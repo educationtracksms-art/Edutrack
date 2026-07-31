@@ -110,7 +110,7 @@ function AuthPage() {
           </div>
           <div>
             <label className="text-sm font-medium" htmlFor="password">
-              {mode === "signin" ? "Password / one-time password" : "Password"}
+              {mode === "signin" ? "Password " : "Password"}
             </label>
             <input
               id="password"

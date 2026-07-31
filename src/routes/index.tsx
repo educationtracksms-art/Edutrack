@@ -47,9 +47,6 @@ function Landing() {
       </header>
 
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center md:pt-20">
-        <span className="inline-block rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent">
-          Multi-tenant school platform
-        </span>
         <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight md:text-5xl">
           Run every school on one platform, keep every school's data apart.
         </h1>
