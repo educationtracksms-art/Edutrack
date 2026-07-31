@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { verifyStudent } from "@/lib/admin.functions";
+import { deleteStudent, verifyStudent } from "@/lib/admin.functions";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 
@@ -26,6 +26,7 @@ function StudentsPage() {
   const { data: me } = useCurrentUser();
   const canVerify = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
   const verify = useServerFn(verifyStudent);
+  const deleteStudentFn = useServerFn(deleteStudent);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -107,16 +108,10 @@ function StudentsPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const archiveMutation = useMutation({
-    mutationFn: async (studentId: string) => {
-      const { error } = await supabase
-        .from("students")
-        .update({ deleted_at: new Date().toISOString(), status: "inactive" })
-        .eq("id", studentId);
-      if (error) throw new Error(error.message);
-    },
+  const removeStudent = useMutation({
+    mutationFn: (studentId: string) => deleteStudentFn({ data: { studentId } }),
     onSuccess: () => {
-      toast.success("Learner archived");
+      toast.success("Learner deleted");
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -234,8 +229,15 @@ function StudentsPage() {
                         <Btn onClick={() => verifyMutation.mutate(student.id)}>Verify</Btn>
                       )}
                       {canVerify && (
-                        <Btn variant="ghost" onClick={() => archiveMutation.mutate(student.id)}>
-                          Archive
+                        <Btn
+                          variant="ghost"
+                          onClick={() => {
+                            if (window.confirm(`Delete learner "${student.full_name}"?`)) {
+                              removeStudent.mutate(student.id);
+                            }
+                          }}
+                        >
+                          Delete
                         </Btn>
                       )}
                     </div>

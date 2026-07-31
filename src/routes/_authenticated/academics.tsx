@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { ACADEMIC_MANAGERS, hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
-import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
+import { deleteClass, deleteStream } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/academics")({
   head: () => ({
@@ -24,6 +26,8 @@ function AcademicsPage() {
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const allowed = hasAny(me?.roles, ACADEMIC_MANAGERS);
+  const deleteClassFn = useServerFn(deleteClass);
+  const deleteStreamFn = useServerFn(deleteStream);
 
   const [classForm, setClassForm] = useState({ name: "", level: "" });
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "" });
@@ -83,9 +87,11 @@ function AcademicsPage() {
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!streamForm.class_id) throw new Error("Choose the class this stream belongs to");
-      const { error } = await supabase
-        .from("streams")
-        .insert({ school_id: schoolId, class_id: streamForm.class_id, name: streamForm.name });
+      const { error } = await supabase.from("streams").insert({
+        school_id: schoolId,
+        class_id: streamForm.class_id,
+        name: streamForm.name,
+      });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
@@ -129,13 +135,29 @@ function AcademicsPage() {
       };
       const { error } = await supabase.from("teacher_allocations").insert(payload);
       if (error) throw new Error(error.message);
-      await supabase
-        .from("teacher_allocation_history")
-        .insert({ ...payload, action: "assigned", performed_by: me?.userId ?? null });
+      await supabase.from("teacher_allocation_history").insert({ ...payload, action: "assigned", performed_by: me?.userId ?? null });
     },
     onSuccess: () => {
       setAllocForm({ teacher_id: "", subject_id: "", class_id: "", stream_id: "" });
       toast.success("Teacher allocated");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeClass = useMutation({
+    mutationFn: (classId: string) => deleteClassFn({ data: { classId } }),
+    onSuccess: () => {
+      toast.success("Class deleted");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeStream = useMutation({
+    mutationFn: (streamId: string) => deleteStreamFn({ data: { streamId } }),
+    onSuccess: () => {
+      toast.success("Stream deleted");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -176,10 +198,7 @@ function AcademicsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Academic setup"
-        description="Classes, streams, subjects and teaching allocations for the current academic year."
-      />
+      <PageHeader title="Academic setup" description="Classes, streams, subjects and teaching allocations for the current academic year." />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Classes">
@@ -202,7 +221,19 @@ function AcademicsPage() {
             {(data?.classes ?? []).map((item) => (
               <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                 <span>{item.name}</span>
-                <Pill tone="muted">{data?.streams.filter((s) => s.class_id === item.id).length ?? 0} streams</Pill>
+                <div className="flex items-center gap-2">
+                  <Pill tone="muted">{data?.streams.filter((s) => s.class_id === item.id).length ?? 0} streams</Pill>
+                  <Btn
+                    variant="ghost"
+                    onClick={() => {
+                      if (window.confirm(`Delete class "${item.name}"? This will also remove related streams.`)) {
+                        removeClass.mutate(item.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </Btn>
+                </div>
               </li>
             ))}
           </ul>
@@ -231,8 +262,20 @@ function AcademicsPage() {
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.streams ?? []).map((item) => (
-              <li key={item.id} className="rounded-md border border-border px-3 py-2">
-                {className(item.class_id)} · <span className="font-medium">{item.name}</span>
+              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <span>
+                  {className(item.class_id)} · <span className="font-medium">{item.name}</span>
+                </span>
+                <Btn
+                  variant="ghost"
+                  onClick={() => {
+                    if (window.confirm(`Delete stream "${item.name}"?`)) {
+                      removeStream.mutate(item.id);
+                    }
+                  }}
+                >
+                  Delete
+                </Btn>
               </li>
             ))}
           </ul>

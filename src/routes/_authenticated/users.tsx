@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { createStaffUser, resetUserPassword } from "@/lib/admin.functions";
+import { createStaffUser, deleteStaffUser, resetUserPassword } from "@/lib/admin.functions";
 import { ROLE_LABELS, hasAny, useCurrentUser, type AppRole } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 
@@ -36,6 +36,7 @@ function UsersPage() {
   const isSuper = hasAny(me?.roles, ["super_admin"]);
   const createUser = useServerFn(createStaffUser);
   const resetPassword = useServerFn(resetUserPassword);
+  const deleteUserFn = useServerFn(deleteStaffUser);
   const [form, setForm] = useState({ fullName: "", email: "", role: "subject_teacher", initials: "", schoolId: "" });
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
 
@@ -89,6 +90,15 @@ function UsersPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => deleteUserFn({ data: { userId } }),
+    onSuccess: () => {
+      toast.success("User deleted");
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   return (
     <div>
       <PageHeader title="Users & roles" description="Accounts are created by administrators — never self-registered." />
@@ -127,9 +137,21 @@ function UsersPage() {
                       {person.must_change_password ? <Pill tone="warning">Must reset</Pill> : <Pill tone="success">Active</Pill>}
                     </td>
                     <td className="py-2.5 text-right">
-                      <Btn variant="ghost" onClick={() => resetMutation.mutate(person.id)}>
-                        Reset password
-                      </Btn>
+                      <div className="flex justify-end gap-2">
+                        <Btn variant="ghost" onClick={() => resetMutation.mutate(person.id)}>
+                          Reset password
+                        </Btn>
+                        <Btn
+                          variant="ghost"
+                          onClick={() => {
+                            if (window.confirm(`Delete user "${person.full_name || person.email}"?`)) {
+                              deleteMutation.mutate(person.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </Btn>
+                      </div>
                     </td>
                   </tr>
                 ))}

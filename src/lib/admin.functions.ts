@@ -268,6 +268,101 @@ export const verifyStudent = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function schoolOf(supabase: any, id: string): Promise<string | null> {
+  const { data } = await supabase.from("profiles").select("school_id").eq("id", id).maybeSingle();
+  return data?.school_id ?? null;
+}
+
+async function ensureCanManageSchool(context: any): Promise<string | null> {
+  const roles = await rolesOf(context.supabase, context.userId);
+  if (!roles.some((r) => ["super_admin", "school_admin"].includes(r))) {
+    throw new Error("Not allowed to manage this record");
+  }
+  return schoolOf(context.supabase, context.userId);
+}
+
+export const deleteClass = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { classId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const schoolId = await ensureCanManageSchool(context);
+    const { data: cls } = await context.supabase.from("classes").select("id, school_id, name").eq("id", data.classId).maybeSingle();
+    if (!cls) throw new Error("Class not found");
+    if (schoolId && cls.school_id !== schoolId) throw new Error("Not allowed to delete this class");
+
+    const { error } = await context.supabase.from("classes").delete().eq("id", data.classId);
+    if (error) throw new Error(error.message);
+    await logAudit(context.supabase, context.userId, cls.school_id, "CLASS_DELETED", "classes", { class_id: data.classId, name: cls.name });
+    return { ok: true };
+  });
+
+export const deleteStream = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { streamId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const schoolId = await ensureCanManageSchool(context);
+    const { data: stream } = await context.supabase.from("streams").select("id, school_id, name").eq("id", data.streamId).maybeSingle();
+    if (!stream) throw new Error("Stream not found");
+    if (schoolId && stream.school_id !== schoolId) throw new Error("Not allowed to delete this stream");
+
+    const { error } = await context.supabase.from("streams").delete().eq("id", data.streamId);
+    if (error) throw new Error(error.message);
+    await logAudit(context.supabase, context.userId, stream.school_id, "STREAM_DELETED", "streams", { stream_id: data.streamId, name: stream.name });
+    return { ok: true };
+  });
+
+export const deleteStudent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { studentId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const schoolId = await ensureCanManageSchool(context);
+    const { data: student } = await context.supabase
+      .from("students")
+      .select("id, school_id, full_name")
+      .eq("id", data.studentId)
+      .maybeSingle();
+    if (!student) throw new Error("Student not found");
+    if (schoolId && student.school_id !== schoolId) throw new Error("Not allowed to delete this student");
+
+    const { error } = await context.supabase.from("students").delete().eq("id", data.studentId);
+    if (error) throw new Error(error.message);
+    await logAudit(context.supabase, context.userId, student.school_id, "STUDENT_DELETED", "students", {
+      student_id: data.studentId,
+      name: student.full_name,
+    });
+    return { ok: true };
+  });
+
+export const deleteStaffUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { userId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin"].includes(r))) throw new Error("Not allowed to delete users");
+    if (data.userId === context.userId) throw new Error("You cannot delete your own account");
+
+    const { data: target } = await context.supabase
+      .from("profiles")
+      .select("id, school_id, full_name, email")
+      .eq("id", data.userId)
+      .maybeSingle();
+    if (!target) throw new Error("User not found");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: profileError } = await supabaseAdmin.from("profiles").delete().eq("id", data.userId);
+    if (profileError) throw new Error(profileError.message);
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
+    if (authError) throw new Error(authError.message);
+
+    await logAudit(context.supabase, context.userId, target.school_id, "USER_DELETED", "profiles", {
+      user_id: data.userId,
+      email: target.email,
+      name: target.full_name,
+    });
+    return { ok: true };
+  });
+
 export const logReportPrint = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { count: number; scope: string }) => data)
