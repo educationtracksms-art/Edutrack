@@ -6,6 +6,10 @@ function otp() {
   return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
+function adminUnavailable(supabaseAdmin: any): boolean {
+  return Boolean(supabaseAdmin?.__unavailable);
+}
+
 async function rolesOf(supabase: any, userId: string): Promise<string[]> {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   return (data ?? []).map((r: any) => r.role);
@@ -63,6 +67,9 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
     if (schoolError) throw new Error(schoolError.message);
 
     const password = otp();
+    if (adminUnavailable(supabaseAdmin)) {
+      return { schoolId: school.id, oneTimePassword: "", warning: "Admin auth provisioning is unavailable in this deployment." };
+    }
     const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
       email: data.adminEmail,
       password,
@@ -138,6 +145,9 @@ export const createStaffUser = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const password = otp();
+    if (adminUnavailable(supabaseAdmin)) {
+      return { oneTimePassword: "", warning: "Admin auth provisioning is unavailable in this deployment." };
+    }
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password,
@@ -186,6 +196,9 @@ export const resetUserPassword = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const password = otp();
+    if (adminUnavailable(supabaseAdmin)) {
+      return { oneTimePassword: "", warning: "Password reset is unavailable in this deployment." };
+    }
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { password });
     if (error) throw new Error(error.message);
     await supabaseAdmin.from("profiles").update({ must_change_password: true }).eq("id", data.userId);
@@ -352,6 +365,9 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
     const { error: profileError } = await context.supabase.from("profiles").delete().eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
+    if (adminUnavailable(supabaseAdmin)) {
+      return { ok: true, warning: "Auth account deletion is unavailable in this deployment." };
+    }
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (authError) throw new Error(authError.message);
 
