@@ -10,13 +10,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "A Uganda-based education management system for schools, administrators and teachers. Track learners, assessments, report cards and operations in one place.",
+          "A Uganda-based education management system that helps schools improve efficiency, simplify administration, and give staff, learners and parents a better experience.",
       },
       { property: "og:title", content: "Education Track SMS | Uganda School Management System" },
       {
         property: "og:description",
         content:
-          "Manage schools, staff, learners, assessments and dynamic report cards from a single multi-school platform.",
+          "Give your school a better way to manage learners, assessments, report cards and daily operations with one platform built for growth.",
       },
     ],
   }),
@@ -24,10 +24,10 @@ export const Route = createFileRoute("/")({
 });
 
 const FEATURES = [
-  { icon: Layers, title: "True multi-tenancy", body: "Every record is scoped to a school. Staff never see another school's data." },
-  { icon: ShieldCheck, title: "Role-based control", body: "Seven roles, one-time passwords, forced password change and full audit trails." },
-  { icon: FileBadge, title: "Dynamic report cards", body: "A4-optimised report cards rendered entirely from live school data." },
-  { icon: BarChart3, title: "Live analytics", body: "Performance, grades, attendance and approval dashboards for every leader." },
+  { icon: Layers, title: "Streamline daily work", body: "Reduce paperwork and move common school processes into one simple system." },
+  { icon: ShieldCheck, title: "Improve trust and control", body: "Keep records organized, secure and easy to review by the right staff members." },
+  { icon: FileBadge, title: "Better reporting", body: "Create clear report cards and academic summaries faster with less manual work." },
+  { icon: BarChart3, title: "See progress faster", body: "Track learner performance, attendance and school activity in one place." },
 ];
 
 function Landing() {
@@ -35,24 +35,24 @@ function Landing() {
     <PublicShell>
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center md:pt-20">
         <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight md:text-5xl">
-          Run every school on one platform, keep every school's data apart.
+          Give your school a smarter way to work, grow, and serve learners better.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground">
-          Schools, staff, learners, assessments and print-ready report cards are governed by roles,
-          approvals and audit logs from the first sign-in.
+          Education Track SMS helps schools reduce administrative stress, improve visibility, and focus more
+          on teaching, learning, and parent engagement.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
             to="/signup"
             className="rounded-md bg-accent px-6 py-3 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
           >
-            Request access
+            Join your school
           </Link>
           <Link
             to="/auth"
             className="rounded-md border border-border px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
-            Sign in
+            Staff sign in
           </Link>
         </div>
       </section>
