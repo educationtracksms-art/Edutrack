@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, inputClass } from "@/components/ui-kit";
+import { uploadImage } from "@/lib/storage";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -24,6 +25,7 @@ function SettingsPage() {
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const [form, setForm] = useState({ name: "", address: "", email: "", phone: "", motto: "", logo_url: "" });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (me?.school) {
@@ -55,12 +57,14 @@ function SettingsPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("No school linked to your account");
-      const { error } = await supabase.from("schools").update(form).eq("id", schoolId);
+      const logoUrl = logoFile ? await uploadImage(logoFile, `schools/${schoolId}/logo`) : form.logo_url;
+      const { error } = await supabase.from("schools").update({ ...form, logo_url: logoUrl }).eq("id", schoolId);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("School details updated");
       queryClient.invalidateQueries({ queryKey: ["current-user"] });
+      setLogoFile(null);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -102,8 +106,14 @@ function SettingsPage() {
             <Field label="Motto">
               <input className={inputClass} value={form.motto} onChange={(e) => setForm({ ...form, motto: e.target.value })} />
             </Field>
-            <Field label="Logo URL">
-              <input className={inputClass} value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} />
+            <Field label="School logo">
+              <input
+                type="file"
+                accept="image/*"
+                className={inputClass}
+                onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Upload an image up to 1 MB. The file will be stored in the images bucket.</p>
             </Field>
             <Btn type="submit" variant="accent" disabled={saveMutation.isPending}>
               Save changes

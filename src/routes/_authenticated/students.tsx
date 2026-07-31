@@ -8,13 +8,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { deleteStudent, verifyStudent } from "@/lib/admin.functions";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
+import { uploadImage } from "@/lib/storage";
 
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({
     meta: [
-      { title: "Students · EduTrack" },
+      { title: "Students Â· EduTrack" },
       { name: "description", content: "Register learners, verify admissions and manage class placement." },
-      { property: "og:title", content: "Students · EduTrack" },
+      { property: "og:title", content: "Students Â· EduTrack" },
       { property: "og:description", content: "Learner records with verification workflow and soft delete." },
     ],
   }),
@@ -29,6 +30,7 @@ function StudentsPage() {
   const deleteStudentFn = useServerFn(deleteStudent);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     full_name: "",
     lin: "",
@@ -75,6 +77,7 @@ function StudentsPage() {
   const addMutation = useMutation({
     mutationFn: async () => {
       if (!me?.profile?.school_id) throw new Error("Your account is not linked to a school");
+      const photoUrl = photoFile ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`) : null;
       const { error } = await supabase.from("students").insert({
         school_id: me.profile.school_id,
         full_name: form.full_name,
@@ -86,13 +89,15 @@ function StudentsPage() {
         schpay_code: form.schpay_code || null,
         parent_name: form.parent_name || null,
         parent_phone: form.parent_phone || null,
+        photo_url: photoUrl,
         created_by: me.userId,
       });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      toast.success("Learner registered — awaiting verification");
+      toast.success("Learner registered â€” awaiting verification");
       setForm({ ...form, full_name: "", lin: "", house: "", schpay_code: "", parent_name: "", parent_phone: "" });
+      setPhotoFile(null);
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
@@ -117,7 +122,7 @@ function StudentsPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "—";
+  const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "â€”";
   const streamName = (id: string | null) => streams?.find((s) => s.id === id)?.name ?? "";
 
   return (
@@ -125,7 +130,11 @@ function StudentsPage() {
       <PageHeader
         title="Students"
         description="Registered learners stay pending until an administrator verifies the admission."
-        actions={<Btn variant="accent" onClick={() => setShowForm((value) => !value)}>{showForm ? "Close" : "Register learner"}</Btn>}
+        actions={
+          <Btn variant="accent" onClick={() => setShowForm((value) => !value)}>
+            {showForm ? "Close" : "Register learner"}
+          </Btn>
+        }
       />
 
       {showForm && (
@@ -181,9 +190,18 @@ function StudentsPage() {
             <Field label="Parent phone">
               <input className={inputClass} value={form.parent_phone} onChange={(e) => setForm({ ...form, parent_phone: e.target.value })} />
             </Field>
+            <Field label="Learner image">
+              <input
+                type="file"
+                accept="image/*"
+                className={inputClass}
+                onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Upload an image up to 1 MB. The file will be stored in the images bucket.</p>
+            </Field>
             <div className="md:col-span-3">
               <Btn type="submit" variant="accent" disabled={addMutation.isPending}>
-                {addMutation.isPending ? "Saving…" : "Save learner"}
+                {addMutation.isPending ? "Savingâ€¦" : "Save learner"}
               </Btn>
             </div>
           </form>
@@ -213,11 +231,11 @@ function StudentsPage() {
               {filtered.map((student) => (
                 <tr key={student.id} className="border-t border-border">
                   <td className="py-2.5 font-medium">{student.full_name}</td>
-                  <td>{student.lin ?? "—"}</td>
+                  <td>{student.lin ?? "â€”"}</td>
                   <td>
                     {className(student.class_id)} {streamName(student.stream_id)}
                   </td>
-                  <td>{student.house ?? "—"}</td>
+                  <td>{student.house ?? "â€”"}</td>
                   <td>
                     <Pill tone={student.status === "active" ? "success" : student.status === "pending" ? "warning" : "muted"}>
                       {student.status}
