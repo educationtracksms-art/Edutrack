@@ -47,10 +47,14 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const previousEnv = globalThis.__EDUTRACK_RUNTIME_ENV__;
+    const previousProcessEnv = typeof process !== "undefined" ? process.env : undefined;
     try {
       const handler = await getServerEntry();
-      globalThis.__EDUTRACK_RUNTIME_ENV__ =
-        env && typeof env === "object" ? (env as Record<string, string | undefined>) : {};
+      const runtimeEnv = env && typeof env === "object" ? (env as Record<string, string | undefined>) : {};
+      globalThis.__EDUTRACK_RUNTIME_ENV__ = runtimeEnv;
+      if (typeof process !== "undefined" && process.env) {
+        process.env = { ...process.env, ...runtimeEnv };
+      }
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
@@ -61,6 +65,9 @@ export default {
       });
     } finally {
       globalThis.__EDUTRACK_RUNTIME_ENV__ = previousEnv;
+      if (typeof process !== "undefined" && previousProcessEnv) {
+        process.env = previousProcessEnv;
+      }
     }
   },
 };

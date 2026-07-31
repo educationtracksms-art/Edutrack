@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 type EnvSource = Record<string, string | undefined>;
@@ -35,8 +35,18 @@ function loadDotenvFile(): EnvSource {
   if (cachedDotenv) return cachedDotenv;
 
   try {
-    const filePath = resolve(process.cwd(), ".env");
-    cachedDotenv = parseDotenv(readFileSync(filePath, "utf8"));
+    const candidatePaths = [
+      resolve(process.cwd(), ".env"),
+      resolve(process.cwd(), "..", ".env"),
+      resolve(process.cwd(), "..", "..", ".env"),
+      resolve(process.cwd(), "..", "..", "..", ".env"),
+      resolve(process.cwd(), ".env.production"),
+      resolve(process.cwd(), "..", ".env.production"),
+      resolve(process.cwd(), "..", "..", ".env.production"),
+    ];
+
+    const filePath = candidatePaths.find((candidate) => existsSync(candidate));
+    cachedDotenv = filePath ? parseDotenv(readFileSync(filePath, "utf8")) : {};
   } catch {
     cachedDotenv = {};
   }
