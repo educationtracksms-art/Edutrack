@@ -67,18 +67,21 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
     if (schoolError) throw new Error(schoolError.message);
 
     const password = otp();
-    if (adminUnavailable(supabaseAdmin)) {
-      return { schoolId: school.id, oneTimePassword: "", warning: "Admin auth provisioning is unavailable in this deployment." };
+    let uid: string | null = null;
+    let warning: string | undefined;
+    if (!adminUnavailable(supabaseAdmin)) {
+      const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
+        email: data.adminEmail,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: data.adminName },
+      });
+      if (userError) throw new Error(userError.message);
+      uid = created.user!.id;
+    } else {
+      warning = "Admin auth provisioning is unavailable in this deployment.";
     }
-    const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
-      email: data.adminEmail,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: data.adminName },
-    });
-    if (userError) throw new Error(userError.message);
 
-    const uid = created.user!.id;
     await context.supabase
       .from("profiles")
       .update({
@@ -87,8 +90,10 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
         email: data.adminEmail,
         must_change_password: true,
       })
-      .eq("id", uid);
-    await context.supabase.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
+      .eq("id", uid ?? context.userId);
+    if (uid) {
+      await context.supabase.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
+    }
 
     const modules = [
       "fees",
@@ -110,18 +115,20 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
         enabled: ["attendance", "report_cards", "fees", "co_curricular"].includes(module),
       })),
     );
-    await context.supabase.from("notifications").insert({
-      school_id: school.id,
-      user_id: uid,
-      title: "One-time password generated",
-      body: "Sign in with your one-time password and set a new password.",
-    });
+    if (uid) {
+      await context.supabase.from("notifications").insert({
+        school_id: school.id,
+        user_id: uid,
+        title: "One-time password generated",
+        body: "Sign in with your one-time password and set a new password.",
+      });
+    }
 
     await logAudit(context.supabase, context.userId, school.id, "SCHOOL_CREATED", "schools", {
       name: data.name,
     });
 
-    return { schoolId: school.id, oneTimePassword: password };
+    return { schoolId: school.id, oneTimePassword: uid ? password : "", warning };
   });
 
 export const createStaffUser = createServerFn({ method: "POST" })
@@ -145,17 +152,20 @@ export const createStaffUser = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const password = otp();
-    if (adminUnavailable(supabaseAdmin)) {
-      return { oneTimePassword: "", warning: "Admin auth provisioning is unavailable in this deployment." };
+    let uid: string | null = null;
+    let warning: string | undefined;
+    if (!adminUnavailable(supabaseAdmin)) {
+      const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+        email: data.email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: data.fullName },
+      });
+      if (error) throw new Error(error.message);
+      uid = created.user!.id;
+    } else {
+      warning = "Admin auth provisioning is unavailable in this deployment.";
     }
-    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-      email: data.email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: data.fullName },
-    });
-    if (error) throw new Error(error.message);
-    const uid = created.user!.id;
 
     await context.supabase
       .from("profiles")
@@ -166,17 +176,19 @@ export const createStaffUser = createServerFn({ method: "POST" })
         initials: data.initials ?? null,
         must_change_password: true,
       })
-      .eq("id", uid);
-    await context.supabase
-      .from("user_roles")
-      .insert({ user_id: uid, role: data.role as never, school_id: schoolId });
+      .eq("id", uid ?? context.userId);
+    if (uid) {
+      await context.supabase
+        .from("user_roles")
+        .insert({ user_id: uid, role: data.role as never, school_id: schoolId });
+    }
 
     await logAudit(context.supabase, context.userId, schoolId, "USER_CREATED", "profiles", {
       email: data.email,
       role: data.role,
     });
 
-    return { oneTimePassword: password };
+    return { oneTimePassword: uid ? password : "", warning };
   });
 
 export const resetUserPassword = createServerFn({ method: "POST" })
