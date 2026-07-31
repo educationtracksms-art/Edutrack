@@ -219,6 +219,7 @@ function StudentsPage() {
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
+                <th className="pb-2">Photo</th>
                 <th className="pb-2">Learner</th>
                 <th className="pb-2">LIN</th>
                 <th className="pb-2">Class</th>
@@ -230,6 +231,19 @@ function StudentsPage() {
             <tbody>
               {filtered.map((student) => (
                 <tr key={student.id} className="border-t border-border">
+                  <td className="py-2.5">
+                    {student.photo_url ? (
+                      <img
+                        src={student.photo_url}
+                        alt={student.full_name}
+                        className="h-10 w-10 rounded-full border border-border object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
+                        —
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2.5 font-medium">{student.full_name}</td>
                   <td>{student.lin ?? "â€”"}</td>
                   <td>
@@ -264,7 +278,7 @@ function StudentsPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={7} className="py-6 text-center text-muted-foreground">
                     No learners found.
                   </td>
                 </tr>

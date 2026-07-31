@@ -107,13 +107,24 @@ function SettingsPage() {
               <input className={inputClass} value={form.motto} onChange={(e) => setForm({ ...form, motto: e.target.value })} />
             </Field>
             <Field label="School logo">
+              {form.logo_url && (
+                <div className="mb-2">
+                  <img
+                    src={form.logo_url}
+                    alt="Current school logo"
+                    className="h-20 w-20 rounded-md border border-border object-cover"
+                  />
+                </div>
+              )}
               <input
                 type="file"
                 accept="image/*"
                 className={inputClass}
                 onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
               />
-              <p className="mt-1 text-xs text-muted-foreground">Upload an image up to 1 MB. The file will be stored in the images bucket.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Upload an image up to 1 MB. New uploads replace the current logo in the images bucket.
+              </p>
             </Field>
             <Btn type="submit" variant="accent" disabled={saveMutation.isPending}>
               Save changes

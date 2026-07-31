@@ -6,10 +6,6 @@ function otp() {
   return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-function adminUnavailable(supabaseAdmin: any): boolean {
-  return Boolean(supabaseAdmin?.__unavailable);
-}
-
 async function rolesOf(supabase: any, userId: string): Promise<string[]> {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   return (data ?? []).map((r: any) => r.role);
@@ -67,20 +63,14 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
     if (schoolError) throw new Error(schoolError.message);
 
     const password = otp();
-    let uid: string | null = null;
-    let warning: string | undefined;
-    if (!adminUnavailable(supabaseAdmin)) {
-      const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
-        email: data.adminEmail,
-        password,
-        email_confirm: true,
-        user_metadata: { full_name: data.adminName },
-      });
-      if (userError) throw new Error(userError.message);
-      uid = created.user!.id;
-    } else {
-      warning = "Admin auth provisioning is unavailable in this deployment.";
-    }
+    const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
+      email: data.adminEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: data.adminName },
+    });
+    if (userError) throw new Error(userError.message);
+    const uid = created.user!.id;
 
     await context.supabase
       .from("profiles")
@@ -91,9 +81,7 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
         must_change_password: true,
       })
       .eq("id", uid ?? context.userId);
-    if (uid) {
-      await context.supabase.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
-    }
+    await context.supabase.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
 
     const modules = [
       "fees",
@@ -115,20 +103,18 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
         enabled: ["attendance", "report_cards", "fees", "co_curricular"].includes(module),
       })),
     );
-    if (uid) {
-      await context.supabase.from("notifications").insert({
-        school_id: school.id,
-        user_id: uid,
-        title: "One-time password generated",
-        body: "Sign in with your one-time password and set a new password.",
-      });
-    }
+    await context.supabase.from("notifications").insert({
+      school_id: school.id,
+      user_id: uid,
+      title: "One-time password generated",
+      body: "Sign in with your one-time password and set a new password.",
+    });
 
     await logAudit(context.supabase, context.userId, school.id, "SCHOOL_CREATED", "schools", {
       name: data.name,
     });
 
-    return { schoolId: school.id, oneTimePassword: uid ? password : "", warning };
+    return { schoolId: school.id, oneTimePassword: password };
   });
 
 export const createStaffUser = createServerFn({ method: "POST" })
@@ -152,20 +138,14 @@ export const createStaffUser = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const password = otp();
-    let uid: string | null = null;
-    let warning: string | undefined;
-    if (!adminUnavailable(supabaseAdmin)) {
-      const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-        email: data.email,
-        password,
-        email_confirm: true,
-        user_metadata: { full_name: data.fullName },
-      });
-      if (error) throw new Error(error.message);
-      uid = created.user!.id;
-    } else {
-      warning = "Admin auth provisioning is unavailable in this deployment.";
-    }
+    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: data.fullName },
+    });
+    if (error) throw new Error(error.message);
+    const uid = created.user!.id;
 
     await context.supabase
       .from("profiles")
@@ -177,18 +157,16 @@ export const createStaffUser = createServerFn({ method: "POST" })
         must_change_password: true,
       })
       .eq("id", uid ?? context.userId);
-    if (uid) {
-      await context.supabase
-        .from("user_roles")
-        .insert({ user_id: uid, role: data.role as never, school_id: schoolId });
-    }
+    await context.supabase
+      .from("user_roles")
+      .insert({ user_id: uid, role: data.role as never, school_id: schoolId });
 
     await logAudit(context.supabase, context.userId, schoolId, "USER_CREATED", "profiles", {
       email: data.email,
       role: data.role,
     });
 
-    return { oneTimePassword: uid ? password : "", warning };
+    return { oneTimePassword: password };
   });
 
 export const resetUserPassword = createServerFn({ method: "POST" })
@@ -208,9 +186,6 @@ export const resetUserPassword = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const password = otp();
-    if (adminUnavailable(supabaseAdmin)) {
-      return { oneTimePassword: "", warning: "Password reset is unavailable in this deployment." };
-    }
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { password });
     if (error) throw new Error(error.message);
     await supabaseAdmin.from("profiles").update({ must_change_password: true }).eq("id", data.userId);
@@ -377,9 +352,6 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
     const { error: profileError } = await context.supabase.from("profiles").delete().eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
-    if (adminUnavailable(supabaseAdmin)) {
-      return { ok: true, warning: "Auth account deletion is unavailable in this deployment." };
-    }
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (authError) throw new Error(authError.message);
 

@@ -17,11 +17,11 @@ export async function uploadImage(file: File, pathPrefix: string) {
 
   const ext = file.name.split(".").pop()?.toLowerCase() || "png";
   const safePrefix = pathPrefix.replace(/[^a-zA-Z0-9/_-]/g, "_");
-  const filePath = `${safePrefix}/${crypto.randomUUID()}.${ext}`;
+  const filePath = `${safePrefix}/current.${ext}`;
 
   const { error } = await supabase.storage.from(IMAGE_BUCKET).upload(filePath, file, {
     contentType: file.type,
-    upsert: false,
+    upsert: true,
   });
 
   if (error) throw new Error(error.message);
