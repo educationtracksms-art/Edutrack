@@ -78,11 +78,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "EduTrack" },
-      { name: "description", content: "Multi-school management and reporting platform for EduTrack." },
-      { name: "author", content: "EduTrack" },
-      { property: "og:title", content: "EduTrack" },
-      { property: "og:description", content: "Multi-school management and reporting platform for EduTrack." },
+      { title: "Education Track SMS | Uganda School Management System" },
+      {
+        name: "description",
+        content:
+          "Education Track SMS is a Uganda-based school management system for admissions, student records, academics, assessments, reports and multi-school operations.",
+      },
+      { name: "author", content: "K-Dev Technologies Ltd" },
+      {
+        name: "keywords",
+        content:
+          "Uganda school management system, school ERP, education management system, student records, report cards, Education Track SMS",
+      },
+      { property: "og:title", content: "Education Track SMS | Uganda School Management System" },
+      {
+        property: "og:description",
+        content:
+          "Manage admissions, students, academics, assessments and reporting in one Uganda-focused school management platform.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

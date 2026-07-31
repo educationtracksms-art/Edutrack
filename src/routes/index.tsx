@@ -1,22 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BarChart3, FileBadge, Layers, ShieldCheck } from "lucide-react";
 
-import logoUrl from "@/assets/logo.png";
+import { PublicShell } from "@/components/layout/PublicShell";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "EduTrack · Multi-School Management & Report Cards" },
+      { title: "Education Track SMS | Uganda School Management System" },
       {
         name: "description",
         content:
-          "One secure platform for many schools: role-based access, verified student records, approved assessments and print-ready A4 report cards.",
+          "A Uganda-based education management system for schools, administrators and teachers. Track learners, assessments, report cards and operations in one place.",
       },
-      { property: "og:title", content: "EduTrack · Multi-School Management & Report Cards" },
+      { property: "og:title", content: "Education Track SMS | Uganda School Management System" },
       {
         property: "og:description",
         content:
-          "Manage schools, staff, learners, assessments and dynamic report cards from a single multi-tenant platform.",
+          "Manage schools, staff, learners, assessments and dynamic report cards from a single multi-school platform.",
       },
     ],
   }),
@@ -32,34 +32,27 @@ const FEATURES = [
 
 function Landing() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between px-6 py-5 md:px-12">
-        <div className="flex items-center gap-3">
-          <img src={logoUrl} alt="EduTrack logo" className="h-11 w-11 object-cover" />
-          <span className="text-lg font-semibold tracking-tight">EduTrack</span>
-        </div>
-        <Link
-          to="/auth"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          Sign in
-        </Link>
-      </header>
-
+    <PublicShell>
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center md:pt-20">
         <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight md:text-5xl">
           Run every school on one platform, keep every school's data apart.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground">
-          Schools, staff, learners, assessments and print-ready report cards — governed by roles,
+          Schools, staff, learners, assessments and print-ready report cards are governed by roles,
           approvals and audit logs from the first sign-in.
         </p>
-        <div className="mt-8 flex justify-center gap-3">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
-            to="/auth"
+            to="/signup"
             className="rounded-md bg-accent px-6 py-3 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
           >
-            Get started
+            Request access
+          </Link>
+          <Link
+            to="/auth"
+            className="rounded-md border border-border px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            Sign in
           </Link>
         </div>
       </section>
@@ -73,6 +66,7 @@ function Landing() {
           </div>
         ))}
       </section>
-    </div>
+
+    </PublicShell>
   );
 }

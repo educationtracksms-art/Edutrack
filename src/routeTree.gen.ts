@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedAcademicsRouteImport } from './routes/_authenticated/academics'
 import { Route as AuthenticatedAssessmentsRouteImport } from './routes/_authenticated/assessments'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
@@ -38,6 +39,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAcademicsRoute = AuthenticatedAcademicsRouteImport.update({
@@ -111,6 +117,7 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/signup': typeof SignupRoute
   '/academics': typeof AuthenticatedAcademicsRoute
   '/assessments': typeof AuthenticatedAssessmentsRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/signup': typeof SignupRoute
   '/academics': typeof AuthenticatedAcademicsRoute
   '/assessments': typeof AuthenticatedAssessmentsRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/signup': typeof SignupRoute
   '/_authenticated/academics': typeof AuthenticatedAcademicsRoute
   '/_authenticated/assessments': typeof AuthenticatedAssessmentsRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/signup'
     | '/academics'
     | '/assessments'
     | '/attendance'
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/signup'
     | '/academics'
     | '/assessments'
     | '/attendance'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/signup'
     | '/_authenticated/academics'
     | '/_authenticated/assessments'
     | '/_authenticated/attendance'
@@ -220,6 +232,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  SignupRoute: typeof SignupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -243,6 +256,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/academics': {
@@ -378,6 +398,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
