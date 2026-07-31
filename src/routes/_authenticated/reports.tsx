@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getReportCards } from "@/lib/report.functions";
 import { logReportPrint } from "@/lib/admin.functions";
+import { friendlyAdminError } from "@/lib/admin-errors";
 import { ReportCard } from "@/components/report/ReportCard";
 import type { ReportCardData } from "@/lib/report-types";
 import { Btn, PageHeader, Panel, inputClass } from "@/components/ui-kit";
@@ -52,7 +53,7 @@ function ReportsPage() {
       setCards(result);
       toast.success(`${result.length} report card(s) ready`);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   function print() {

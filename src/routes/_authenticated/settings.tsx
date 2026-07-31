@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, inputClass } from "@/components/ui-kit";
 import { uploadImage } from "@/lib/storage";
+import { friendlyAdminError } from "@/lib/admin-errors";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -66,7 +67,7 @@ function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["current-user"] });
       setLogoFile(null);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   const toggleMutation = useMutation({
@@ -75,7 +76,7 @@ function SettingsPage() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feature-toggles", schoolId] }),
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   return (

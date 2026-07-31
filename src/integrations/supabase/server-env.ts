@@ -51,8 +51,9 @@ export function readServerSupabaseEnv(
 ) {
   const viteName = `VITE_${name}`;
   const dotenv = loadDotenvFile();
+  const metaEnv = typeof import.meta !== "undefined" ? ((import.meta as unknown as { env?: EnvSource }).env ?? {}) : {};
 
-  return dotenv[name] ?? dotenv[viteName];
+  return metaEnv[name] ?? metaEnv[viteName] ?? dotenv[name] ?? dotenv[viteName];
 }
 
 export function getServerSupabaseEnvDebugInfo() {

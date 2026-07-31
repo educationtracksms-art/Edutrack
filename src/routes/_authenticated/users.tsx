@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { createStaffUser, deleteStaffUser, resetUserPassword } from "@/lib/admin.functions";
+import { createStaffUser, deleteStaffUser, resetUserPassword, updateStaffUser } from "@/lib/admin.functions";
 import { ROLE_LABELS, hasAny, useCurrentUser, type AppRole } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 
@@ -35,10 +35,12 @@ function UsersPage() {
   const { data: me } = useCurrentUser();
   const isSuper = hasAny(me?.roles, ["super_admin"]);
   const createUser = useServerFn(createStaffUser);
+  const updateUser = useServerFn(updateStaffUser);
   const resetPassword = useServerFn(resetUserPassword);
   const deleteUserFn = useServerFn(deleteStaffUser);
   const [form, setForm] = useState({ fullName: "", email: "", role: "subject_teacher", initials: "", schoolId: "" });
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
+  const [editingUser, setEditingUser] = useState<string | null>(null);
 
   const { data: schools } = useQuery({
     queryKey: ["schools-list"],
@@ -77,7 +79,28 @@ function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       toast.success("Account created");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(
+        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+          ? "Admin user creation is unavailable because the committed .env file is not being shipped with the deployment."
+          : error.message,
+      ),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: (vars: { userId: string; fullName: string; email: string; role: string; initials?: string; schoolId?: string }) =>
+      updateUser({ data: vars }),
+    onSuccess: () => {
+      toast.success("User updated");
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+      setEditingUser(null);
+    },
+    onError: (error: Error) =>
+      toast.error(
+        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+          ? "User editing is unavailable because the committed .env file is not being shipped with the deployment."
+          : error.message,
+      ),
   });
 
   const resetMutation = useMutation({
@@ -87,7 +110,12 @@ function UsersPage() {
       setIssued({ email: person?.email ?? "", password: result.oneTimePassword });
       toast.success("New one-time password issued");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(
+        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+          ? "Password reset is unavailable because the committed .env file is not being shipped with the deployment."
+          : error.message,
+      ),
   });
 
   const deleteMutation = useMutation({
@@ -96,7 +124,12 @@ function UsersPage() {
       toast.success("User deleted");
       queryClient.invalidateQueries({ queryKey: ["staff"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(
+        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+          ? "User deletion is unavailable because the committed .env file is not being shipped with the deployment."
+          : error.message,
+      ),
   });
 
   return (
@@ -144,6 +177,21 @@ function UsersPage() {
                         <Btn
                           variant="ghost"
                           onClick={() => {
+                            setEditingUser(person.id);
+                            setForm({
+                              fullName: person.full_name ?? "",
+                              email: person.email ?? "",
+                              role: (person.roles[0] ?? "subject_teacher") as AppRole,
+                              initials: person.initials ?? "",
+                              schoolId: "",
+                            });
+                          }}
+                        >
+                          Edit
+                        </Btn>
+                        <Btn
+                          variant="ghost"
+                          onClick={() => {
                             if (window.confirm(`Delete user "${person.full_name || person.email}"?`)) {
                               deleteMutation.mutate(person.id);
                             }
@@ -160,12 +208,23 @@ function UsersPage() {
           </div>
         </Panel>
 
-        <Panel title="Create an account">
+        <Panel title={editingUser ? "Edit account" : "Create an account"}>
           <form
             className="space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
-              createMutation.mutate();
+              if (editingUser) {
+                editMutation.mutate({
+                  userId: editingUser,
+                  fullName: form.fullName,
+                  email: form.email,
+                  role: form.role,
+                  initials: form.initials || undefined,
+                  schoolId: form.schoolId || undefined,
+                });
+              } else {
+                createMutation.mutate();
+              }
             }}
           >
             {isSuper && (
@@ -199,8 +258,20 @@ function UsersPage() {
               </select>
             </Field>
             <Btn type="submit" variant="accent" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Creating…" : "Create account"}
+              {editingUser ? (editMutation.isPending ? "Saving…" : "Save changes") : createMutation.isPending ? "Creating…" : "Create account"}
             </Btn>
+            {editingUser && (
+              <Btn
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setEditingUser(null);
+                  setForm({ fullName: "", email: "", role: "subject_teacher", initials: "", schoolId: "" });
+                }}
+              >
+                Cancel edit
+              </Btn>
+            )}
           </form>
 
           {issued && (

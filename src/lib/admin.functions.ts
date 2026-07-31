@@ -169,6 +169,68 @@ export const createStaffUser = createServerFn({ method: "POST" })
     return { oneTimePassword: password };
   });
 
+export const updateStaffUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: { userId: string; fullName: string; email: string; role: string; initials?: string; schoolId?: string }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    const isSuper = roles.includes("super_admin");
+    if (!isSuper && !roles.includes("school_admin")) throw new Error("Not allowed to edit users");
+
+    const { data: target } = await context.supabase
+      .from("profiles")
+      .select("id, school_id")
+      .eq("id", data.userId)
+      .maybeSingle();
+    if (!target) throw new Error("User not found");
+
+    const { data: profile } = await context.supabase
+      .from("profiles")
+      .select("school_id")
+      .eq("id", context.userId)
+      .maybeSingle();
+
+    const schoolId = isSuper ? (data.schoolId ?? target.school_id ?? profile?.school_id) : profile?.school_id;
+    if (!schoolId) throw new Error("A school must be selected");
+    if (data.role === "super_admin") throw new Error("Super Admin accounts cannot be assigned here");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: profileError } = await context.supabase
+      .from("profiles")
+      .update({
+        school_id: schoolId,
+        full_name: data.fullName,
+        email: data.email,
+        initials: data.initials ?? null,
+      })
+      .eq("id", data.userId);
+    if (profileError) throw new Error(profileError.message);
+
+    const { error: roleDeleteError } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    if (roleDeleteError) throw new Error(roleDeleteError.message);
+
+    const { error: roleInsertError } = await context.supabase
+      .from("user_roles")
+      .insert({ user_id: data.userId, role: data.role as never, school_id: schoolId });
+    if (roleInsertError) throw new Error(roleInsertError.message);
+
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      email: data.email,
+      user_metadata: { full_name: data.fullName },
+    });
+    if (authError) throw new Error(authError.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "USER_UPDATED", "profiles", {
+      user_id: data.userId,
+      email: data.email,
+      role: data.role,
+    });
+
+    return { ok: true };
+  });
+
 export const resetUserPassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { userId: string }) => data)

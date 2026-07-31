@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { reviewAssessments } from "@/lib/admin.functions";
+import { friendlyAdminError } from "@/lib/admin-errors";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 
@@ -75,7 +76,7 @@ function AssessmentsPage() {
       toast.success("Scores submitted for approval");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   const reviewMutation = useMutation({
@@ -84,7 +85,7 @@ function AssessmentsPage() {
       toast.success("Review recorded");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   const pendingIds = rows.filter((r) => r.status === "submitted").map((r) => r.id);

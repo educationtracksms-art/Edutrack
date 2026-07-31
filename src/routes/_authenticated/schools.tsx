@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { createSchoolWithAdmin, setSchoolStatus } from "@/lib/admin.functions";
+import { friendlyAdminError } from "@/lib/admin-errors";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/schools")({
@@ -51,7 +52,7 @@ function SchoolsPage() {
       queryClient.invalidateQueries({ queryKey: ["schools"] });
       toast.success("School created with an administrator account");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   const statusMutation = useMutation({
@@ -60,7 +61,7 @@ function SchoolsPage() {
       queryClient.invalidateQueries({ queryKey: ["schools"] });
       toast.success("School status updated");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   return (

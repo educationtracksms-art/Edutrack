@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { deleteStudent, verifyStudent } from "@/lib/admin.functions";
+import { friendlyAdminError } from "@/lib/admin-errors";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { uploadImage } from "@/lib/storage";
@@ -101,7 +102,7 @@ function StudentsPage() {
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   const verifyMutation = useMutation({
@@ -110,7 +111,7 @@ function StudentsPage() {
       toast.success("Learner verified");
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   const removeStudent = useMutation({
@@ -119,7 +120,7 @@ function StudentsPage() {
       toast.success("Learner deleted");
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "â€”";
