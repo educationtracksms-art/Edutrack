@@ -46,8 +46,11 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    const previousEnv = globalThis.__EDUTRACK_RUNTIME_ENV__;
     try {
       const handler = await getServerEntry();
+      globalThis.__EDUTRACK_RUNTIME_ENV__ =
+        env && typeof env === "object" ? (env as Record<string, string | undefined>) : {};
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
@@ -56,6 +59,8 @@ export default {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },
       });
+    } finally {
+      globalThis.__EDUTRACK_RUNTIME_ENV__ = previousEnv;
     }
   },
 };
