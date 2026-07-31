@@ -48,8 +48,16 @@ export function readServerSupabaseEnv(
   name: "SUPABASE_URL" | "SUPABASE_PUBLISHABLE_KEY" | "SUPABASE_SERVICE_ROLE_KEY",
 ) {
   const viteName = `VITE_${name}`;
+  const metaEnv = typeof import.meta !== "undefined" ? ((import.meta as unknown as { env?: EnvSource }).env ?? {}) : {};
   const dotenv = loadDotenvFile();
   const processEnv = typeof process !== "undefined" ? process.env : {};
 
-  return processEnv[name] ?? processEnv[viteName] ?? dotenv[name] ?? dotenv[viteName];
+  return (
+    metaEnv[name] ??
+    metaEnv[viteName] ??
+    processEnv[name] ??
+    processEnv[viteName] ??
+    dotenv[name] ??
+    dotenv[viteName]
+  );
 }
