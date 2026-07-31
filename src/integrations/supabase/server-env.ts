@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 type EnvSource = Record<string, string | undefined>;
 
 let cachedDotenv: EnvSource | undefined;
+let cachedDotenvPath: string | undefined;
 
 function parseDotenv(contents: string): EnvSource {
   const result: EnvSource = {};
@@ -46,6 +47,7 @@ function loadDotenvFile(): EnvSource {
     ];
 
     const filePath = candidatePaths.find((candidate) => existsSync(candidate));
+    cachedDotenvPath = filePath;
     cachedDotenv = filePath ? parseDotenv(readFileSync(filePath, "utf8")) : {};
   } catch {
     cachedDotenv = {};
@@ -70,4 +72,19 @@ export function readServerSupabaseEnv(
     dotenv[name] ??
     dotenv[viteName]
   );
+}
+
+export function getServerSupabaseEnvDebugInfo() {
+  const dotenv = loadDotenvFile();
+
+  return {
+    dotenvPath: cachedDotenvPath ?? null,
+    hasDotenv: Boolean(cachedDotenvPath),
+    hasProcessServiceRoleKey: Boolean(process.env?.SUPABASE_SERVICE_ROLE_KEY),
+    hasProcessPublishableKey: Boolean(process.env?.SUPABASE_PUBLISHABLE_KEY),
+    hasProcessUrl: Boolean(process.env?.SUPABASE_URL),
+    hasDotenvServiceRoleKey: Boolean(dotenv.SUPABASE_SERVICE_ROLE_KEY ?? dotenv.VITE_SUPABASE_SERVICE_ROLE_KEY),
+    hasDotenvPublishableKey: Boolean(dotenv.SUPABASE_PUBLISHABLE_KEY ?? dotenv.VITE_SUPABASE_PUBLISHABLE_KEY),
+    hasDotenvUrl: Boolean(dotenv.SUPABASE_URL ?? dotenv.VITE_SUPABASE_URL),
+  };
 }

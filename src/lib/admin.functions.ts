@@ -49,7 +49,7 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: school, error: schoolError } = await supabaseAdmin
+    const { data: school, error: schoolError } = await context.supabase
       .from("schools")
       .insert({
         name: data.name,
@@ -72,7 +72,7 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
     if (userError) throw new Error(userError.message);
 
     const uid = created.user!.id;
-    await supabaseAdmin
+    await context.supabase
       .from("profiles")
       .update({
         school_id: school.id,
@@ -81,7 +81,7 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
         must_change_password: true,
       })
       .eq("id", uid);
-    await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
+    await context.supabase.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
 
     const modules = [
       "fees",
@@ -96,14 +96,14 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
       "report_cards",
       "co_curricular",
     ];
-    await supabaseAdmin.from("feature_toggles").insert(
+    await context.supabase.from("feature_toggles").insert(
       modules.map((module) => ({
         school_id: school.id,
         module,
         enabled: ["attendance", "report_cards", "fees", "co_curricular"].includes(module),
       })),
     );
-    await supabaseAdmin.from("notifications").insert({
+    await context.supabase.from("notifications").insert({
       school_id: school.id,
       user_id: uid,
       title: "One-time password generated",
@@ -147,7 +147,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     const uid = created.user!.id;
 
-    await supabaseAdmin
+    await context.supabase
       .from("profiles")
       .update({
         school_id: schoolId,
@@ -157,7 +157,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
         must_change_password: true,
       })
       .eq("id", uid);
-    await supabaseAdmin
+    await context.supabase
       .from("user_roles")
       .insert({ user_id: uid, role: data.role as never, school_id: schoolId });
 
@@ -349,8 +349,8 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     if (!target) throw new Error("User not found");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
-    const { error: profileError } = await supabaseAdmin.from("profiles").delete().eq("id", data.userId);
+    await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: profileError } = await context.supabase.from("profiles").delete().eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (authError) throw new Error(authError.message);
