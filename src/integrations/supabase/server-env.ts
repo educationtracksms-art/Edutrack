@@ -51,9 +51,20 @@ export function readServerSupabaseEnv(
 ) {
   const viteName = `VITE_${name}`;
   const dotenv = loadDotenvFile();
+  const globalEnv = typeof globalThis !== "undefined" ? globalThis.__EDUTRACK_RUNTIME_ENV__ ?? {} : {};
   const metaEnv = typeof import.meta !== "undefined" ? ((import.meta as unknown as { env?: EnvSource }).env ?? {}) : {};
+  const processEnv = typeof process !== "undefined" ? process.env : {};
 
-  return metaEnv[name] ?? metaEnv[viteName] ?? dotenv[name] ?? dotenv[viteName];
+  return (
+    metaEnv[name] ??
+    metaEnv[viteName] ??
+    globalEnv[name] ??
+    globalEnv[viteName] ??
+    processEnv[name] ??
+    processEnv[viteName] ??
+    dotenv[name] ??
+    dotenv[viteName]
+  );
 }
 
 export function getServerSupabaseEnvDebugInfo() {
