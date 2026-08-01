@@ -1,5 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   Bar,
   BarChart,
@@ -17,8 +20,10 @@ import {
 } from "recharts";
 
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser, hasAny, type AppRole } from "@/hooks/useCurrentUser";
+import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { PageHeader, Panel, Stat } from "@/components/ui-kit";
+import { upsertReportComment, verifyStudent } from "@/lib/admin.functions";
+import { friendlyAdminError } from "@/lib/admin-errors";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -40,9 +45,12 @@ const CHART_COLORS = [
   "var(--color-chart-5)",
 ];
 
-function useDashboardData(schoolId: string | null | undefined, isSuper: boolean) {
+type DashboardTermRow = { id: string; name: string; is_current: boolean };
+type DashboardStudentRow = { id: string; full_name: string; status: string; class_id: string | null; stream_id: string | null };
+
+function useDashboardData(schoolId: string | null | undefined, isSuper: boolean, isTeacher: boolean, teacherId?: string | null) {
   return useQuery({
-    queryKey: ["dashboard", schoolId, isSuper],
+    queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId],
     queryFn: async () => {
       if (!isSuper && !schoolId) {
         return {
@@ -52,18 +60,28 @@ function useDashboardData(schoolId: string | null | undefined, isSuper: boolean)
           subjects: [],
           profiles: [],
           activity: [],
+          classes: [],
+          streams: [],
+          terms: [],
+          teacherAllocations: [],
         };
       }
 
       const schoolQuery = !isSuper && schoolId ? (query: any) => query.eq("school_id", schoolId) : (query: any) => query;
 
-      const [schools, students, assessments, subjects, profiles, activity] = await Promise.all([
+      const [schools, students, assessments, subjects, profiles, activity, classes, streams, terms, teacherAllocations] = await Promise.all([
         schoolQuery(supabase.from("schools").select("id, name, status")),
-        schoolQuery(supabase.from("students").select("id, gender, status, class_id, school_id")),
-        schoolQuery(supabase.from("assessments").select("id, subject_id, formative, summative, status, school_id")),
+        schoolQuery(supabase.from("students").select("id, full_name, gender, status, class_id, stream_id, school_id")),
+        schoolQuery(supabase.from("assessments").select("id, student_id, subject_id, formative, summative, status, school_id")),
         supabase.from("subjects").select("id, name"),
         schoolQuery(supabase.from("profiles").select("id, full_name, school_id")),
         schoolQuery(supabase.from("audit_logs").select("action, user_name, created_at").order("created_at", { ascending: false }).limit(8)),
+        schoolQuery(supabase.from("classes").select("id, name")),
+        schoolQuery(supabase.from("streams").select("id, name, class_id")),
+        schoolQuery(supabase.from("terms").select("id, name, is_current").order("start_date", { ascending: false })),
+        isTeacher && teacherId
+          ? supabase.from("teacher_allocations").select("subject_id, class_id, stream_id").eq("teacher_id", teacherId)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
       return {
         schools: schools.data ?? [],
@@ -72,6 +90,10 @@ function useDashboardData(schoolId: string | null | undefined, isSuper: boolean)
         subjects: subjects.data ?? [],
         profiles: profiles.data ?? [],
         activity: activity.data ?? [],
+        classes: classes.data ?? [],
+        streams: streams.data ?? [],
+        terms: terms.data ?? [],
+        teacherAllocations: teacherAllocations.data ?? [],
       };
     },
   });
@@ -86,7 +108,7 @@ function Dashboard() {
   }
 
   if (isSuper) return <PlatformDashboard />;
-  return <SchoolDashboard />;
+  return <SchoolDashboard me={me} isTeacher={hasAny(me?.roles, ["subject_teacher", "class_teacher"])} />;
 }
 
 function PlatformDashboard() {
@@ -177,13 +199,265 @@ function PlatformDashboard() {
   );
 }
 
-function SchoolDashboard() {
-  const { data: me } = useCurrentUser();
+function TeacherDashboard({ data, me }: { data: any; me: any }) {
+  const teacherAllocations = data.teacherAllocations as Array<{ subject_id: string; class_id: string | null; stream_id: string | null }>;
+  const scopeStudents = data.students.filter((student: any) =>
+    student.status === "active" &&
+    teacherAllocations.some(
+      (allocation) =>
+        (!allocation.class_id || allocation.class_id === student.class_id) &&
+        (!allocation.stream_id || allocation.stream_id === student.stream_id),
+    ),
+  );
+  const scopeSubjects = data.subjects.filter((subject: any) => teacherAllocations.some((allocation) => allocation.subject_id === subject.id));
+  const scopeAssessments = data.assessments.filter(
+    (assessment: any) =>
+      scopeStudents.some((student: any) => student.id === assessment.student_id) &&
+      scopeSubjects.some((subject: any) => subject.id === assessment.subject_id),
+  );
+  const pendingMarks = scopeAssessments.filter((assessment: any) => assessment.status === "submitted");
+  const canEditComments = hasAny(me?.roles, ["class_teacher"]);
+  const assignedLabels = teacherAllocations.map((allocation) => {
+    const subjectName = data.subjects.find((subject: any) => subject.id === allocation.subject_id)?.name ?? "Subject";
+    const className = data.classes.find((item: any) => item.id === allocation.class_id)?.name ?? "Any class";
+    const streamName = data.streams.find((item: any) => item.id === allocation.stream_id)?.name ?? "Any stream";
+    return `${subjectName} · ${className}${allocation.stream_id ? ` · ${streamName}` : ""}`;
+  });
+
+  const totals = scopeAssessments.map((assessment: any) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+  const average = totals.length ? totals.reduce((sum: number, value: number) => sum + value, 0) / totals.length : 0;
+
+  return (
+    <div>
+      <PageHeader
+        title="Teacher dashboard"
+        description="This view is limited to the learners, streams, and subjects assigned to you."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Assigned learners" value={scopeStudents.length} />
+        <Stat label="Assigned subjects" value={scopeSubjects.length} />
+        <Stat label="Pending marks" value={pendingMarks.length} />
+        <Stat label="Average achievement" value={`${average.toFixed(1)}%`} />
+      </div>
+
+      <Panel title="Your assignments" className="mt-4">
+        {assignedLabels.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No teaching allocations have been assigned to your account yet.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {assignedLabels.map((label) => (
+              <li key={label} className="rounded-md border border-border px-3 py-2">
+                {label}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel title="Learners in scope" className="mt-4">
+        {scopeStudents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No learners match your current allocations.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {scopeStudents.slice(0, 10).map((student: any) => (
+              <li key={student.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <span>{student.full_name}</span>
+                <Link to="/assessments" className="text-sm font-medium text-accent">
+                  Enter marks
+                </Link>
+              </li>
+            ))}
+            {scopeStudents.length > 10 && <li className="text-xs text-muted-foreground">Showing the first 10 learners only.</li>}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel title="Marks waiting for submission" className="mt-4">
+        {pendingMarks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No marks are waiting for submission.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {pendingMarks.map((assessment: any) => (
+              <li key={assessment.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <span>
+                  <span className="font-medium">{scopeStudents.find((student: any) => student.id === assessment.student_id)?.full_name ?? "Learner"}</span>{" "}
+                  · {scopeSubjects.find((subject: any) => subject.id === assessment.subject_id)?.name ?? "Subject"}
+                </span>
+                <Link to="/assessments" className="text-sm font-medium text-accent">
+                  Review
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      {canEditComments && (
+        <CommentEditorPanel mode="class_teacher" students={scopeStudents as DashboardStudentRow[]} terms={(data.terms ?? []) as DashboardTermRow[]} />
+      )}
+    </div>
+  );
+}
+
+function CommentEditorPanel({
+  mode,
+  students,
+  terms,
+}: {
+  mode: "class_teacher" | "head_teacher";
+  students: DashboardStudentRow[];
+  terms: DashboardTermRow[];
+}) {
+  const saveComment = useServerFn(upsertReportComment);
+  const [termId, setTermId] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, { classTeacherComment: string; headTeacherComment: string }>>({});
+  const currentTermId = useMemo(() => terms.find((term) => term.is_current)?.id ?? terms[0]?.id ?? "", [terms]);
+
+  useEffect(() => {
+    if (!termId && currentTermId) setTermId(currentTermId);
+  }, [currentTermId, termId]);
+
+  const visible = students.filter((student) => student.status === "active");
+  const scopeStudents = visible;
+  const scopeIds = scopeStudents.map((student) => student.id);
+
+  const { data: comments } = useQuery({
+    queryKey: ["dashboard-report-comments", mode, termId, scopeIds.join(",")],
+    enabled: !!termId && scopeIds.length > 0,
+    queryFn: async () =>
+      (
+        await supabase
+          .from("report_comments")
+          .select("student_id, class_teacher_comment, head_teacher_comment")
+          .eq("term_id", termId)
+          .in("student_id", scopeIds)
+      ).data ?? [],
+  });
+
+  useEffect(() => {
+    if (!comments) return;
+    setDrafts((current) => {
+      const next = { ...current };
+      for (const comment of comments as Array<{ student_id: string; class_teacher_comment: string | null; head_teacher_comment: string | null }>) {
+        next[comment.student_id] = {
+          classTeacherComment: comment.class_teacher_comment ?? current[comment.student_id]?.classTeacherComment ?? "",
+          headTeacherComment: comment.head_teacher_comment ?? current[comment.student_id]?.headTeacherComment ?? "",
+        };
+      }
+      return next;
+    });
+  }, [comments]);
+
+  const editableKey = mode === "class_teacher" ? "classTeacherComment" : "headTeacherComment";
+  const editableLabel = mode === "class_teacher" ? "Class Teacher's Comment" : "Head Teacher's Comment";
+  const otherLabel = mode === "class_teacher" ? "Head Teacher's Comment" : "Class Teacher's Comment";
+  const saveMutation = useMutation({
+    mutationFn: async (studentId: string) => {
+      if (!termId) throw new Error("Choose a term first");
+      const draft = drafts[studentId] ?? { classTeacherComment: "", headTeacherComment: "" };
+      await saveComment({
+        data: {
+          studentId,
+          termId,
+          ...(mode === "class_teacher"
+            ? { classTeacherComment: draft.classTeacherComment }
+            : { headTeacherComment: draft.headTeacherComment }),
+        },
+      });
+    },
+    onSuccess: () => toast.success("Comment saved"),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  return (
+    <Panel title="Report comments" className="mt-4">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <select className="rounded-md border border-border bg-background px-3 py-2 text-sm" value={termId} onChange={(event) => setTermId(event.target.value)}>
+          <option value="">Select term</option>
+          {terms.map((term) => (
+            <option key={term.id} value={term.id}>
+              {term.name}
+              {term.is_current ? " (Current)" : ""}
+            </option>
+          ))}
+        </select>
+        <span className="text-sm text-muted-foreground">{visible.length} learner(s) in scope</span>
+      </div>
+
+      {scopeStudents.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No learners are available for comment entry yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {scopeStudents.map((student) => {
+            const draft = drafts[student.id] ?? { classTeacherComment: "", headTeacherComment: "" };
+            return (
+              <div key={student.id} className="rounded-lg border border-border p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold">{student.full_name}</h3>
+                  <button
+                    type="button"
+                    className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
+                    onClick={() => saveMutation.mutate(student.id)}
+                    disabled={saveMutation.isPending}
+                  >
+                    Save comment
+                  </button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="block text-sm">
+                    <span className="font-medium">{editableLabel}</span>
+                    <textarea
+                      className="mt-1 min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
+                      value={draft[editableKey]}
+                      onChange={(event) =>
+                        setDrafts((current) => ({
+                          ...current,
+                          [student.id]: { ...draft, [editableKey]: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="font-medium">{otherLabel}</span>
+                    <textarea
+                      className="mt-1 min-h-28 w-full rounded-md border border-border bg-muted px-3 py-2 text-sm outline-none"
+                      value={draft[mode === "class_teacher" ? "headTeacherComment" : "classTeacherComment"]}
+                      readOnly
+                    />
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
+  const queryClient = useQueryClient();
   const isSuper = false;
   const canSeeActivity = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher"]);
-  const { data, isLoading } = useDashboardData(me?.profile?.school_id, isSuper);
+  const canApprove = hasAny(me?.roles, ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
+  const canEditHeadComments = hasAny(me?.roles, ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"]);
+  const approveStudent = useServerFn(verifyStudent);
+  const { data, isLoading } = useDashboardData(me?.profile?.school_id, isSuper, isTeacher, me?.userId);
+  const approveMutation = useMutation({
+    mutationFn: (studentId: string) => approveStudent({ data: { studentId } }),
+    onSuccess: () => {
+      toast.success("Learner approved");
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
 
   if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading analytics…</p>;
+
+  if (isTeacher) {
+    return <TeacherDashboard data={data} me={me} />;
+  }
 
   const totals = data.assessments.map((a) => Number(a.formative ?? 0) + Number(a.summative ?? 0));
   const average = totals.length ? totals.reduce((x, y) => x + y, 0) / totals.length : 0;
@@ -216,6 +490,14 @@ function SchoolDashboard() {
   const approved = data.assessments.filter((a) => a.status === "approved").length;
   const rejected = data.assessments.filter((a) => a.status === "rejected").length;
   const completion = data.assessments.length ? Math.round((approved / data.assessments.length) * 100) : 0;
+  const pendingStudents = data.students.filter((student) => student.status === "pending");
+  const pendingAssessments = data.assessments
+    .filter((assessment) => assessment.status === "submitted")
+    .map((assessment) => ({
+      ...assessment,
+      studentName: data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "—",
+      subjectName: data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "—",
+    }));
 
   const trend = ["Term I", "Term II", "Term III"].map((term, index) => ({
     term,
@@ -234,6 +516,74 @@ function SchoolDashboard() {
         <Stat label="Approved assessments" value={approved} />
         <Stat label="Assessment completion" value={`${completion}%`} />
       </div>
+
+      {canApprove && (
+        <Panel title="Needs your approval" className="mt-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Learner admissions</h3>
+                <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">{pendingStudents.length} pending</span>
+              </div>
+              {pendingStudents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No learner admissions are waiting for verification.</p>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {pendingStudents.map((student) => (
+                    <li key={student.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                      <span>{student.full_name ?? "Unnamed learner"}</span>
+                      <div className="flex items-center gap-2">
+                        <Link to="/students" className="text-sm font-medium text-accent">
+                          Review
+                        </Link>
+                        <button
+                          type="button"
+                          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
+                          onClick={() => approveMutation.mutate(student.id)}
+                          disabled={approveMutation.isPending}
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Assessment approvals</h3>
+                <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">{pendingAssessments.length} pending</span>
+              </div>
+              {pendingAssessments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No assessment entries are waiting for review.</p>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {pendingAssessments.map((assessment) => (
+                    <li key={assessment.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                      <span>
+                        <span className="font-medium">{assessment.studentName}</span> · {assessment.subjectName}
+                      </span>
+                      <Link to="/assessments" className="text-sm font-medium text-accent">
+                        Review
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      {canEditHeadComments && (
+        <CommentEditorPanel
+          mode="head_teacher"
+          students={(data.students as DashboardStudentRow[]).filter((student) => student.status === "active")}
+          terms={(data.terms ?? []) as DashboardTermRow[]}
+        />
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Panel title="Subject performance">

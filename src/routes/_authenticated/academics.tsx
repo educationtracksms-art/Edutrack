@@ -50,8 +50,8 @@ function AcademicsPage() {
         supabase.from("teacher_allocations").select("*"),
         supabase.from("profiles").select("id, full_name, initials").order("full_name"),
         supabase.from("user_roles").select("user_id, role"),
-        supabase.from("academic_years").select("*").eq("school_id", schoolId).order("name"),
-        supabase.from("terms").select("*").eq("school_id", schoolId).order("start_date", { ascending: true }).order("name"),
+        supabase.from("academic_years").select("*").eq("school_id", schoolId!).order("name"),
+        supabase.from("terms").select("*").eq("school_id", schoolId!).order("start_date", { ascending: true }).order("name"),
       ]);
       const teachingRoles = new Set(
         (roles.data ?? [])

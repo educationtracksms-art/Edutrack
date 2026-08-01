@@ -106,6 +106,7 @@ export type Database = {
           created_at: string
           exam_type: string
           formative: number | null
+          grade_descriptor: string | null
           id: string
           locked: boolean
           rejection_reason: string | null
@@ -128,6 +129,7 @@ export type Database = {
           created_at?: string
           exam_type?: string
           formative?: number | null
+          grade_descriptor?: string | null
           id?: string
           locked?: boolean
           rejection_reason?: string | null
@@ -150,6 +152,7 @@ export type Database = {
           created_at?: string
           exam_type?: string
           formative?: number | null
+          grade_descriptor?: string | null
           id?: string
           locked?: boolean
           rejection_reason?: string | null

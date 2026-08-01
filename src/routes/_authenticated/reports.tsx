@@ -1,16 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { supabase } from "@/integrations/supabase/client";
-import { getReportCards } from "@/lib/report.functions";
-import { logReportPrint } from "@/lib/admin.functions";
-import { friendlyAdminError } from "@/lib/admin-errors";
 import { ReportCard } from "@/components/report/ReportCard";
-import type { ReportCardData } from "@/lib/report-types";
 import { Btn, PageHeader, Panel, inputClass } from "@/components/ui-kit";
+import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
+import { friendlyAdminError } from "@/lib/admin-errors";
+import { logReportPrint, upsertReportComment } from "@/lib/admin.functions";
+import { getReportCards } from "@/lib/report.functions";
+import type { ReportCardData } from "@/lib/report-types";
+import { supabase } from "@/integrations/supabase/client";
+
+type ClassRow = { id: string; name: string };
+type StudentRow = { id: string; full_name: string; class_id: string | null };
+type TermRow = { id: string; name: string; is_current: boolean };
+type CommentRow = { student_id: string; class_teacher_comment: string | null; head_teacher_comment: string | null };
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
@@ -27,31 +33,95 @@ export const Route = createFileRoute("/_authenticated/reports")({
 function ReportsPage() {
   const build = useServerFn(getReportCards);
   const logPrint = useServerFn(logReportPrint);
+  const saveComment = useServerFn(upsertReportComment);
+  const { data: me } = useCurrentUser();
+  const canEditComments = hasAny(me?.roles, ["class_teacher", "head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"]);
   const [classId, setClassId] = useState("");
+  const [termId, setTermId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [cards, setCards] = useState<ReportCardData[]>([]);
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, { classTeacherComment: string; headTeacherComment: string }>>({});
 
-  const { data: classes } = useQuery({
+  const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["classes"],
     queryFn: async () => (await supabase.from("classes").select("id, name").order("name")).data ?? [],
   });
-  const { data: students } = useQuery({
+  const { data: students } = useQuery<StudentRow[]>({
     queryKey: ["students-active"],
     queryFn: async () =>
       (await supabase.from("students").select("id, full_name, class_id").eq("status", "active").order("full_name")).data ?? [],
   });
+  const { data: terms } = useQuery<TermRow[]>({
+    queryKey: ["report-terms"],
+    queryFn: async () =>
+      (await supabase.from("terms").select("id, name, is_current").order("start_date", { ascending: false })).data ?? [],
+  });
 
-  const visible = (students ?? []).filter((s) => (classId ? s.class_id === classId : true));
+  const currentTermId = useMemo(() => terms?.find((term) => term.is_current)?.id ?? terms?.[0]?.id ?? "", [terms]);
+
+  useEffect(() => {
+    if (!termId && currentTermId) setTermId(currentTermId);
+  }, [currentTermId, termId]);
+
+  const visible = (students ?? []).filter((student) => (classId ? student.class_id === classId : true));
+  const scopeStudents = selected.length ? visible.filter((student) => selected.includes(student.id)) : visible;
+  const scopeIds = scopeStudents.map((student) => student.id);
+
+  const { data: comments } = useQuery<CommentRow[]>({
+    queryKey: ["report-comments", termId, scopeIds.join(",")],
+    enabled: !!termId && scopeIds.length > 0,
+    queryFn: async () =>
+      (
+        await supabase
+          .from("report_comments")
+          .select("student_id, class_teacher_comment, head_teacher_comment")
+          .eq("term_id", termId)
+          .in("student_id", scopeIds)
+      ).data ?? [],
+  });
+
+  useEffect(() => {
+    if (!comments) return;
+    setCommentDrafts((current) => {
+      const next = { ...current };
+      for (const comment of comments) {
+        next[comment.student_id] = {
+          classTeacherComment: comment.class_teacher_comment ?? current[comment.student_id]?.classTeacherComment ?? "",
+          headTeacherComment: comment.head_teacher_comment ?? current[comment.student_id]?.headTeacherComment ?? "",
+        };
+      }
+      return next;
+    });
+  }, [comments]);
 
   const generate = useMutation({
     mutationFn: async () => {
-      const ids = selected.length ? selected : visible.map((s) => s.id);
+      const ids = selected.length ? selected : visible.map((student) => student.id);
       if (!ids.length) throw new Error("Select at least one learner");
-      return build({ data: { studentIds: ids } });
+      return build({ data: { studentIds: ids, termId: termId || undefined } });
     },
     onSuccess: (result) => {
       setCards(result);
       toast.success(`${result.length} report card(s) ready`);
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  const saveCommentMutation = useMutation({
+    mutationFn: async (studentId: string) => {
+      if (!termId) throw new Error("Choose a term first");
+      const draft = commentDrafts[studentId] ?? { classTeacherComment: "", headTeacherComment: "" };
+      await saveComment({
+        data: {
+          studentId,
+          termId,
+          classTeacherComment: draft.classTeacherComment,
+          headTeacherComment: draft.headTeacherComment,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Comment saved");
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -78,7 +148,27 @@ function ReportsPage() {
 
       <Panel className="no-print mb-6">
         <div className="flex flex-wrap items-center gap-3">
-          <select className={`${inputClass} max-w-xs`} value={classId} onChange={(e) => { setClassId(e.target.value); setSelected([]); }}>
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={termId}
+            onChange={(event) => setTermId(event.target.value)}
+          >
+            <option value="">Select term</option>
+            {(terms ?? []).map((term) => (
+              <option key={term.id} value={term.id}>
+                {term.name}
+                {term.is_current ? " (Current)" : ""}
+              </option>
+            ))}
+          </select>
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={classId}
+            onChange={(event) => {
+              setClassId(event.target.value);
+              setSelected([]);
+            }}
+          >
             <option value="">All classes</option>
             {(classes ?? []).map((item) => (
               <option key={item.id} value={item.id}>
@@ -96,8 +186,8 @@ function ReportsPage() {
               <input
                 type="checkbox"
                 checked={selected.includes(student.id)}
-                onChange={(e) =>
-                  setSelected(e.target.checked ? [...selected, student.id] : selected.filter((id) => id !== student.id))
+                onChange={(event) =>
+                  setSelected(event.target.checked ? [...selected, student.id] : selected.filter((id) => id !== student.id))
                 }
               />
               {student.full_name}
@@ -105,6 +195,58 @@ function ReportsPage() {
           ))}
         </div>
       </Panel>
+
+      {canEditComments && (
+        <Panel title="Report comments" className="no-print mb-6">
+          {scopeStudents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Select learners first, then add comments for the chosen term.</p>
+          ) : (
+            <div className="space-y-4">
+              {scopeStudents.map((student) => {
+                const draft = commentDrafts[student.id] ?? { classTeacherComment: "", headTeacherComment: "" };
+                return (
+                  <div key={student.id} className="rounded-lg border border-border p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold">{student.full_name}</h3>
+                      <Btn variant="accent" onClick={() => saveCommentMutation.mutate(student.id)} disabled={saveCommentMutation.isPending}>
+                        Save comment
+                      </Btn>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="block text-sm">
+                        <span className="font-medium">Class Teacher&apos;s Comment</span>
+                        <textarea
+                          className={`${inputClass} mt-1 min-h-28`}
+                          value={draft.classTeacherComment}
+                          onChange={(event) =>
+                            setCommentDrafts((current) => ({
+                              ...current,
+                              [student.id]: { ...draft, classTeacherComment: event.target.value },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="block text-sm">
+                        <span className="font-medium">Head Teacher&apos;s Comment</span>
+                        <textarea
+                          className={`${inputClass} mt-1 min-h-28`}
+                          value={draft.headTeacherComment}
+                          onChange={(event) =>
+                            setCommentDrafts((current) => ({
+                              ...current,
+                              [student.id]: { ...draft, headTeacherComment: event.target.value },
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
+      )}
 
       <div className="space-y-6">
         {cards.map((card) => (

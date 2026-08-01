@@ -61,7 +61,7 @@ export async function buildReportCards(
     await Promise.all([
       supabase
         .from("assessments")
-        .select("student_id, subject_id, formative, summative, teacher_initials, status")
+        .select("student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status")
         .in("student_id", ids)
         .eq("term_id", termFilterId)
         .eq("status", "approved"),
@@ -121,7 +121,7 @@ export async function buildReportCards(
         summative: fmt(summative),
         total: fmt(total),
         grade: g.grade,
-        descriptor: g.descriptor,
+        descriptor: (mark.grade_descriptor as string | null) ?? g.descriptor,
         teacher: mark.teacher_initials ?? "",
       };
     });

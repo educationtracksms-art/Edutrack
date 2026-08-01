@@ -5,9 +5,9 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { deleteStudent, verifyStudent } from "@/lib/admin.functions";
+import { deleteStudent, updateStudentStatus, verifyStudent } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
-import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
+import { hasAny, SCHOOL_ROLES, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { uploadImage } from "@/lib/storage";
 
@@ -26,8 +26,12 @@ export const Route = createFileRoute("/_authenticated/students")({
 function StudentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
-  const canVerify = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
+  const canAccessStudents = hasAny(me?.roles, ["super_admin", ...SCHOOL_ROLES]);
+  const canManageStudents = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "super_admin"]);
+  const canChangeStatus = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
+  const canVerify = canManageStudents;
   const verify = useServerFn(verifyStudent);
+  const updateStatus = useServerFn(updateStudentStatus);
   const deleteStudentFn = useServerFn(deleteStudent);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -140,6 +144,15 @@ function StudentsPage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
+  const statusMutation = useMutation({
+    mutationFn: (vars: { studentId: string; status: "pending" | "active" | "inactive" }) => updateStatus({ data: vars }),
+    onSuccess: () => {
+      toast.success("Student status updated");
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
   const removeStudent = useMutation({
     mutationFn: (studentId: string) => deleteStudentFn({ data: { studentId } }),
     onSuccess: () => {
@@ -184,15 +197,25 @@ function StudentsPage() {
   const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "â€”";
   const streamName = (id: string | null) => streams?.find((s) => s.id === id)?.name ?? "";
 
+if (!canAccessStudents) {
+    return (
+      <Panel>
+        <p className="text-sm text-muted-foreground">You do not have access to the learner records area yet.</p>
+      </Panel>
+    );
+  }
+
   return (
     <div>
       <PageHeader
         title="Students"
         description="Registered learners stay pending until an administrator verifies the admission."
         actions={
-          <Btn variant="accent" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
-            {showForm ? "Close" : "Register learner"}
-          </Btn>
+          canManageStudents ? (
+            <Btn variant="accent" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
+              {showForm ? "Close" : "Register learner"}
+            </Btn>
+          ) : undefined
         }
       />
 
@@ -318,9 +341,21 @@ function StudentsPage() {
                   </td>
                   <td>{student.house ?? "â€”"}</td>
                   <td>
-                    <Pill tone={student.status === "active" ? "success" : student.status === "pending" ? "warning" : "muted"}>
-                      {student.status}
-                    </Pill>
+                    {canChangeStatus ? (
+                      <select
+                        className={`${inputClass} max-w-[120px]`}
+                        value={student.status ?? "pending"}
+                        onChange={(event) => statusMutation.mutate({ studentId: student.id, status: event.target.value as "pending" | "active" | "inactive" })}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    ) : (
+                      <Pill tone={student.status === "active" ? "success" : student.status === "pending" ? "warning" : "muted"}>
+                        {student.status}
+                      </Pill>
+                    )}
                   </td>
                   <td className="py-2.5 text-right">
                     <div className="flex justify-end gap-2">
@@ -328,7 +363,9 @@ function StudentsPage() {
                         Edit
                       </Btn>
                       {canVerify && student.status === "pending" && (
-                        <Btn onClick={() => verifyMutation.mutate(student.id)}>Verify</Btn>
+                        <Btn variant="accent" onClick={() => verifyMutation.mutate(student.id)}>
+                          Approve
+                        </Btn>
                       )}
                       {canVerify && (
                         <Btn

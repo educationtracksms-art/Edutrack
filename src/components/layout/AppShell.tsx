@@ -53,7 +53,7 @@ const NAV: NavItem[] = [
     to: "/students",
     label: "Students",
     icon: GraduationCap,
-    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "class_teacher"],
+    roles: ["super_admin", ...SCHOOL_ROLES],
   },
   { to: "/academics", label: "Academic setup", icon: Library, roles: ACADEMIC_MANAGERS },
   { to: "/timetable", label: "Timetable", icon: CalendarClock, roles: SCHOOL_ROLES },
