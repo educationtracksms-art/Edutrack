@@ -17,7 +17,7 @@ import {
 } from "recharts";
 
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
+import { useCurrentUser, hasAny, type AppRole } from "@/hooks/useCurrentUser";
 import { PageHeader, Panel, Stat } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -44,13 +44,26 @@ function useDashboardData(schoolId: string | null | undefined, isSuper: boolean)
   return useQuery({
     queryKey: ["dashboard", schoolId, isSuper],
     queryFn: async () => {
+      if (!isSuper && !schoolId) {
+        return {
+          schools: [],
+          students: [],
+          assessments: [],
+          subjects: [],
+          profiles: [],
+          activity: [],
+        };
+      }
+
+      const schoolQuery = !isSuper && schoolId ? (query: any) => query.eq("school_id", schoolId) : (query: any) => query;
+
       const [schools, students, assessments, subjects, profiles, activity] = await Promise.all([
-        supabase.from("schools").select("id, name, status"),
-        supabase.from("students").select("id, gender, status, class_id, school_id"),
-        supabase.from("assessments").select("id, subject_id, formative, summative, status, school_id"),
+        schoolQuery(supabase.from("schools").select("id, name, status")),
+        schoolQuery(supabase.from("students").select("id, gender, status, class_id, school_id")),
+        schoolQuery(supabase.from("assessments").select("id, subject_id, formative, summative, status, school_id")),
         supabase.from("subjects").select("id, name"),
-        supabase.from("profiles").select("id, full_name, school_id"),
-        supabase.from("audit_logs").select("action, user_name, created_at").order("created_at", { ascending: false }).limit(8),
+        schoolQuery(supabase.from("profiles").select("id, full_name, school_id")),
+        schoolQuery(supabase.from("audit_logs").select("action, user_name, created_at").order("created_at", { ascending: false }).limit(8)),
       ]);
       return {
         schools: schools.data ?? [],
@@ -65,8 +78,13 @@ function useDashboardData(schoolId: string | null | undefined, isSuper: boolean)
 }
 
 function Dashboard() {
-  const { data: me } = useCurrentUser();
+  const { data: me, isLoading: isUserLoading } = useCurrentUser();
   const isSuper = hasAny(me?.roles, ["super_admin"]);
+
+  if (isUserLoading) {
+    return <p className="text-sm text-muted-foreground">Loading dashboard…</p>;
+  }
+
   if (isSuper) return <PlatformDashboard />;
   return <SchoolDashboard />;
 }
