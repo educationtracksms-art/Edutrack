@@ -19,6 +19,7 @@ import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authenticated/audit-logs'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedEnvDebugRouteImport } from './routes/_authenticated/env-debug'
 import { Route as AuthenticatedPromotionsRouteImport } from './routes/_authenticated/promotions'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedSchoolsRouteImport } from './routes/_authenticated/schools'
@@ -78,6 +79,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEnvDebugRoute = AuthenticatedEnvDebugRouteImport.update({
+  id: '/env-debug',
+  path: '/env-debug',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedPromotionsRoute = AuthenticatedPromotionsRouteImport.update({
   id: '/promotions',
   path: '/promotions',
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/env-debug': typeof AuthenticatedEnvDebugRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/schools': typeof AuthenticatedSchoolsRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/env-debug': typeof AuthenticatedEnvDebugRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/schools': typeof AuthenticatedSchoolsRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/_authenticated/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/env-debug': typeof AuthenticatedEnvDebugRoute
   '/_authenticated/promotions': typeof AuthenticatedPromotionsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/schools': typeof AuthenticatedSchoolsRoute
@@ -182,6 +191,7 @@ export interface FileRouteTypes {
     | '/audit-logs'
     | '/change-password'
     | '/dashboard'
+    | '/env-debug'
     | '/promotions'
     | '/reports'
     | '/schools'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/audit-logs'
     | '/change-password'
     | '/dashboard'
+    | '/env-debug'
     | '/promotions'
     | '/reports'
     | '/schools'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/_authenticated/audit-logs'
     | '/_authenticated/change-password'
     | '/_authenticated/dashboard'
+    | '/_authenticated/env-debug'
     | '/_authenticated/promotions'
     | '/_authenticated/reports'
     | '/_authenticated/schools'
@@ -307,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/env-debug': {
+      id: '/_authenticated/env-debug'
+      path: '/env-debug'
+      fullPath: '/env-debug'
+      preLoaderRoute: typeof AuthenticatedEnvDebugRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/promotions': {
       id: '/_authenticated/promotions'
       path: '/promotions'
@@ -366,6 +385,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditLogsRoute: typeof AuthenticatedAuditLogsRoute
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedEnvDebugRoute: typeof AuthenticatedEnvDebugRoute
   AuthenticatedPromotionsRoute: typeof AuthenticatedPromotionsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSchoolsRoute: typeof AuthenticatedSchoolsRoute
@@ -382,6 +402,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditLogsRoute: AuthenticatedAuditLogsRoute,
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedEnvDebugRoute: AuthenticatedEnvDebugRoute,
   AuthenticatedPromotionsRoute: AuthenticatedPromotionsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSchoolsRoute: AuthenticatedSchoolsRoute,
