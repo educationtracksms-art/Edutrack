@@ -69,12 +69,46 @@ export function readServerSupabaseEnv(
 
 export function getServerSupabaseEnvDebugInfo() {
   const dotenv = loadDotenvFile();
+  const runtimeEnv = typeof globalThis !== "undefined" ? globalThis.__EDUTRACK_RUNTIME_ENV__ ?? {} : {};
+  const metaEnv = typeof import.meta !== "undefined" ? ((import.meta as unknown as { env?: EnvSource }).env ?? {}) : {};
+  const processEnv = typeof process !== "undefined" ? process.env : {};
 
   return {
     dotenvPath: cachedDotenvPath ?? null,
     hasDotenv: Boolean(cachedDotenvPath),
-    hasDotenvServiceRoleKey: Boolean(dotenv.SUPABASE_SERVICE_ROLE_KEY ?? dotenv.VITE_SUPABASE_SERVICE_ROLE_KEY),
-    hasDotenvPublishableKey: Boolean(dotenv.SUPABASE_PUBLISHABLE_KEY ?? dotenv.VITE_SUPABASE_PUBLISHABLE_KEY),
-    hasDotenvUrl: Boolean(dotenv.SUPABASE_URL ?? dotenv.VITE_SUPABASE_URL),
+    hasDotenvServiceRoleKey: Boolean(
+      dotenv.SUPABASE_SERVICE_ROLE_KEY ??
+        dotenv.VITE_SUPABASE_SERVICE_ROLE_KEY ??
+        metadataEnvValue(metaEnv, "SUPABASE_SERVICE_ROLE_KEY") ??
+        metadataEnvValue(metaEnv, "VITE_SUPABASE_SERVICE_ROLE_KEY") ??
+        runtimeEnv["SUPABASE_SERVICE_ROLE_KEY"] ??
+        runtimeEnv["VITE_SUPABASE_SERVICE_ROLE_KEY"] ??
+        processEnv["SUPABASE_SERVICE_ROLE_KEY"] ??
+        processEnv["VITE_SUPABASE_SERVICE_ROLE_KEY"],
+    ),
+    hasDotenvPublishableKey: Boolean(
+      dotenv.SUPABASE_PUBLISHABLE_KEY ??
+        dotenv.VITE_SUPABASE_PUBLISHABLE_KEY ??
+        metadataEnvValue(metaEnv, "SUPABASE_PUBLISHABLE_KEY") ??
+        metadataEnvValue(metaEnv, "VITE_SUPABASE_PUBLISHABLE_KEY") ??
+        runtimeEnv["SUPABASE_PUBLISHABLE_KEY"] ??
+        runtimeEnv["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
+        processEnv["SUPABASE_PUBLISHABLE_KEY"] ??
+        processEnv["VITE_SUPABASE_PUBLISHABLE_KEY"],
+    ),
+    hasDotenvUrl: Boolean(
+      dotenv.SUPABASE_URL ??
+        dotenv.VITE_SUPABASE_URL ??
+        metadataEnvValue(metaEnv, "SUPABASE_URL") ??
+        metadataEnvValue(metaEnv, "VITE_SUPABASE_URL") ??
+        runtimeEnv["SUPABASE_URL"] ??
+        runtimeEnv["VITE_SUPABASE_URL"] ??
+        processEnv["SUPABASE_URL"] ??
+        processEnv["VITE_SUPABASE_URL"],
+    ),
   };
+}
+
+function metadataEnvValue(env: EnvSource, name: string) {
+  return env[name] ?? undefined;
 }

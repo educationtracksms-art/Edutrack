@@ -53,7 +53,15 @@ export default {
       const runtimeEnv = env && typeof env === "object" ? (env as Record<string, string | undefined>) : {};
       globalThis.__EDUTRACK_RUNTIME_ENV__ = runtimeEnv;
       if (typeof process !== "undefined" && process.env) {
-        process.env = { ...process.env, ...runtimeEnv };
+        for (const [key, value] of Object.entries(runtimeEnv)) {
+          if (value !== undefined) {
+            try {
+              process.env[key] = value;
+            } catch {
+              // Some server runtimes may use a frozen process.env object.
+            }
+          }
+        }
       }
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
