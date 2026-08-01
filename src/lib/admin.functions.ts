@@ -74,13 +74,16 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
 
     await context.supabase
       .from("profiles")
-      .update({
-        school_id: school.id,
-        full_name: data.adminName,
-        email: data.adminEmail,
-        must_change_password: true,
-      })
-      .eq("id", uid ?? context.userId);
+      .upsert(
+        {
+          id: uid,
+          school_id: school.id,
+          full_name: data.adminName,
+          email: data.adminEmail,
+          must_change_password: true,
+        },
+        { onConflict: ["id"] },
+      );
     await context.supabase.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
 
     const modules = [
@@ -149,14 +152,17 @@ export const createStaffUser = createServerFn({ method: "POST" })
 
     await context.supabase
       .from("profiles")
-      .update({
-        school_id: schoolId,
-        full_name: data.fullName,
-        email: data.email,
-        initials: data.initials ?? null,
-        must_change_password: true,
-      })
-      .eq("id", uid ?? context.userId);
+      .upsert(
+        {
+          id: uid,
+          school_id: schoolId,
+          full_name: data.fullName,
+          email: data.email,
+          initials: data.initials ?? null,
+          must_change_password: true,
+        },
+        { onConflict: ["id"] },
+      );
     await context.supabase
       .from("user_roles")
       .insert({ user_id: uid, role: data.role as never, school_id: schoolId });
