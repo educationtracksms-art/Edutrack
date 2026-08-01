@@ -18,6 +18,7 @@ export type ReportCardData = {
   studentId: string;
   school: {
     name: string;
+    motto: string | null;
     address: string;
     email: string;
     phone: string;

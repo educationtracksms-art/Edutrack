@@ -351,7 +351,6 @@ function CommentEditorPanel({
 
   const editableKey = mode === "class_teacher" ? "classTeacherComment" : "headTeacherComment";
   const editableLabel = mode === "class_teacher" ? "Class Teacher's Comment" : "Head Teacher's Comment";
-  const otherLabel = mode === "class_teacher" ? "Head Teacher's Comment" : "Class Teacher's Comment";
   const saveMutation = useMutation({
     mutationFn: async (studentId: string) => {
       if (!termId) throw new Error("Choose a term first");
@@ -416,14 +415,6 @@ function CommentEditorPanel({
                           [student.id]: { ...draft, [editableKey]: event.target.value },
                         }))
                       }
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    <span className="font-medium">{otherLabel}</span>
-                    <textarea
-                      className="mt-1 min-h-28 w-full rounded-md border border-border bg-muted px-3 py-2 text-sm outline-none"
-                      value={draft[mode === "class_teacher" ? "headTeacherComment" : "classTeacherComment"]}
-                      readOnly
                     />
                   </label>
                 </div>

@@ -125,10 +125,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className={cn("flex items-center gap-3 border-b border-sidebar-border px-3 py-4", !labelsVisible && "justify-center")}>
-          <img src={logoUrl} alt="EduTrack logo" className="h-11 w-11 rounded-full bg-white object-cover" />
+          <img src={me?.school?.logo_url || logoUrl} alt={`${me?.school?.name || "EduTrack"} logo`} className="h-11 w-11 rounded-full bg-white object-cover" />
           {!isMobile && labelsVisible && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold leading-tight">EduTrack</p>
+              <p className="truncate text-sm font-semibold leading-tight">{me?.school?.name || "EduTrack"}</p>
               <p className="truncate text-xs text-sidebar-foreground/60">School Management</p>
             </div>
           )}

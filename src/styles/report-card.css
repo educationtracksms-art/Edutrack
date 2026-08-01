@@ -73,6 +73,12 @@
             color: #2c3e50;
             margin-bottom: 2px;
         }
+.report-doc .school-details p.motto {
+            font-size: 13px;
+            color: #555;
+            font-style: italic;
+            margin-bottom: 4px;
+        }
 .report-doc .school-details h2 {
             font-size: 16px;
             color: #c9302c;

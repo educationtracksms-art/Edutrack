@@ -139,6 +139,7 @@ export async function buildReportCards(
       studentId: student.id,
       school: {
         name: school?.name ?? "",
+        motto: school?.motto ?? null,
         address: school?.address ?? "",
         email: school?.email ?? "",
         phone: school?.phone ?? "",

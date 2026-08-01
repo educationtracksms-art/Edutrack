@@ -42,7 +42,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
       <main>{children}</main>
 
-      <footer className="border-t border-border/70 bg-muted/30">
+     {/*  <footer className="border-t border-border/70 bg-muted/30">
         <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 md:grid-cols-[1.2fr_0.8fr] md:items-center">
           <div>
             <p className="text-sm font-semibold text-foreground">Developed by K-Dev Technologies Ltd</p>
@@ -76,7 +76,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </div>
-      </footer>
+      </footer> */}
     </div>
   );
 }

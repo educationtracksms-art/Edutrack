@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
-import { reviewAssessments, upsertAssessmentEntry } from "@/lib/admin.functions";
+import { reviewAssessments, upsertAssessmentEntry, upsertReportComment } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type TeacherAllocationView = {
@@ -43,6 +43,11 @@ type TermRow = { id: string; name: string; is_current: boolean };
 type ClassRow = { id: string; name: string };
 type StreamRow = { id: string; name: string; class_id: string | null };
 type ProfileRow = { initials: string | null };
+type CommentRow = {
+  student_id: string;
+  class_teacher_comment: string | null;
+  head_teacher_comment: string | null;
+};
 
 type AssessmentsData = {
   assessments: AssessmentRow[];
@@ -75,12 +80,17 @@ function AssessmentsPage() {
   const isTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
   const canReview = hasAny(me?.roles, ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
   const canEnter = !!schoolId && hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher"]);
+  const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
+  const isHeadTeacher = hasAny(me?.roles, ["head_teacher", "deputy_head_teacher"]);
+  const canEditComments = isClassTeacher || isHeadTeacher;
   const review = useServerFn(reviewAssessments);
   const upsertEntry = useServerFn(upsertAssessmentEntry);
+  const saveComment = useServerFn(upsertReportComment);
   const [subjectFilter, setSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [termFilter, setTermFilter] = useState("");
   const [allocationKey, setAllocationKey] = useState("");
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, { classTeacherComment: string; headTeacherComment: string }>>({});
   const [entryForm, setEntryForm] = useState({
     studentId: "",
     subjectId: "",
@@ -212,6 +222,44 @@ function AssessmentsPage() {
     return data.subjects.filter((subject: SubjectRow) => subject.id === selectedAllocation.subject_id);
   }, [data, isTeacher, selectedAllocation]);
 
+  const commentStudents = useMemo(() => {
+    if (!data) return [];
+    if (!isTeacher) return data.students;
+    if (!selectedAllocation) return [];
+    return data.students.filter(
+      (student: StudentRow) =>
+        (!selectedAllocation.class_id || selectedAllocation.class_id === student.class_id) &&
+        (!selectedAllocation.stream_id || selectedAllocation.stream_id === student.stream_id),
+    );
+  }, [data, isTeacher, selectedAllocation]);
+
+  const { data: comments } = useQuery<CommentRow[]>({
+    queryKey: ["assessment-comments", termFilter || data?.currentTermId || "", commentStudents.map((student) => student.id).join(",")],
+    enabled: commentStudents.length > 0,
+    queryFn: async () =>
+      (
+        await supabase
+          .from("report_comments")
+          .select("student_id, class_teacher_comment, head_teacher_comment")
+          .eq("term_id", termFilter || data?.currentTermId || "")
+          .in("student_id", commentStudents.map((student) => student.id))
+      ).data ?? [],
+  });
+
+  useEffect(() => {
+    if (!comments) return;
+    setCommentDrafts((current) => {
+      const next = { ...current };
+      for (const comment of comments) {
+        next[comment.student_id] = {
+          classTeacherComment: comment.class_teacher_comment ?? current[comment.student_id]?.classTeacherComment ?? "",
+          headTeacherComment: comment.head_teacher_comment ?? current[comment.student_id]?.headTeacherComment ?? "",
+        };
+      }
+      return next;
+    });
+  }, [comments]);
+
   const rows = useMemo(() => {
     if (!data) return [];
     return data.assessments
@@ -255,6 +303,27 @@ function AssessmentsPage() {
     onSuccess: () => {
       toast.success("Scores submitted for approval");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: async (studentId: string) => {
+      const termId = termFilter || data?.currentTermId;
+      if (!termId) throw new Error("Choose a term first");
+      const draft = commentDrafts[studentId] ?? { classTeacherComment: "", headTeacherComment: "" };
+      await saveComment({
+        data: {
+          studentId,
+          termId,
+          classTeacherComment: draft.classTeacherComment,
+          headTeacherComment: draft.headTeacherComment,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Comment saved");
+      queryClient.invalidateQueries({ queryKey: ["assessment-comments"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -451,6 +520,62 @@ function AssessmentsPage() {
               </Btn>
             </div>
           </form>
+        </Panel>
+      )}
+
+      {canEditComments && (
+        <Panel title="Learner comments" className="mb-4">
+          {commentStudents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Choose an allocation and term first, then add each learner&apos;s {isClassTeacher ? "class teacher" : "head teacher"} comment.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {commentStudents.map((student) => {
+                const draft = commentDrafts[student.id] ?? { classTeacherComment: "", headTeacherComment: "" };
+                return (
+                  <div key={student.id} className="rounded-lg border border-border p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold">{student.full_name}</h3>
+                      <Btn variant="accent" onClick={() => commentMutation.mutate(student.id)} disabled={commentMutation.isPending}>
+                        Save comment
+                      </Btn>
+                    </div>
+                    <div>
+                      {isClassTeacher && (
+                        <Field label="Class Teacher's Comment">
+                          <textarea
+                            className={`${inputClass} min-h-28`}
+                            value={draft.classTeacherComment}
+                            onChange={(event) =>
+                              setCommentDrafts((current) => ({
+                                ...current,
+                                [student.id]: { ...draft, classTeacherComment: event.target.value },
+                              }))
+                            }
+                          />
+                        </Field>
+                      )}
+                      {isHeadTeacher && (
+                        <Field label="Head Teacher's Comment">
+                          <textarea
+                            className={`${inputClass} min-h-28`}
+                            value={draft.headTeacherComment}
+                            onChange={(event) =>
+                              setCommentDrafts((current) => ({
+                                ...current,
+                                [student.id]: { ...draft, headTeacherComment: event.target.value },
+                              }))
+                            }
+                          />
+                        </Field>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Panel>
       )}
 

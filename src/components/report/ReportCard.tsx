@@ -16,6 +16,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
           </div>
           <div className="school-details">
             <h1>{school.name}</h1>
+            {school.motto && <p className="motto">{school.motto}</p>}
             <p>
               {school.address}
               {school.email ? ` | Email: ${school.email}` : ""}
