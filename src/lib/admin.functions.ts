@@ -67,7 +67,11 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
       email: data.adminEmail,
       password,
       email_confirm: true,
-      user_metadata: { full_name: data.adminName, school_id: school.id },
+      user_metadata: {
+        full_name: data.adminName,
+        school_id: school.id,
+        initials: null,
+      },
     });
     if (userError) throw new Error(userError.message);
     const uid = created.user!.id;
@@ -142,7 +146,11 @@ export const createStaffUser = createServerFn({ method: "POST" })
       email: data.email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: data.fullName, school_id: schoolId },
+      user_metadata: {
+        full_name: data.fullName,
+        school_id: schoolId,
+        initials: data.initials ?? null,
+      },
     });
     if (error) throw new Error(error.message);
     const uid = created.user!.id;
@@ -218,7 +226,11 @@ export const updateStaffUser = createServerFn({ method: "POST" })
 
     const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
       email: data.email,
-      user_metadata: { full_name: data.fullName, school_id: schoolId },
+      user_metadata: {
+        full_name: data.fullName,
+        school_id: schoolId,
+        initials: data.initials ?? null,
+      },
     });
     if (authError) throw new Error(authError.message);
 
