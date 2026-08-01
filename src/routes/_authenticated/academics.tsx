@@ -32,19 +32,26 @@ function AcademicsPage() {
   const [classForm, setClassForm] = useState({ name: "", level: "" });
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "" });
   const [subjectForm, setSubjectForm] = useState({ name: "", code: "", category: "", position: "" });
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
+  const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
+  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
   const [allocForm, setAllocForm] = useState({ teacher_id: "", subject_id: "", class_id: "", stream_id: "" });
+  const [yearForm, setYearForm] = useState({ name: "" });
+  const [termForm, setTermForm] = useState({ name: "", academic_year_id: "", start_date: "", end_date: "" });
 
   const { data } = useQuery({
     queryKey: ["academics", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
-      const [classes, streams, subjects, allocations, teachers, roles] = await Promise.all([
+      const [classes, streams, subjects, allocations, teachers, roles, academicYears, terms] = await Promise.all([
         supabase.from("classes").select("*").order("level", { ascending: true }).order("name"),
         supabase.from("streams").select("*").order("name"),
         supabase.from("subjects").select("*").order("position"),
         supabase.from("teacher_allocations").select("*"),
         supabase.from("profiles").select("id, full_name, initials").order("full_name"),
         supabase.from("user_roles").select("user_id, role"),
+        supabase.from("academic_years").select("*").eq("school_id", schoolId).order("name"),
+        supabase.from("terms").select("*").eq("school_id", schoolId).order("start_date", { ascending: true }).order("name"),
       ]);
       const teachingRoles = new Set(
         (roles.data ?? [])
@@ -57,6 +64,8 @@ function AcademicsPage() {
         subjects: subjects.data ?? [],
         allocations: allocations.data ?? [],
         teachers: (teachers.data ?? []).filter((t) => teachingRoles.has(t.id)),
+        academicYears: academicYears.data ?? [],
+        terms: terms.data ?? [],
       };
     },
   });
@@ -65,19 +74,90 @@ function AcademicsPage() {
     queryClient.invalidateQueries({ queryKey: ["academics", schoolId] });
   }
 
+  function resetClassForm() {
+    setClassForm({ name: "", level: "" });
+    setEditingClassId(null);
+  }
+
+  function resetStreamForm() {
+    setStreamForm({ name: "", class_id: "" });
+    setEditingStreamId(null);
+  }
+
+  function resetSubjectForm() {
+    setSubjectForm({ name: "", code: "", category: "", position: "" });
+    setEditingSubjectId(null);
+  }
+
+  async function setYearAsCurrent(yearId: string) {
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const { error: clearError } = await supabase.from("academic_years").update({ is_current: false }).eq("school_id", schoolId);
+    if (clearError) throw new Error(clearError.message);
+    const { error: selectError } = await supabase.from("academic_years").update({ is_current: true }).eq("id", yearId).eq("school_id", schoolId);
+    if (selectError) throw new Error(selectError.message);
+  }
+
+  async function setTermAsCurrent(termId: string) {
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const { data: term, error: termLookupError } = await supabase
+      .from("terms")
+      .select("academic_year_id")
+      .eq("id", termId)
+      .eq("school_id", schoolId)
+      .maybeSingle();
+    if (termLookupError) throw new Error(termLookupError.message);
+    if (!term?.academic_year_id) throw new Error("The selected term is missing an academic year");
+
+    const { error: clearTermsError } = await supabase.from("terms").update({ is_current: false }).eq("school_id", schoolId);
+    if (clearTermsError) throw new Error(clearTermsError.message);
+    const { error: selectTermError } = await supabase.from("terms").update({ is_current: true }).eq("id", termId).eq("school_id", schoolId);
+    if (selectTermError) throw new Error(selectTermError.message);
+
+    const { error: clearYearsError } = await supabase.from("academic_years").update({ is_current: false }).eq("school_id", schoolId);
+    if (clearYearsError) throw new Error(clearYearsError.message);
+    const { error: selectYearError } = await supabase
+      .from("academic_years")
+      .update({ is_current: true })
+      .eq("id", term.academic_year_id)
+      .eq("school_id", schoolId);
+    if (selectYearError) throw new Error(selectYearError.message);
+  }
+
   const addClass = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       const { error } = await supabase.from("classes").insert({
         school_id: schoolId,
-        name: classForm.name,
+        name: classForm.name.trim(),
         level: classForm.level ? Number(classForm.level) : null,
       });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      setClassForm({ name: "", level: "" });
+      resetClassForm();
       toast.success("Class added");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateClass = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!editingClassId) throw new Error("No class selected for update");
+      const { error } = await supabase
+        .from("classes")
+        .update({
+          name: classForm.name.trim(),
+          level: classForm.level ? Number(classForm.level) : null,
+        })
+        .eq("id", editingClassId)
+        .eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      resetClassForm();
+      toast.success("Class updated");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -90,13 +170,36 @@ function AcademicsPage() {
       const { error } = await supabase.from("streams").insert({
         school_id: schoolId,
         class_id: streamForm.class_id,
-        name: streamForm.name,
+        name: streamForm.name.trim(),
       });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      setStreamForm({ name: "", class_id: "" });
+      resetStreamForm();
       toast.success("Stream added");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateStream = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!editingStreamId) throw new Error("No stream selected for update");
+      if (!streamForm.class_id) throw new Error("Choose the class this stream belongs to");
+      const { error } = await supabase
+        .from("streams")
+        .update({
+          class_id: streamForm.class_id,
+          name: streamForm.name.trim(),
+        })
+        .eq("id", editingStreamId)
+        .eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      resetStreamForm();
+      toast.success("Stream updated");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -107,7 +210,7 @@ function AcademicsPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       const { error } = await supabase.from("subjects").insert({
         school_id: schoolId,
-        name: subjectForm.name,
+        name: subjectForm.name.trim(),
         code: subjectForm.code || null,
         category: subjectForm.category || undefined,
         position: subjectForm.position ? Number(subjectForm.position) : (data?.subjects.length ?? 0) + 1,
@@ -115,8 +218,32 @@ function AcademicsPage() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      setSubjectForm({ name: "", code: "", category: "", position: "" });
+      resetSubjectForm();
       toast.success("Subject added");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateSubject = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!editingSubjectId) throw new Error("No subject selected for update");
+      const { error } = await supabase
+        .from("subjects")
+        .update({
+          name: subjectForm.name.trim(),
+          code: subjectForm.code || null,
+          category: subjectForm.category || undefined,
+          position: subjectForm.position ? Number(subjectForm.position) : (data?.subjects.length ?? 0) + 1,
+        })
+        .eq("id", editingSubjectId)
+        .eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      resetSubjectForm();
+      toast.success("Subject updated");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -140,6 +267,71 @@ function AcademicsPage() {
     onSuccess: () => {
       setAllocForm({ teacher_id: "", subject_id: "", class_id: "", stream_id: "" });
       toast.success("Teacher allocated");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addYear = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      const name = yearForm.name.trim();
+      if (!name) throw new Error("Enter an academic year name");
+      const { data: created, error } = await supabase.from("academic_years").insert({ school_id: schoolId, name }).select("id").single();
+      if (error) throw new Error(error.message);
+      await setYearAsCurrent(created.id);
+      return created.id;
+    },
+    onSuccess: () => {
+      setYearForm({ name: "" });
+      toast.success("Academic year created and set as current");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addTerm = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      const name = termForm.name.trim();
+      if (!name) throw new Error("Enter a term name");
+      if (!termForm.academic_year_id) throw new Error("Choose an academic year for this term");
+      const { data: created, error } = await supabase
+        .from("terms")
+        .insert({
+          school_id: schoolId,
+          academic_year_id: termForm.academic_year_id,
+          name,
+          start_date: termForm.start_date || null,
+          end_date: termForm.end_date || null,
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      await setTermAsCurrent(created.id);
+      return created.id;
+    },
+    onSuccess: () => {
+      setTermForm({ name: "", academic_year_id: "", start_date: "", end_date: "" });
+      toast.success("Term created and set as current");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const makeYearCurrent = useMutation({
+    mutationFn: (yearId: string) => setYearAsCurrent(yearId),
+    onSuccess: () => {
+      toast.success("Academic year set as current");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const makeTermCurrent = useMutation({
+    mutationFn: (termId: string) => setTermAsCurrent(termId),
+    onSuccess: () => {
+      toast.success("Term set as current");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -196,6 +388,26 @@ function AcademicsPage() {
   const subjectName = (id: string) => data?.subjects.find((s) => s.id === id)?.name ?? "—";
   const teacherName = (id: string) => data?.teachers.find((t) => t.id === id)?.full_name ?? "—";
 
+  function startEditingClass(item: any) {
+    setEditingClassId(item.id);
+    setClassForm({ name: item.name ?? "", level: item.level?.toString() ?? "" });
+  }
+
+  function startEditingStream(item: any) {
+    setEditingStreamId(item.id);
+    setStreamForm({ name: item.name ?? "", class_id: item.class_id ?? "" });
+  }
+
+  function startEditingSubject(item: any) {
+    setEditingSubjectId(item.id);
+    setSubjectForm({
+      name: item.name ?? "",
+      code: item.code ?? "",
+      category: item.category ?? "",
+      position: item.position?.toString() ?? "",
+    });
+  }
+
   return (
     <div>
       <PageHeader title="Academic setup" description="Classes, streams, subjects and teaching allocations for the current academic year." />
@@ -206,7 +418,8 @@ function AcademicsPage() {
             className="mb-3 space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
-              addClass.mutate();
+              if (editingClassId) updateClass.mutate();
+              else addClass.mutate();
             }}
           >
             <Field label="Class name">
@@ -215,7 +428,16 @@ function AcademicsPage() {
             <Field label="Level (order)">
               <input type="number" className={inputClass} value={classForm.level} onChange={(e) => setClassForm({ ...classForm, level: e.target.value })} />
             </Field>
-            <Btn type="submit" variant="accent" disabled={addClass.isPending}>Add class</Btn>
+            <div className="flex flex-wrap gap-2">
+              <Btn type="submit" variant="accent" disabled={addClass.isPending || updateClass.isPending}>
+                {editingClassId ? "Save changes" : "Add class"}
+              </Btn>
+              {editingClassId && (
+                <Btn variant="ghost" onClick={resetClassForm}>
+                  Cancel
+                </Btn>
+              )}
+            </div>
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.classes ?? []).map((item) => (
@@ -223,6 +445,9 @@ function AcademicsPage() {
                 <span>{item.name}</span>
                 <div className="flex items-center gap-2">
                   <Pill tone="muted">{data?.streams.filter((s) => s.class_id === item.id).length ?? 0} streams</Pill>
+                  <Btn variant="ghost" onClick={() => startEditingClass(item)}>
+                    Edit
+                  </Btn>
                   <Btn
                     variant="ghost"
                     onClick={() => {
@@ -244,7 +469,8 @@ function AcademicsPage() {
             className="mb-3 space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
-              addStream.mutate();
+              if (editingStreamId) updateStream.mutate();
+              else addStream.mutate();
             }}
           >
             <Field label="Class">
@@ -258,7 +484,16 @@ function AcademicsPage() {
             <Field label="Stream name">
               <input required className={inputClass} value={streamForm.name} onChange={(e) => setStreamForm({ ...streamForm, name: e.target.value })} />
             </Field>
-            <Btn type="submit" variant="accent" disabled={addStream.isPending}>Add stream</Btn>
+            <div className="flex flex-wrap gap-2">
+              <Btn type="submit" variant="accent" disabled={addStream.isPending || updateStream.isPending}>
+                {editingStreamId ? "Save changes" : "Add stream"}
+              </Btn>
+              {editingStreamId && (
+                <Btn variant="ghost" onClick={resetStreamForm}>
+                  Cancel
+                </Btn>
+              )}
+            </div>
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.streams ?? []).map((item) => (
@@ -266,16 +501,21 @@ function AcademicsPage() {
                 <span>
                   {className(item.class_id)} · <span className="font-medium">{item.name}</span>
                 </span>
-                <Btn
-                  variant="ghost"
-                  onClick={() => {
-                    if (window.confirm(`Delete stream "${item.name}"?`)) {
-                      removeStream.mutate(item.id);
-                    }
-                  }}
-                >
-                  Delete
-                </Btn>
+                <div className="flex items-center gap-2">
+                  <Btn variant="ghost" onClick={() => startEditingStream(item)}>
+                    Edit
+                  </Btn>
+                  <Btn
+                    variant="ghost"
+                    onClick={() => {
+                      if (window.confirm(`Delete stream "${item.name}"?`)) {
+                        removeStream.mutate(item.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </Btn>
+                </div>
               </li>
             ))}
           </ul>
@@ -286,7 +526,8 @@ function AcademicsPage() {
             className="mb-3 space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
-              addSubject.mutate();
+              if (editingSubjectId) updateSubject.mutate();
+              else addSubject.mutate();
             }}
           >
             <Field label="Subject name">
@@ -303,15 +544,107 @@ function AcademicsPage() {
             <Field label="Category">
               <input placeholder="Core / Elective" className={inputClass} value={subjectForm.category} onChange={(e) => setSubjectForm({ ...subjectForm, category: e.target.value })} />
             </Field>
-            <Btn type="submit" variant="accent" disabled={addSubject.isPending}>Add subject</Btn>
+            <div className="flex flex-wrap gap-2">
+              <Btn type="submit" variant="accent" disabled={addSubject.isPending || updateSubject.isPending}>
+                {editingSubjectId ? "Save changes" : "Add subject"}
+              </Btn>
+              {editingSubjectId && (
+                <Btn variant="ghost" onClick={resetSubjectForm}>
+                  Cancel
+                </Btn>
+              )}
+            </div>
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.subjects ?? []).map((item) => (
               <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                 <span>{item.name}</span>
-                {item.category && <Pill tone="muted">{item.category}</Pill>}
+                <div className="flex items-center gap-2">
+                  {item.category && <Pill tone="muted">{item.category}</Pill>}
+                  <Btn variant="ghost" onClick={() => startEditingSubject(item)}>
+                    Edit
+                  </Btn>
+                </div>
               </li>
             ))}
+          </ul>
+        </Panel>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Panel title="Academic years">
+          <form
+            className="mb-3 space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              addYear.mutate();
+            }}
+          >
+            <Field label="Year name">
+              <input required className={inputClass} value={yearForm.name} onChange={(e) => setYearForm({ ...yearForm, name: e.target.value })} />
+            </Field>
+            <Btn type="submit" variant="accent" disabled={addYear.isPending}>Create year</Btn>
+          </form>
+          <ul className="space-y-1 text-sm">
+            {(data?.academicYears ?? []).map((item) => (
+              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <span className="flex items-center gap-2">
+                  <span>{item.name}</span>
+                  {item.is_current && <Pill tone="success">Current</Pill>}
+                </span>
+                <Btn variant="ghost" onClick={() => makeYearCurrent.mutate(item.id)} disabled={makeYearCurrent.isPending || item.is_current}>
+                  Use this year
+                </Btn>
+              </li>
+            ))}
+            {(data?.academicYears ?? []).length === 0 && <p className="text-sm text-muted-foreground">No academic years yet.</p>}
+          </ul>
+        </Panel>
+
+        <Panel title="Terms">
+          <form
+            className="mb-3 space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              addTerm.mutate();
+            }}
+          >
+            <Field label="Academic year">
+              <select className={inputClass} value={termForm.academic_year_id} onChange={(e) => setTermForm({ ...termForm, academic_year_id: e.target.value })}>
+                <option value="">Select year</option>
+                {(data?.academicYears ?? []).map((year) => (
+                  <option key={year.id} value={year.id}>
+                    {year.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Term name">
+              <input required className={inputClass} value={termForm.name} onChange={(e) => setTermForm({ ...termForm, name: e.target.value })} />
+            </Field>
+            <div className="grid gap-2 md:grid-cols-2">
+              <Field label="Start date">
+                <input type="date" className={inputClass} value={termForm.start_date} onChange={(e) => setTermForm({ ...termForm, start_date: e.target.value })} />
+              </Field>
+              <Field label="End date">
+                <input type="date" className={inputClass} value={termForm.end_date} onChange={(e) => setTermForm({ ...termForm, end_date: e.target.value })} />
+              </Field>
+            </div>
+            <Btn type="submit" variant="accent" disabled={addTerm.isPending}>Create term</Btn>
+          </form>
+          <ul className="space-y-1 text-sm">
+            {(data?.terms ?? []).map((item) => (
+              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <span className="flex items-center gap-2">
+                  <span>{item.name}</span>
+                  {item.is_current && <Pill tone="success">Current</Pill>}
+                </span>
+                <Btn variant="ghost" onClick={() => makeTermCurrent.mutate(item.id)} disabled={makeTermCurrent.isPending || item.is_current}>
+                  Use this term
+                </Btn>
+              </li>
+            ))}
+            {(data?.terms ?? []).length === 0 && <p className="text-sm text-muted-foreground">No terms yet.</p>}
           </ul>
         </Panel>
       </div>

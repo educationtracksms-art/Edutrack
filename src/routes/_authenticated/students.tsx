@@ -31,6 +31,7 @@ function StudentsPage() {
   const deleteStudentFn = useServerFn(deleteStudent);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     full_name: "",
@@ -81,7 +82,7 @@ function StudentsPage() {
       const photoUrl = photoFile ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`) : null;
       const { error } = await supabase.from("students").insert({
         school_id: me.profile.school_id,
-        full_name: form.full_name,
+        full_name: form.full_name.trim(),
         lin: form.lin || null,
         gender: form.gender,
         class_id: form.class_id || null,
@@ -96,10 +97,35 @@ function StudentsPage() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      toast.success("Learner registered â€” awaiting verification");
-      setForm({ ...form, full_name: "", lin: "", house: "", schpay_code: "", parent_name: "", parent_phone: "" });
-      setPhotoFile(null);
-      setShowForm(false);
+      toast.success("Learner registered — awaiting verification");
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!me?.profile?.school_id || !editingStudentId) throw new Error("Select a learner to edit");
+      const photoUrl = photoFile ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`) : undefined;
+      const payload: Record<string, unknown> = {
+        full_name: form.full_name.trim(),
+        lin: form.lin || null,
+        gender: form.gender,
+        class_id: form.class_id || null,
+        stream_id: form.stream_id || null,
+        house: form.house || null,
+        schpay_code: form.schpay_code || null,
+        parent_name: form.parent_name || null,
+        parent_phone: form.parent_phone || null,
+      };
+      if (photoUrl) payload.photo_url = photoUrl;
+      const { error } = await supabase.from("students").update(payload).eq("id", editingStudentId).eq("school_id", me.profile.school_id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Learner updated");
+      resetForm();
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -122,7 +148,39 @@ function StudentsPage() {
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
+  function resetForm() {
+    setForm({
+      full_name: "",
+      lin: "",
+      gender: "Female",
+      class_id: "",
+      stream_id: "",
+      house: "",
+      schpay_code: "",
+      parent_name: "",
+      parent_phone: "",
+    });
+    setPhotoFile(null);
+    setEditingStudentId(null);
+    setShowForm(false);
+  }
 
+  function startEditing(student: any) {
+    setEditingStudentId(student.id);
+    setShowForm(true);
+    setForm({
+      full_name: student.full_name ?? "",
+      lin: student.lin ?? "",
+      gender: student.gender ?? "Female",
+      class_id: student.class_id ?? "",
+      stream_id: student.stream_id ?? "",
+      house: student.house ?? "",
+      schpay_code: student.schpay_code ?? "",
+      parent_name: student.parent_name ?? "",
+      parent_phone: student.parent_phone ?? "",
+    });
+    setPhotoFile(null);
+  }
   const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "â€”";
   const streamName = (id: string | null) => streams?.find((s) => s.id === id)?.name ?? "";
 
@@ -132,19 +190,20 @@ function StudentsPage() {
         title="Students"
         description="Registered learners stay pending until an administrator verifies the admission."
         actions={
-          <Btn variant="accent" onClick={() => setShowForm((value) => !value)}>
+          <Btn variant="accent" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
             {showForm ? "Close" : "Register learner"}
           </Btn>
         }
       />
 
       {showForm && (
-        <Panel title="Register a learner" className="mb-4">
+        <Panel title={editingStudentId ? "Edit learner" : "Register a learner"} className="mb-4">
           <form
             className="grid gap-3 md:grid-cols-3"
             onSubmit={(event) => {
               event.preventDefault();
-              addMutation.mutate();
+              if (editingStudentId) updateMutation.mutate();
+              else addMutation.mutate();
             }}
           >
             <Field label="Full name">
@@ -201,9 +260,16 @@ function StudentsPage() {
               <p className="mt-1 text-xs text-muted-foreground">Upload an image up to 1 MB. The file will be stored in the images bucket.</p>
             </Field>
             <div className="md:col-span-3">
-              <Btn type="submit" variant="accent" disabled={addMutation.isPending}>
-                {addMutation.isPending ? "Savingâ€¦" : "Save learner"}
-              </Btn>
+              <div className="flex flex-wrap gap-2">
+                <Btn type="submit" variant="accent" disabled={addMutation.isPending || updateMutation.isPending}>
+                  {editingStudentId ? (updateMutation.isPending ? "Saving…" : "Save changes") : addMutation.isPending ? "Saving…" : "Save learner"}
+                </Btn>
+                {editingStudentId && (
+                  <Btn variant="ghost" onClick={resetForm}>
+                    Cancel
+                  </Btn>
+                )}
+              </div>
             </div>
           </form>
         </Panel>
@@ -258,6 +324,9 @@ function StudentsPage() {
                   </td>
                   <td className="py-2.5 text-right">
                     <div className="flex justify-end gap-2">
+                      <Btn variant="ghost" onClick={() => startEditing(student)}>
+                        Edit
+                      </Btn>
                       {canVerify && student.status === "pending" && (
                         <Btn onClick={() => verifyMutation.mutate(student.id)}>Verify</Btn>
                       )}
