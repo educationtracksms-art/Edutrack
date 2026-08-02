@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createSchoolWithAdmin, setSchoolStatus } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
-import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
+import { Btn, Field, PageHeader, Panel, Pill, ResponsiveTable, inputClass } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/schools")({
   head: () => ({
@@ -70,27 +70,69 @@ function SchoolsPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Panel title="Registered schools">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="pb-2">School</th>
-                  <th className="pb-2">Code</th>
-                  <th className="pb-2">Plan</th>
-                  <th className="pb-2">Status</th>
-                  <th className="pb-2" />
-                </tr>
-              </thead>
-              <tbody>
+          <ResponsiveTable
+            desktop={
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="pb-2">School</th>
+                      <th className="pb-2">Code</th>
+                      <th className="pb-2">Plan</th>
+                      <th className="pb-2">Status</th>
+                      <th className="pb-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(schools ?? []).map((school) => (
+                      <tr key={school.id} className="border-t border-border">
+                        <td className="py-2.5 font-medium">{school.name}</td>
+                        <td>{school.code}</td>
+                        <td className="capitalize">{school.subscription_plan}</td>
+                        <td>
+                          <Pill tone={school.status === "active" ? "success" : "danger"}>{school.status}</Pill>
+                        </td>
+                        <td className="text-right">
+                          <Btn
+                            variant="ghost"
+                            onClick={() =>
+                              statusMutation.mutate({
+                                schoolId: school.id,
+                                status: school.status === "active" ? "suspended" : "active",
+                              })
+                            }
+                          >
+                            {school.status === "active" ? "Suspend" : "Activate"}
+                          </Btn>
+                        </td>
+                      </tr>
+                    ))}
+                    {(schools ?? []).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                          No schools yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            }
+            mobile={
+              <>
                 {(schools ?? []).map((school) => (
-                  <tr key={school.id} className="border-t border-border">
-                    <td className="py-2.5 font-medium">{school.name}</td>
-                    <td>{school.code}</td>
-                    <td className="capitalize">{school.subscription_plan}</td>
-                    <td>
+                  <div key={school.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{school.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Code: {school.code}</p>
+                      </div>
                       <Pill tone={school.status === "active" ? "success" : "danger"}>{school.status}</Pill>
-                    </td>
-                    <td className="text-right">
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs capitalize text-muted-foreground">
+                        {school.subscription_plan}
+                      </span>
                       <Btn
                         variant="ghost"
                         onClick={() =>
@@ -102,19 +144,17 @@ function SchoolsPage() {
                       >
                         {school.status === "active" ? "Suspend" : "Activate"}
                       </Btn>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 ))}
                 {(schools ?? []).length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                      No schools yet.
-                    </td>
-                  </tr>
+                  <div className="rounded-2xl border border-dashed border-border bg-card p-4 text-center text-sm text-muted-foreground">
+                    No schools yet.
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </>
+            }
+          />
         </Panel>
 
         <Panel title="Add a school">

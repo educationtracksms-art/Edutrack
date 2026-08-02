@@ -29,7 +29,8 @@ function StudentsPage() {
   const canAccessStudents = hasAny(me?.roles, ["super_admin", ...SCHOOL_ROLES]);
   const canManageStudents = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "super_admin"]);
   const canChangeStatus = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
-  const canVerify = canManageStudents;
+  const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
+  const canVerify = canManageStudents || isClassTeacher;
   const verify = useServerFn(verifyStudent);
   const updateStatus = useServerFn(updateStudentStatus);
   const deleteStudentFn = useServerFn(deleteStudent);
@@ -51,7 +52,7 @@ function StudentsPage() {
 
   const { data: classes } = useQuery({
     queryKey: ["classes"],
-    queryFn: async () => (await supabase.from("classes").select("id, name").order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("classes").select("id, name, class_teacher_id").order("name")).data ?? [],
   });
   const { data: streams } = useQuery({
     queryKey: ["streams"],

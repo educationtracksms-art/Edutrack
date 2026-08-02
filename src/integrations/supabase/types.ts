@@ -354,6 +354,7 @@ export type Database = {
       }
       classes: {
         Row: {
+          class_teacher_id: string | null
           created_at: string
           id: string
           level: number | null
@@ -361,6 +362,7 @@ export type Database = {
           school_id: string
         }
         Insert: {
+          class_teacher_id?: string | null
           created_at?: string
           id?: string
           level?: number | null
@@ -368,6 +370,7 @@ export type Database = {
           school_id: string
         }
         Update: {
+          class_teacher_id?: string | null
           created_at?: string
           id?: string
           level?: number | null
@@ -375,6 +378,13 @@ export type Database = {
           school_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "classes_class_teacher_id_fkey"
+            columns: ["class_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "classes_school_id_fkey"
             columns: ["school_id"]

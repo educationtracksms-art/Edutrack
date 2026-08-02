@@ -41,4 +41,5 @@ export type ReportCardData = {
   gradeKeys: GradeKey[];
   coCurricular: { games: string; clubs: string; projects: string };
   comments: { classTeacher: string; headTeacher: string };
+  staff: { classTeacher: string; headTeacher: string };
 };

@@ -29,7 +29,7 @@ function AcademicsPage() {
   const deleteClassFn = useServerFn(deleteClass);
   const deleteStreamFn = useServerFn(deleteStream);
 
-  const [classForm, setClassForm] = useState({ name: "", level: "" });
+  const [classForm, setClassForm] = useState({ name: "", level: "", class_teacher_id: "" });
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "" });
   const [subjectForm, setSubjectForm] = useState({ name: "", code: "", category: "", position: "" });
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
@@ -75,7 +75,7 @@ function AcademicsPage() {
   }
 
   function resetClassForm() {
-    setClassForm({ name: "", level: "" });
+    setClassForm({ name: "", level: "", class_teacher_id: "" });
     setEditingClassId(null);
   }
 
@@ -130,6 +130,7 @@ function AcademicsPage() {
         school_id: schoolId,
         name: classForm.name.trim(),
         level: classForm.level ? Number(classForm.level) : null,
+        class_teacher_id: classForm.class_teacher_id || null,
       });
       if (error) throw new Error(error.message);
     },
@@ -150,6 +151,7 @@ function AcademicsPage() {
         .update({
           name: classForm.name.trim(),
           level: classForm.level ? Number(classForm.level) : null,
+          class_teacher_id: classForm.class_teacher_id || null,
         })
         .eq("id", editingClassId)
         .eq("school_id", schoolId);
@@ -385,12 +387,13 @@ function AcademicsPage() {
 
   const className = (id: string | null) => data?.classes.find((c) => c.id === id)?.name ?? "All classes";
   const streamName = (id: string | null) => data?.streams.find((s) => s.id === id)?.name ?? "All streams";
+  const classTeacherName = (id: string | null) => data?.teachers.find((t) => t.id === id)?.full_name ?? "Not assigned";
   const subjectName = (id: string) => data?.subjects.find((s) => s.id === id)?.name ?? "—";
   const teacherName = (id: string) => data?.teachers.find((t) => t.id === id)?.full_name ?? "—";
 
   function startEditingClass(item: any) {
     setEditingClassId(item.id);
-    setClassForm({ name: item.name ?? "", level: item.level?.toString() ?? "" });
+    setClassForm({ name: item.name ?? "", level: item.level?.toString() ?? "", class_teacher_id: item.class_teacher_id ?? "" });
   }
 
   function startEditingStream(item: any) {
@@ -428,6 +431,14 @@ function AcademicsPage() {
             <Field label="Level (order)">
               <input type="number" className={inputClass} value={classForm.level} onChange={(e) => setClassForm({ ...classForm, level: e.target.value })} />
             </Field>
+            <Field label="Class teacher">
+              <select className={inputClass} value={classForm.class_teacher_id} onChange={(e) => setClassForm({ ...classForm, class_teacher_id: e.target.value })}>
+                <option value="">Not assigned</option>
+                {(data?.teachers ?? []).map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>{teacher.full_name}</option>
+                ))}
+              </select>
+            </Field>
             <div className="flex flex-wrap gap-2">
               <Btn type="submit" variant="accent" disabled={addClass.isPending || updateClass.isPending}>
                 {editingClassId ? "Save changes" : "Add class"}
@@ -442,7 +453,10 @@ function AcademicsPage() {
           <ul className="space-y-1 text-sm">
             {(data?.classes ?? []).map((item) => (
               <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                <span>{item.name}</span>
+                <span>
+                  <span className="font-medium">{item.name}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">Class teacher: {classTeacherName(item.class_teacher_id)}</span>
+                </span>
                 <div className="flex items-center gap-2">
                   <Pill tone="muted">{data?.streams.filter((s) => s.class_id === item.id).length ?? 0} streams</Pill>
                   <Btn variant="ghost" onClick={() => startEditingClass(item)}>

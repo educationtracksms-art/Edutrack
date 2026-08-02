@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createStaffUser, deleteStaffUser, resetUserPassword, updateStaffUser } from "@/lib/admin.functions";
 import { ROLE_LABELS, hasAny, useCurrentUser, type AppRole } from "@/hooks/useCurrentUser";
-import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
+import { Btn, Field, PageHeader, Panel, Pill, ResponsiveTable, inputClass } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/users")({
   head: () => ({
@@ -138,74 +138,133 @@ function UsersPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <Panel title="Accounts">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="pb-2">Name</th>
-                  <th className="pb-2">Email</th>
-                  <th className="pb-2">Roles</th>
-                  <th className="pb-2">State</th>
-                  <th className="pb-2" />
-                </tr>
-              </thead>
-              <tbody>
+          <ResponsiveTable
+            desktop={
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="pb-2">Name</th>
+                      <th className="pb-2">Email</th>
+                      <th className="pb-2">Roles</th>
+                      <th className="pb-2">State</th>
+                      <th className="pb-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(people ?? []).map((person) => (
+                      <tr key={person.id} className="border-t border-border align-top">
+                        <td className="py-2.5 font-medium">
+                          {person.full_name || "—"}
+                          {person.initials && <span className="ml-2 text-xs text-muted-foreground">({person.initials})</span>}
+                        </td>
+                        <td className="py-2.5">{person.email}</td>
+                        <td className="py-2.5">
+                          <div className="flex flex-wrap gap-1">
+                            {person.roles.map((role) => (
+                              <Pill key={role} tone="muted">
+                                {ROLE_LABELS[role]}
+                              </Pill>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-2.5">
+                          {person.must_change_password ? <Pill tone="warning">Must reset</Pill> : <Pill tone="success">Active</Pill>}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <div className="flex justify-end gap-2">
+                            <Btn variant="ghost" onClick={() => resetMutation.mutate(person.id)}>
+                              Reset password
+                            </Btn>
+                            <Btn
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingUser(person.id);
+                                setForm({
+                                  fullName: person.full_name ?? "",
+                                  email: person.email ?? "",
+                                  role: (person.roles[0] ?? "subject_teacher") as AppRole,
+                                  initials: person.initials ?? "",
+                                  schoolId: "",
+                                });
+                              }}
+                            >
+                              Edit
+                            </Btn>
+                            <Btn
+                              variant="ghost"
+                              onClick={() => {
+                                if (window.confirm(`Delete user "${person.full_name || person.email}"?`)) {
+                                  deleteMutation.mutate(person.id);
+                                }
+                              }}
+                            >
+                              Delete
+                            </Btn>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            }
+            mobile={
+              <>
                 {(people ?? []).map((person) => (
-                  <tr key={person.id} className="border-t border-border align-top">
-                    <td className="py-2.5 font-medium">
-                      {person.full_name || "—"}
-                      {person.initials && <span className="ml-2 text-xs text-muted-foreground">({person.initials})</span>}
-                    </td>
-                    <td className="py-2.5">{person.email}</td>
-                    <td className="py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {person.roles.map((role) => (
-                          <Pill key={role} tone="muted">
-                            {ROLE_LABELS[role]}
-                          </Pill>
-                        ))}
+                  <div key={person.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {person.full_name || "—"}
+                          {person.initials && <span className="ml-2 text-xs text-muted-foreground">({person.initials})</span>}
+                        </p>
+                        <p className="mt-1 break-all text-xs text-muted-foreground">{person.email}</p>
                       </div>
-                    </td>
-                    <td className="py-2.5">
                       {person.must_change_password ? <Pill tone="warning">Must reset</Pill> : <Pill tone="success">Active</Pill>}
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Btn variant="ghost" onClick={() => resetMutation.mutate(person.id)}>
-                          Reset password
-                        </Btn>
-                        <Btn
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingUser(person.id);
-                            setForm({
-                              fullName: person.full_name ?? "",
-                              email: person.email ?? "",
-                              role: (person.roles[0] ?? "subject_teacher") as AppRole,
-                              initials: person.initials ?? "",
-                              schoolId: "",
-                            });
-                          }}
-                        >
-                          Edit
-                        </Btn>
-                        <Btn
-                          variant="ghost"
-                          onClick={() => {
-                            if (window.confirm(`Delete user "${person.full_name || person.email}"?`)) {
-                              deleteMutation.mutate(person.id);
-                            }
-                          }}
-                        >
-                          Delete
-                        </Btn>
-                      </div>
-                    </td>
-                  </tr>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {person.roles.map((role) => (
+                        <Pill key={role} tone="muted">
+                          {ROLE_LABELS[role]}
+                        </Pill>
+                      ))}
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      <Btn variant="ghost" onClick={() => resetMutation.mutate(person.id)}>
+                        Reset
+                      </Btn>
+                      <Btn
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingUser(person.id);
+                          setForm({
+                            fullName: person.full_name ?? "",
+                            email: person.email ?? "",
+                            role: (person.roles[0] ?? "subject_teacher") as AppRole,
+                            initials: person.initials ?? "",
+                            schoolId: "",
+                          });
+                        }}
+                      >
+                        Edit
+                      </Btn>
+                      <Btn
+                        variant="ghost"
+                        onClick={() => {
+                          if (window.confirm(`Delete user "${person.full_name || person.email}"?`)) {
+                            deleteMutation.mutate(person.id);
+                          }
+                        }}
+                      >
+                        Delete
+                      </Btn>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </>
+            }
+          />
         </Panel>
 
         <Panel title={editingUser ? "Edit account" : "Create an account"}>

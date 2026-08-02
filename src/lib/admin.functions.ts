@@ -292,8 +292,46 @@ export const reviewAssessments = createServerFn({ method: "POST" })
   .inputValidator((data: { ids: string[]; action: "approve" | "reject"; reason?: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r)))
-      throw new Error("Only the Director of Studies can review assessments");
+    const canReviewAny = roles.some((r) => ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r));
+    const isClassTeacher = roles.includes("class_teacher");
+    if (!canReviewAny && !isClassTeacher) throw new Error("Not allowed to review assessments");
+
+    if (isClassTeacher && !canReviewAny) {
+      const { data: profile } = await context.supabase
+        .from("profiles")
+        .select("school_id")
+        .eq("id", context.userId)
+        .maybeSingle();
+      const schoolId = profile?.school_id ?? null;
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+
+      const { data: assessments } = await context.supabase
+        .from("assessments")
+        .select("id, student_id")
+        .in("id", data.ids)
+        .eq("school_id", schoolId);
+      if (!assessments || assessments.length !== data.ids.length) {
+        throw new Error("One or more assessments were not found in your school");
+      }
+
+      const { data: students } = await context.supabase
+        .from("students")
+        .select("id, class_id")
+        .in("id", assessments.map((assessment: any) => assessment.student_id));
+
+      const { data: classes } = await context.supabase
+        .from("classes")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("class_teacher_id", context.userId);
+      const assignedClassIds = new Set((classes ?? []).map((cls: any) => cls.id));
+      const studentClassById = new Map((students ?? []).map((student: any) => [student.id, student.class_id]));
+
+      const unauthorized = assessments.some((assessment: any) => !assignedClassIds.has(studentClassById.get(assessment.student_id)));
+      if (unauthorized) {
+        throw new Error("Class teachers can only review assessments for their assigned class");
+      }
+    }
 
     const patch =
       data.action === "approve"
@@ -469,18 +507,39 @@ export const verifyStudent = createServerFn({ method: "POST" })
   .inputValidator((data: { studentId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r)))
+    const canVerifyAny = roles.some((r) => ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r));
+    const isClassTeacher = roles.includes("class_teacher");
+    if (!canVerifyAny && !isClassTeacher) {
       throw new Error("Not allowed to verify students");
-    const { error } = await context.supabase
-      .from("students")
-      .update({ status: "active", verified_by: context.userId, verified_at: new Date().toISOString() })
-      .eq("id", data.studentId);
-    if (error) throw new Error(error.message);
+    }
+
     const { data: profile } = await context.supabase
       .from("profiles")
       .select("school_id")
       .eq("id", context.userId)
       .maybeSingle();
+    const { data: student } = await context.supabase
+      .from("students")
+      .select("id, school_id, class_id")
+      .eq("id", data.studentId)
+      .maybeSingle();
+    if (!student || student.school_id !== profile?.school_id) throw new Error("Student not found in your school");
+
+    if (!canVerifyAny) {
+      const { data: assignedClass } = await context.supabase
+        .from("classes")
+        .select("id")
+        .eq("id", student.class_id)
+        .eq("class_teacher_id", context.userId)
+        .maybeSingle();
+      if (!assignedClass) throw new Error("Class teachers can only approve learners in their assigned class");
+    }
+
+    const { error } = await context.supabase
+      .from("students")
+      .update({ status: "active", verified_by: context.userId, verified_at: new Date().toISOString() })
+      .eq("id", data.studentId);
+    if (error) throw new Error(error.message);
     await logAudit(context.supabase, context.userId, profile?.school_id ?? null, "STUDENT_VERIFIED", "students", {
       student_id: data.studentId,
     });

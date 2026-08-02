@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Btn, Field, PageHeader, Panel, inputClass } from "@/components/ui-kit";
+import { Btn, Field, PageHeader, Panel, ResponsiveTable, inputClass } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({
@@ -99,47 +99,95 @@ function AttendancePage() {
           </Field>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">Learner</th>
-                <th className="pb-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
+        <ResponsiveTable
+          desktop={
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="pb-2">Learner</th>
+                    <th className="pb-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((student) => {
+                    const saved = data?.records.find((r) => r.student_id === student.id)?.status ?? "";
+                    const value = marks[student.id] ?? saved;
+                    return (
+                      <tr key={student.id} className="border-t border-border">
+                        <td className="py-2 font-medium">{student.full_name}</td>
+                        <td className="py-2">
+                          <div className="flex flex-wrap gap-2">
+                            {STATUSES.map((status) => (
+                              <label key={status} className="flex items-center gap-1 text-xs capitalize">
+                                <input
+                                  type="radio"
+                                  name={`att-${student.id}`}
+                                  checked={value === status}
+                                  onChange={() => setMarks({ ...marks, [student.id]: status })}
+                                />
+                                {status}
+                              </label>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {students.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="py-6 text-center text-muted-foreground">No learners in this class.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          }
+          mobile={
+            <>
               {students.map((student) => {
                 const saved = data?.records.find((r) => r.student_id === student.id)?.status ?? "";
                 const value = marks[student.id] ?? saved;
                 return (
-                  <tr key={student.id} className="border-t border-border">
-                    <td className="py-2 font-medium">{student.full_name}</td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap gap-2">
-                        {STATUSES.map((status) => (
-                          <label key={status} className="flex items-center gap-1 text-xs capitalize">
-                            <input
-                              type="radio"
-                              name={`att-${student.id}`}
-                              checked={value === status}
-                              onChange={() => setMarks({ ...marks, [student.id]: status })}
-                            />
-                            {status}
-                          </label>
-                        ))}
+                  <div key={student.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">{student.full_name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Set today’s attendance below.</p>
                       </div>
-                    </td>
-                  </tr>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs capitalize text-muted-foreground">
+                        {value || "Not marked"}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {STATUSES.map((status) => (
+                        <label
+                          key={status}
+                          className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs capitalize ${
+                            value === status ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={`att-mobile-${student.id}`}
+                            checked={value === status}
+                            onChange={() => setMarks({ ...marks, [student.id]: status })}
+                          />
+                          {status}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 );
               })}
               {students.length === 0 && (
-                <tr>
-                  <td colSpan={2} className="py-6 text-center text-muted-foreground">No learners in this class.</td>
-                </tr>
+                <div className="rounded-2xl border border-dashed border-border bg-card p-4 text-center text-sm text-muted-foreground">
+                  No learners in this class.
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+            </>
+          }
+        />
       </Panel>
     </div>
   );

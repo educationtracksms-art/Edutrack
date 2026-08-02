@@ -1,7 +1,7 @@
 import type { ReportCardData } from "@/lib/report-types";
 
 export function ReportCard({ data }: { data: ReportCardData }) {
-  const { school, student, attendance, rows, overall, gradeKeys, coCurricular, comments } = data;
+  const { school, student, attendance, rows, overall, gradeKeys, coCurricular, comments, staff } = data;
 
   return (
     <div className="report-doc">
@@ -230,6 +230,12 @@ export function ReportCard({ data }: { data: ReportCardData }) {
       <section className="signature-area">
         <div>
           <strong>Class Teacher</strong>
+          {staff.classTeacher && (
+            <>
+              <br />
+              {staff.classTeacher}
+            </>
+          )}
           <br />
           <br />
           <br />
@@ -237,6 +243,12 @@ export function ReportCard({ data }: { data: ReportCardData }) {
         </div>
         <div>
           <strong>Head Teacher</strong>
+          {staff.headTeacher && (
+            <>
+              <br />
+              {staff.headTeacher}
+            </>
+          )}
           <br />
           <br />
           <br />

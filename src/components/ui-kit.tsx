@@ -10,19 +10,19 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="no-print mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+    <div className="no-print mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+        {description && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">{actions}</div>}
     </div>
   );
 }
 
 export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-xl border border-border bg-card p-4 ${className}`}>
+    <section className={`rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4 ${className}`}>
       {title && <h2 className="mb-3 text-sm font-semibold text-foreground">{title}</h2>}
       {children}
     </section>
@@ -31,9 +31,9 @@ export function Panel({ title, children, className = "" }: { title?: string; chi
 
 export function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-2 text-xl font-semibold sm:text-2xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -72,7 +72,7 @@ export function Btn({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${styles[variant]}`}
+      className={`rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-60 sm:w-auto ${styles[variant]}`}
     >
       {children}
     </button>
@@ -90,3 +90,12 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 export const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring";
+
+export function ResponsiveTable({ desktop, mobile }: { desktop: ReactNode; mobile: ReactNode }) {
+  return (
+    <>
+      <div className="hidden md:block">{desktop}</div>
+      <div className="space-y-3 md:hidden">{mobile}</div>
+    </>
+  );
+}

@@ -3,9 +3,48 @@
 .report-doc, .report-doc * { margin: 0; padding: 0; box-sizing: border-box; }
 .report-doc { font-family: 'Segoe UI', Roboto, system-ui, sans-serif; color: #1a2634; }
 @media print {
-  @page { size: A4 portrait; margin: 8mm; }
+  @page { size: A4 portrait; margin: 0; }
   .no-print { display: none !important; }
-  .report-doc { box-shadow: none !important; border-radius: 0 !important; page-break-after: always; }
+  .no-print * { display: none !important; }
+  .min-h-screen,
+  .min-h-dvh,
+  .h-dvh,
+  .h-screen {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+  .min-w-0 {
+    min-width: 0 !important;
+  }
+  body > div,
+  body > div > div {
+    padding-left: 0 !important;
+    margin: 0 !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  html, body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-doc {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+    padding: 8mm !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    page-break-after: always;
+    overflow: hidden;
+  }
   .report-doc:last-child { page-break-after: auto; }
 }
 .report-doc {

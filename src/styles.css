@@ -149,5 +149,59 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    overflow-x: hidden;
+  }
+}
+
+@media (max-width: 767px) {
+  table[data-responsive-table="true"] {
+    display: block;
+    width: 100%;
+  }
+
+  table[data-responsive-table="true"] thead {
+    display: none;
+  }
+
+  table[data-responsive-table="true"] tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  table[data-responsive-table="true"] tr {
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    background-color: var(--color-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  table[data-responsive-table="true"] td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.6rem 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  table[data-responsive-table="true"] td:first-child {
+    border-top: 0;
+  }
+
+  table[data-responsive-table="true"] td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 48%;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-muted-foreground);
+  }
+
+  table[data-responsive-table="true"] td > * {
+    text-align: right;
   }
 }

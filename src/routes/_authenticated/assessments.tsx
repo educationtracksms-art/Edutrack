@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
+import { descriptorFromAssessmentScore } from "@/lib/descriptor";
 import { reviewAssessments, upsertAssessmentEntry, upsertReportComment } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -78,7 +79,7 @@ function AssessmentsPage() {
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const isTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
-  const canReview = hasAny(me?.roles, ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
+  const canReview = hasAny(me?.roles, ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin", "class_teacher"]);
   const canEnter = !!schoolId && hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher"]);
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const isHeadTeacher = hasAny(me?.roles, ["head_teacher", "deputy_head_teacher"]);
@@ -96,7 +97,6 @@ function AssessmentsPage() {
     subjectId: "",
     termId: "",
     examType: "end_of_term",
-    gradeDescriptor: "",
     formative: "",
     summative: "",
     teacherInitials: "",
@@ -178,6 +178,16 @@ function AssessmentsPage() {
   const selectedAllocation = useMemo(
     () => data?.allocations.find((allocation) => allocation.key === allocationKey) ?? data?.allocations[0] ?? null,
     [allocationKey, data?.allocations],
+  );
+
+  const autoDescriptor = useMemo(
+    () => descriptorFromAssessmentScore(entryForm.formative, entryForm.summative),
+    [entryForm.formative, entryForm.summative],
+  );
+
+  const assessmentLookup = useMemo(
+    () => new Map(data?.assessments.map((assessment) => [assessment.id, assessment]) ?? []),
+    [data?.assessments],
   );
 
   useEffect(() => {
@@ -289,13 +299,16 @@ function AssessmentsPage() {
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
       const edit = edits[id] ?? {};
+      const existing = assessmentLookup.get(id);
+      const effectiveFormative = edit.formative !== undefined ? edit.formative : existing?.formative?.toString() ?? "";
+      const effectiveSummative = edit.summative !== undefined ? edit.summative : existing?.summative?.toString() ?? "";
       const patch = {
         status: "submitted" as const,
         submitted_by: me?.userId,
         submitted_at: new Date().toISOString(),
         ...(edit.formative !== undefined ? { formative: edit.formative === "" ? null : Number(edit.formative) } : {}),
         ...(edit.summative !== undefined ? { summative: edit.summative === "" ? null : Number(edit.summative) } : {}),
-        ...(edit.gradeDescriptor !== undefined ? { grade_descriptor: edit.gradeDescriptor === "" ? null : edit.gradeDescriptor } : {}),
+        grade_descriptor: descriptorFromAssessmentScore(effectiveFormative, effectiveSummative) || null,
       };
       const { error } = await supabase.from("assessments").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
@@ -341,7 +354,7 @@ function AssessmentsPage() {
           subjectId: entryForm.subjectId,
           termId: entryForm.termId || data?.currentTermId || "",
           examType: entryForm.examType,
-          gradeDescriptor: entryForm.gradeDescriptor || null,
+          gradeDescriptor: autoDescriptor || null,
           formative: entryForm.formative === "" ? null : Number(entryForm.formative),
           summative: entryForm.summative === "" ? null : Number(entryForm.summative),
           teacherInitials: entryForm.teacherInitials || null,
@@ -354,10 +367,10 @@ function AssessmentsPage() {
       setEntryForm((current) => ({
         ...current,
         studentId: "",
-        gradeDescriptor: "",
         formative: "",
         summative: "",
         examType: "end_of_term",
+        teacherInitials: "",
       }));
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -499,12 +512,10 @@ function AssessmentsPage() {
               />
             </Field>
             <Field label="Grade descriptor">
-              <input
-                className={inputClass}
-                value={entryForm.gradeDescriptor}
-                onChange={(event) => setEntryForm({ ...entryForm, gradeDescriptor: event.target.value })}
-                placeholder="e.g. Excellent, Good, Fair"
-              />
+              <input className={inputClass} value={autoDescriptor} readOnly />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Auto-generated from the current score total.
+              </p>
             </Field>
             <Field label="Teacher initials">
               <input
@@ -626,7 +637,7 @@ function AssessmentsPage() {
                 const edit = edits[row.id] ?? {};
                 const formative = edit.formative ?? (row.formative ?? "").toString();
                 const summative = edit.summative ?? (row.summative ?? "").toString();
-                const gradeDescriptor = edit.gradeDescriptor ?? row.gradeDescriptor ?? "";
+                const gradeDescriptor = descriptorFromAssessmentScore(formative, summative) || row.gradeDescriptor || "";
                 const total = (Number(formative || 0) + Number(summative || 0)).toFixed(1);
                 return (
                   <tr key={row.id} className="border-t border-border">
@@ -634,13 +645,7 @@ function AssessmentsPage() {
                     <td>{row.subjectName}</td>
                     <td>{row.termName}</td>
                     <td>
-                      <input
-                        className={`${inputClass} w-40`}
-                        value={gradeDescriptor}
-                        disabled={row.locked}
-                        onChange={(event) => setEdits({ ...edits, [row.id]: { ...edit, gradeDescriptor: event.target.value } })}
-                        placeholder="Descriptor"
-                      />
+                      <Pill tone="muted">{gradeDescriptor || "—"}</Pill>
                     </td>
                     <td>
                       <input

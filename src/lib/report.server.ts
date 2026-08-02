@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReportCardData, SubjectRow } from "./report-types";
+import { descriptorFromIdentifier } from "./descriptor";
 
 type AnyClient = SupabaseClient<any, any, any>;
 
@@ -25,6 +26,8 @@ export async function buildReportCards(
   const [
     { data: school },
     { data: classes },
+    { data: profiles },
+    { data: roles },
     { data: streams },
     { data: subjects },
     { data: scales },
@@ -32,7 +35,9 @@ export async function buildReportCards(
     { data: terms },
   ] = await Promise.all([
     supabase.from("schools").select("*").eq("id", schoolId).maybeSingle(),
-    supabase.from("classes").select("id, name").eq("school_id", schoolId),
+    supabase.from("classes").select("id, name, class_teacher_id").eq("school_id", schoolId),
+    supabase.from("profiles").select("id, full_name, school_id").eq("school_id", schoolId),
+    supabase.from("user_roles").select("user_id, role"),
     supabase.from("streams").select("id, name").eq("school_id", schoolId),
     supabase.from("subjects").select("id, name, position").eq("school_id", schoolId).order("position"),
     supabase.from("grading_scales").select("*").eq("school_id", schoolId).order("min_score", { ascending: false }),
@@ -83,13 +88,14 @@ export async function buildReportCards(
       : { grade: "", descriptor: "", identifier: 0 };
   };
 
-  const overallDescriptor = (identifier: number) =>
-    identifier >= 2.5 ? "Outstanding" : identifier >= 1.5 ? "Moderate" : identifier > 0 ? "Basic" : "";
-
   const schoolInitials = (school?.code as string) ?? (school?.name as string ?? "").slice(0, 3).toUpperCase();
+  const headTeacherIds = new Set((roles ?? []).filter((r: any) => r.role === "head_teacher").map((r: any) => r.user_id));
+  const headTeacherName = (profiles ?? []).find((p: any) => headTeacherIds.has(p.id))?.full_name ?? "";
 
   return students.map((student: any) => {
-    const className = classes?.find((c: any) => c.id === student.class_id)?.name ?? "";
+    const cls = classes?.find((c: any) => c.id === student.class_id);
+    const className = cls?.name ?? "";
+    const classTeacherName = (profiles ?? []).find((p: any) => p.id === cls?.class_teacher_id)?.full_name ?? "";
     const streamName = streams?.find((s: any) => s.id === student.stream_id)?.name ?? "";
     const marks = (assessments ?? []).filter((a: any) => a.student_id === student.id);
 
@@ -170,7 +176,7 @@ export async function buildReportCards(
       overall: {
         average: `${average.toFixed(1)}%`,
         identifier: identifierAvg.toFixed(2),
-        descriptor: overallDescriptor(identifierAvg),
+        descriptor: descriptorFromIdentifier(identifierAvg),
       },
       gradeKeys: [
         { identifier: "3", range: "2.5 - 3.0", descriptor: "Outstanding" },
@@ -185,6 +191,10 @@ export async function buildReportCards(
       comments: {
         classTeacher: comment?.class_teacher_comment ?? "",
         headTeacher: comment?.head_teacher_comment ?? "",
+      },
+      staff: {
+        classTeacher: classTeacherName,
+        headTeacher: headTeacherName,
       },
     } satisfies ReportCardData;
   });

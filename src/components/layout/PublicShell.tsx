@@ -8,31 +8,34 @@ export function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border/70 bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
-          <Link to="/" className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <Link to="/" className="flex min-w-0 items-center gap-3">
             <img src={logoUrl} alt="Education Track SMS logo" className="h-10 w-10 object-cover" />
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold leading-tight">Education Track SMS</p>
               <p className="text-xs text-muted-foreground">Uganda School Management System</p>
             </div>
           </Link>
 
-          <nav className="flex items-center gap-2 text-sm">
+          <nav className="grid grid-cols-3 gap-2 text-sm sm:flex sm:flex-wrap sm:items-center">
             <Link
               to="/"
-              className="rounded-md px-3 py-2 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              preload="intent"
+              className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
             >
               Home
             </Link>
             <Link
               to="/signup"
-              className="rounded-md px-3 py-2 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              preload="intent"
+              className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
             >
               Request access
             </Link>
             <Link
               to="/auth"
-              className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              preload="intent"
+              className="rounded-md bg-primary px-4 py-2 text-center font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Sign in
             </Link>
