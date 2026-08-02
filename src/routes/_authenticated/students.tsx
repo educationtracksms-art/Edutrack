@@ -468,7 +468,6 @@ function StudentsPage() {
                               feesBalance: Number(
                                 feesDrafts[student.id] ?? student.fees_balance ?? 0,
                               ),
-                                feesDrafts[student.id] ?? student.fees_balance ?? 0,
                             })
                           }
                           disabled={feesMutation.isPending}
