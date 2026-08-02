@@ -6,10 +6,14 @@ declare global {
 }
 
 function getImportMetaEnv(): EnvSource {
-  return typeof import.meta !== "undefined" ? ((import.meta as unknown as { env?: EnvSource }).env ?? {}) : {};
+  return typeof import.meta !== "undefined"
+    ? ((import.meta as unknown as { env?: EnvSource }).env ?? {})
+    : {};
 }
 
-export function readSupabaseEnv(name: "SUPABASE_URL" | "SUPABASE_PUBLISHABLE_KEY" | "SUPABASE_SERVICE_ROLE_KEY") {
+export function readSupabaseEnv(
+  name: "SUPABASE_URL" | "SUPABASE_PUBLISHABLE_KEY" | "SUPABASE_SERVICE_ROLE_KEY",
+) {
   const viteName = `VITE_${name}`;
   const metaEnv = getImportMetaEnv();
   const runtimeEnv = globalThis.__EDUTRACK_RUNTIME_ENV__ ?? {};

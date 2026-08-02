@@ -24,10 +24,26 @@ export const Route = createFileRoute("/")({
 });
 
 const FEATURES = [
-  { icon: Layers, title: "Streamline daily work", body: "Reduce paperwork and move common school processes into one simple system." },
-  { icon: ShieldCheck, title: "Improve trust and control", body: "Keep records organized, secure and easy to review by the right staff members." },
-  { icon: FileBadge, title: "Better reporting", body: "Create clear report cards and academic summaries faster with less manual work." },
-  { icon: BarChart3, title: "See progress faster", body: "Track learner performance, attendance and school activity in one place." },
+  {
+    icon: Layers,
+    title: "Streamline daily work",
+    body: "Reduce paperwork and move common school processes into one simple system.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Improve trust and control",
+    body: "Keep records organized, secure and easy to review by the right staff members.",
+  },
+  {
+    icon: FileBadge,
+    title: "Better reporting",
+    body: "Create clear report cards and academic summaries faster with less manual work.",
+  },
+  {
+    icon: BarChart3,
+    title: "See progress faster",
+    body: "Track learner performance, attendance and school activity in one place.",
+  },
 ];
 
 function Landing() {
@@ -38,8 +54,8 @@ function Landing() {
           Give your school a smarter way to work, grow, and serve learners better.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground">
-          Education Track SMS helps schools reduce administrative stress, improve visibility, and focus more
-          on teaching, learning, and parent engagement.
+          Education Track SMS helps schools reduce administrative stress, improve visibility, and
+          focus more on teaching, learning, and parent engagement.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
@@ -66,7 +82,6 @@ function Landing() {
           </div>
         ))}
       </section>
-
     </PublicShell>
   );
 }

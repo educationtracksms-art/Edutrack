@@ -7,13 +7,24 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createSchoolWithAdmin, setSchoolStatus } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
-import { Btn, Field, PageHeader, Panel, Pill, ResponsiveTable, inputClass } from "@/components/ui-kit";
+import {
+  Btn,
+  Field,
+  PageHeader,
+  Panel,
+  Pill,
+  ResponsiveTable,
+  inputClass,
+} from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/schools")({
   head: () => ({
     meta: [
       { title: "Schools · EduTrack" },
-      { name: "description", content: "Create, suspend and monitor every school tenant on the platform." },
+      {
+        name: "description",
+        content: "Create, suspend and monitor every school tenant on the platform.",
+      },
       { property: "og:title", content: "Schools · EduTrack" },
       { property: "og:description", content: "Super Admin control centre for school tenants." },
     ],
@@ -39,7 +50,10 @@ function SchoolsPage() {
   const { data: schools } = useQuery({
     queryKey: ["schools"],
     queryFn: async () => {
-      const { data } = await supabase.from("schools").select("*").order("created_at", { ascending: false });
+      const { data } = await supabase
+        .from("schools")
+        .select("*")
+        .order("created_at", { ascending: false });
       return data ?? [];
     },
   });
@@ -48,7 +62,15 @@ function SchoolsPage() {
     mutationFn: () => createSchool({ data: form }),
     onSuccess: (result) => {
       setIssued({ email: form.adminEmail, password: result.oneTimePassword });
-      setForm({ name: "", code: "", address: "", email: "", phone: "", adminName: "", adminEmail: "" });
+      setForm({
+        name: "",
+        code: "",
+        address: "",
+        email: "",
+        phone: "",
+        adminName: "",
+        adminEmail: "",
+      });
       queryClient.invalidateQueries({ queryKey: ["schools"] });
       toast.success("School created with an administrator account");
     },
@@ -56,7 +78,8 @@ function SchoolsPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: (vars: { schoolId: string; status: "active" | "suspended" }) => changeStatus({ data: vars }),
+    mutationFn: (vars: { schoolId: string; status: "active" | "suspended" }) =>
+      changeStatus({ data: vars }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["schools"] });
       toast.success("School status updated");
@@ -66,7 +89,10 @@ function SchoolsPage() {
 
   return (
     <div>
-      <PageHeader title="Schools" description="Each school is an isolated tenant with its own staff, learners and data." />
+      <PageHeader
+        title="Schools"
+        description="Each school is an isolated tenant with its own staff, learners and data."
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Panel title="Registered schools">
@@ -90,7 +116,9 @@ function SchoolsPage() {
                         <td>{school.code}</td>
                         <td className="capitalize">{school.subscription_plan}</td>
                         <td>
-                          <Pill tone={school.status === "active" ? "success" : "danger"}>{school.status}</Pill>
+                          <Pill tone={school.status === "active" ? "success" : "danger"}>
+                            {school.status}
+                          </Pill>
                         </td>
                         <td className="text-right">
                           <Btn
@@ -121,13 +149,18 @@ function SchoolsPage() {
             mobile={
               <>
                 {(schools ?? []).map((school) => (
-                  <div key={school.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <div
+                    key={school.id}
+                    className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{school.name}</p>
                         <p className="mt-1 text-xs text-muted-foreground">Code: {school.code}</p>
                       </div>
-                      <Pill tone={school.status === "active" ? "success" : "danger"}>{school.status}</Pill>
+                      <Pill tone={school.status === "active" ? "success" : "danger"}>
+                        {school.status}
+                      </Pill>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                       <span className="rounded-full bg-muted px-2.5 py-1 text-xs capitalize text-muted-foreground">
@@ -166,25 +199,59 @@ function SchoolsPage() {
             }}
           >
             <Field label="School name">
-              <input required className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </Field>
             <Field label="School code">
-              <input required className={inputClass} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+              />
             </Field>
             <Field label="Address">
-              <input className={inputClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+              />
             </Field>
             <Field label="School email">
-              <input type="email" className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input
+                type="email"
+                className={inputClass}
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
             </Field>
             <Field label="School phone">
-              <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
             </Field>
             <Field label="Administrator name">
-              <input required className={inputClass} value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={form.adminName}
+                onChange={(e) => setForm({ ...form, adminName: e.target.value })}
+              />
             </Field>
             <Field label="Administrator email">
-              <input required type="email" className={inputClass} value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} />
+              <input
+                required
+                type="email"
+                className={inputClass}
+                value={form.adminEmail}
+                onChange={(e) => setForm({ ...form, adminEmail: e.target.value })}
+              />
             </Field>
             <Btn type="submit" variant="accent" disabled={createMutation.isPending}>
               {createMutation.isPending ? "Creating…" : "Create school"}

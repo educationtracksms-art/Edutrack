@@ -5,15 +5,31 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { createStaffUser, deleteStaffUser, resetUserPassword, updateStaffUser } from "@/lib/admin.functions";
+import {
+  createStaffUser,
+  deleteStaffUser,
+  resetUserPassword,
+  updateStaffUser,
+} from "@/lib/admin.functions";
 import { ROLE_LABELS, hasAny, useCurrentUser, type AppRole } from "@/hooks/useCurrentUser";
-import { Btn, Field, PageHeader, Panel, Pill, ResponsiveTable, inputClass } from "@/components/ui-kit";
+import {
+  Btn,
+  Field,
+  PageHeader,
+  Panel,
+  Pill,
+  ResponsiveTable,
+  inputClass,
+} from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/users")({
   head: () => ({
     meta: [
       { title: "Users & Roles · EduTrack" },
-      { name: "description", content: "Create staff accounts, assign roles and issue one-time passwords." },
+      {
+        name: "description",
+        content: "Create staff accounts, assign roles and issue one-time passwords.",
+      },
       { property: "og:title", content: "Users & Roles · EduTrack" },
       { property: "og:description", content: "Role-based user administration for your school." },
     ],
@@ -28,6 +44,7 @@ const ASSIGNABLE: AppRole[] = [
   "dos",
   "class_teacher",
   "subject_teacher",
+  "librarian",
 ];
 
 function UsersPage() {
@@ -38,21 +55,30 @@ function UsersPage() {
   const updateUser = useServerFn(updateStaffUser);
   const resetPassword = useServerFn(resetUserPassword);
   const deleteUserFn = useServerFn(deleteStaffUser);
-  const [form, setForm] = useState({ fullName: "", email: "", role: "subject_teacher", initials: "", schoolId: "" });
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    role: "subject_teacher",
+    initials: "",
+    schoolId: "",
+  });
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const [editingUser, setEditingUser] = useState<string | null>(null);
 
   const { data: schools } = useQuery({
     queryKey: ["schools-list"],
     enabled: isSuper,
-    queryFn: async () => (await supabase.from("schools").select("id, name").order("name")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("schools").select("id, name").order("name")).data ?? [],
   });
 
   const { data: people } = useQuery({
     queryKey: ["staff"],
     queryFn: async () => {
       const [{ data: profiles }, { data: roles }] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, email, initials, is_active, must_change_password"),
+        supabase
+          .from("profiles")
+          .select("id, full_name, email, initials, is_active, must_change_password"),
         supabase.from("user_roles").select("user_id, role"),
       ]);
       return (profiles ?? []).map((profile) => ({
@@ -81,15 +107,22 @@ function UsersPage() {
     },
     onError: (error: Error) =>
       toast.error(
-        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+        error.message ===
+          "Supabase admin client is unavailable because the committed .env file was not found at runtime."
           ? "Admin user creation is unavailable because the committed .env file is not being shipped with the deployment."
           : error.message,
       ),
   });
 
   const editMutation = useMutation({
-    mutationFn: (vars: { userId: string; fullName: string; email: string; role: string; initials?: string; schoolId?: string }) =>
-      updateUser({ data: vars }),
+    mutationFn: (vars: {
+      userId: string;
+      fullName: string;
+      email: string;
+      role: string;
+      initials?: string;
+      schoolId?: string;
+    }) => updateUser({ data: vars }),
     onSuccess: () => {
       toast.success("User updated");
       queryClient.invalidateQueries({ queryKey: ["staff"] });
@@ -97,7 +130,8 @@ function UsersPage() {
     },
     onError: (error: Error) =>
       toast.error(
-        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+        error.message ===
+          "Supabase admin client is unavailable because the committed .env file was not found at runtime."
           ? "User editing is unavailable because the committed .env file is not being shipped with the deployment."
           : error.message,
       ),
@@ -112,7 +146,8 @@ function UsersPage() {
     },
     onError: (error: Error) =>
       toast.error(
-        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+        error.message ===
+          "Supabase admin client is unavailable because the committed .env file was not found at runtime."
           ? "Password reset is unavailable because the committed .env file is not being shipped with the deployment."
           : error.message,
       ),
@@ -126,7 +161,8 @@ function UsersPage() {
     },
     onError: (error: Error) =>
       toast.error(
-        error.message === "Supabase admin client is unavailable because the committed .env file was not found at runtime."
+        error.message ===
+          "Supabase admin client is unavailable because the committed .env file was not found at runtime."
           ? "User deletion is unavailable because the committed .env file is not being shipped with the deployment."
           : error.message,
       ),
@@ -134,7 +170,10 @@ function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="Users & roles" description="Accounts are created by administrators — never self-registered." />
+      <PageHeader
+        title="Users & roles"
+        description="Accounts are created by administrators — never self-registered."
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <Panel title="Accounts">
@@ -156,7 +195,11 @@ function UsersPage() {
                       <tr key={person.id} className="border-t border-border align-top">
                         <td className="py-2.5 font-medium">
                           {person.full_name || "—"}
-                          {person.initials && <span className="ml-2 text-xs text-muted-foreground">({person.initials})</span>}
+                          {person.initials && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({person.initials})
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5">{person.email}</td>
                         <td className="py-2.5">
@@ -169,7 +212,11 @@ function UsersPage() {
                           </div>
                         </td>
                         <td className="py-2.5">
-                          {person.must_change_password ? <Pill tone="warning">Must reset</Pill> : <Pill tone="success">Active</Pill>}
+                          {person.must_change_password ? (
+                            <Pill tone="warning">Must reset</Pill>
+                          ) : (
+                            <Pill tone="success">Active</Pill>
+                          )}
                         </td>
                         <td className="py-2.5 text-right">
                           <div className="flex justify-end gap-2">
@@ -194,7 +241,11 @@ function UsersPage() {
                             <Btn
                               variant="ghost"
                               onClick={() => {
-                                if (window.confirm(`Delete user "${person.full_name || person.email}"?`)) {
+                                if (
+                                  window.confirm(
+                                    `Delete user "${person.full_name || person.email}"?`,
+                                  )
+                                ) {
                                   deleteMutation.mutate(person.id);
                                 }
                               }}
@@ -212,16 +263,29 @@ function UsersPage() {
             mobile={
               <>
                 {(people ?? []).map((person) => (
-                  <div key={person.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <div
+                    key={person.id}
+                    className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">
                           {person.full_name || "—"}
-                          {person.initials && <span className="ml-2 text-xs text-muted-foreground">({person.initials})</span>}
+                          {person.initials && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({person.initials})
+                            </span>
+                          )}
                         </p>
-                        <p className="mt-1 break-all text-xs text-muted-foreground">{person.email}</p>
+                        <p className="mt-1 break-all text-xs text-muted-foreground">
+                          {person.email}
+                        </p>
                       </div>
-                      {person.must_change_password ? <Pill tone="warning">Must reset</Pill> : <Pill tone="success">Active</Pill>}
+                      {person.must_change_password ? (
+                        <Pill tone="warning">Must reset</Pill>
+                      ) : (
+                        <Pill tone="success">Active</Pill>
+                      )}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1">
                       {person.roles.map((role) => (
@@ -252,7 +316,9 @@ function UsersPage() {
                       <Btn
                         variant="ghost"
                         onClick={() => {
-                          if (window.confirm(`Delete user "${person.full_name || person.email}"?`)) {
+                          if (
+                            window.confirm(`Delete user "${person.full_name || person.email}"?`)
+                          ) {
                             deleteMutation.mutate(person.id);
                           }
                         }}
@@ -288,7 +354,11 @@ function UsersPage() {
           >
             {isSuper && (
               <Field label="School">
-                <select className={inputClass} value={form.schoolId} onChange={(e) => setForm({ ...form, schoolId: e.target.value })}>
+                <select
+                  className={inputClass}
+                  value={form.schoolId}
+                  onChange={(e) => setForm({ ...form, schoolId: e.target.value })}
+                >
                   <option value="">Select a school</option>
                   {(schools ?? []).map((school) => (
                     <option key={school.id} value={school.id}>
@@ -299,16 +369,35 @@ function UsersPage() {
               </Field>
             )}
             <Field label="Full name">
-              <input required className={inputClass} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={form.fullName}
+                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+              />
             </Field>
             <Field label="Email">
-              <input required type="email" className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input
+                required
+                type="email"
+                className={inputClass}
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
             </Field>
             <Field label="Initials (shown on report cards)">
-              <input className={inputClass} value={form.initials} onChange={(e) => setForm({ ...form, initials: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.initials}
+                onChange={(e) => setForm({ ...form, initials: e.target.value })}
+              />
             </Field>
             <Field label="Role">
-              <select className={inputClass} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              <select
+                className={inputClass}
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+              >
                 {ASSIGNABLE.map((role) => (
                   <option key={role} value={role}>
                     {ROLE_LABELS[role]}
@@ -317,7 +406,13 @@ function UsersPage() {
               </select>
             </Field>
             <Btn type="submit" variant="accent" disabled={createMutation.isPending}>
-              {editingUser ? (editMutation.isPending ? "Saving…" : "Save changes") : createMutation.isPending ? "Creating…" : "Create account"}
+              {editingUser
+                ? editMutation.isPending
+                  ? "Saving…"
+                  : "Save changes"
+                : createMutation.isPending
+                  ? "Creating…"
+                  : "Create account"}
             </Btn>
             {editingUser && (
               <Btn
@@ -325,7 +420,13 @@ function UsersPage() {
                 variant="ghost"
                 onClick={() => {
                   setEditingUser(null);
-                  setForm({ fullName: "", email: "", role: "subject_teacher", initials: "", schoolId: "" });
+                  setForm({
+                    fullName: "",
+                    email: "",
+                    role: "subject_teacher",
+                    initials: "",
+                    schoolId: "",
+                  });
                 }}
               >
                 Cancel edit

@@ -1,7 +1,8 @@
 import type { ReportCardData } from "@/lib/report-types";
 
 export function ReportCard({ data }: { data: ReportCardData }) {
-  const { school, student, attendance, rows, overall, gradeKeys, coCurricular, comments, staff } = data;
+  const { school, student, attendance, rows, overall, gradeKeys, coCurricular, comments, staff } =
+    data;
 
   return (
     <div className="report-doc">
@@ -177,21 +178,23 @@ export function ReportCard({ data }: { data: ReportCardData }) {
         </div>
         <div className="meaning">
           <p>
-            <strong>Competency:</strong> The overall expected capability of a learner after exposure to
-            knowledge, skills and values.
+            <strong>Competency:</strong> The overall expected capability of a learner after exposure
+            to knowledge, skills and values.
           </p>
           <p>
-            <strong>Descriptor:</strong> Gives details on the extent to which the learner has achieved the
-            stipulated learning outcomes.
+            <strong>Descriptor:</strong> Gives details on the extent to which the learner has
+            achieved the stipulated learning outcomes.
           </p>
           <p>
-            <strong>Generic Skills:</strong> Higher order transferable skills applied in school and work.
+            <strong>Generic Skills:</strong> Higher order transferable skills applied in school and
+            work.
           </p>
           <p>
             <strong>Identifier:</strong> Alphabetical grade distinguishing learner achievement.
           </p>
           <p>
-            <strong>Score:</strong> Refers to the average of the scores obtained from all learning outcomes.
+            <strong>Score:</strong> Refers to the average of the scores obtained from all learning
+            outcomes.
           </p>
         </div>
       </section>
@@ -217,7 +220,15 @@ export function ReportCard({ data }: { data: ReportCardData }) {
       <table className="comments">
         <tbody>
           <tr>
-            <td className="label">Class Teacher's Comment</td>
+            <td className="label">
+              Class Teacher&apos;s Comment
+              {staff.classTeacher && (
+                <>
+                  <br />
+                  <span className="text-xs font-normal">({staff.classTeacher})</span>
+                </>
+              )}
+            </td>
             <td>{comments.classTeacher}</td>
           </tr>
           <tr>

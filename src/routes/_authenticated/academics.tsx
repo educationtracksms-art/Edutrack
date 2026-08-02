@@ -13,9 +13,15 @@ export const Route = createFileRoute("/_authenticated/academics")({
   head: () => ({
     meta: [
       { title: "Academic setup · EduTrack" },
-      { name: "description", content: "Create classes, streams and subjects, then allocate teachers to each stream." },
+      {
+        name: "description",
+        content: "Create classes, streams and subjects, then allocate teachers to each stream.",
+      },
       { property: "og:title", content: "Academic setup · EduTrack" },
-      { property: "og:description", content: "Director of Studies control over classes, streams, subjects and teaching loads." },
+      {
+        property: "og:description",
+        content: "Director of Studies control over classes, streams, subjects and teaching loads.",
+      },
     ],
   }),
   component: AcademicsPage,
@@ -31,31 +37,60 @@ function AcademicsPage() {
 
   const [classForm, setClassForm] = useState({ name: "", level: "", class_teacher_id: "" });
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "" });
-  const [subjectForm, setSubjectForm] = useState({ name: "", code: "", category: "", position: "" });
+  const [subjectForm, setSubjectForm] = useState({
+    name: "",
+    code: "",
+    category: "",
+    position: "",
+  });
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
-  const [allocForm, setAllocForm] = useState({ teacher_id: "", subject_id: "", class_id: "", stream_id: "" });
+  const [allocForm, setAllocForm] = useState({
+    teacher_id: "",
+    subject_id: "",
+    class_id: "",
+    stream_id: "",
+  });
   const [yearForm, setYearForm] = useState({ name: "" });
-  const [termForm, setTermForm] = useState({ name: "", academic_year_id: "", start_date: "", end_date: "" });
+  const [termForm, setTermForm] = useState({
+    name: "",
+    academic_year_id: "",
+    start_date: "",
+    end_date: "",
+  });
 
   const { data } = useQuery({
     queryKey: ["academics", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
-      const [classes, streams, subjects, allocations, teachers, roles, academicYears, terms] = await Promise.all([
-        supabase.from("classes").select("*").order("level", { ascending: true }).order("name"),
-        supabase.from("streams").select("*").order("name"),
-        supabase.from("subjects").select("*").order("position"),
-        supabase.from("teacher_allocations").select("*"),
-        supabase.from("profiles").select("id, full_name, initials").order("full_name"),
-        supabase.from("user_roles").select("user_id, role"),
-        supabase.from("academic_years").select("*").eq("school_id", schoolId!).order("name"),
-        supabase.from("terms").select("*").eq("school_id", schoolId!).order("start_date", { ascending: true }).order("name"),
-      ]);
+      const [classes, streams, subjects, allocations, teachers, roles, academicYears, terms] =
+        await Promise.all([
+          supabase.from("classes").select("*").order("level", { ascending: true }).order("name"),
+          supabase.from("streams").select("*").order("name"),
+          supabase.from("subjects").select("*").order("position"),
+          supabase.from("teacher_allocations").select("*"),
+          supabase.from("profiles").select("id, full_name, initials").order("full_name"),
+          supabase.from("user_roles").select("user_id, role"),
+          supabase.from("academic_years").select("*").eq("school_id", schoolId!).order("name"),
+          supabase
+            .from("terms")
+            .select("*")
+            .eq("school_id", schoolId!)
+            .order("start_date", { ascending: true })
+            .order("name"),
+        ]);
       const teachingRoles = new Set(
         (roles.data ?? [])
-          .filter((r) => ["class_teacher", "subject_teacher", "dos", "head_teacher", "deputy_head_teacher"].includes(r.role))
+          .filter((r) =>
+            [
+              "class_teacher",
+              "subject_teacher",
+              "dos",
+              "head_teacher",
+              "deputy_head_teacher",
+            ].includes(r.role),
+          )
           .map((r) => r.user_id),
       );
       return {
@@ -91,9 +126,16 @@ function AcademicsPage() {
 
   async function setYearAsCurrent(yearId: string) {
     if (!schoolId) throw new Error("Your account is not linked to a school");
-    const { error: clearError } = await supabase.from("academic_years").update({ is_current: false }).eq("school_id", schoolId);
+    const { error: clearError } = await supabase
+      .from("academic_years")
+      .update({ is_current: false })
+      .eq("school_id", schoolId);
     if (clearError) throw new Error(clearError.message);
-    const { error: selectError } = await supabase.from("academic_years").update({ is_current: true }).eq("id", yearId).eq("school_id", schoolId);
+    const { error: selectError } = await supabase
+      .from("academic_years")
+      .update({ is_current: true })
+      .eq("id", yearId)
+      .eq("school_id", schoolId);
     if (selectError) throw new Error(selectError.message);
   }
 
@@ -108,12 +150,22 @@ function AcademicsPage() {
     if (termLookupError) throw new Error(termLookupError.message);
     if (!term?.academic_year_id) throw new Error("The selected term is missing an academic year");
 
-    const { error: clearTermsError } = await supabase.from("terms").update({ is_current: false }).eq("school_id", schoolId);
+    const { error: clearTermsError } = await supabase
+      .from("terms")
+      .update({ is_current: false })
+      .eq("school_id", schoolId);
     if (clearTermsError) throw new Error(clearTermsError.message);
-    const { error: selectTermError } = await supabase.from("terms").update({ is_current: true }).eq("id", termId).eq("school_id", schoolId);
+    const { error: selectTermError } = await supabase
+      .from("terms")
+      .update({ is_current: true })
+      .eq("id", termId)
+      .eq("school_id", schoolId);
     if (selectTermError) throw new Error(selectTermError.message);
 
-    const { error: clearYearsError } = await supabase.from("academic_years").update({ is_current: false }).eq("school_id", schoolId);
+    const { error: clearYearsError } = await supabase
+      .from("academic_years")
+      .update({ is_current: false })
+      .eq("school_id", schoolId);
     if (clearYearsError) throw new Error(clearYearsError.message);
     const { error: selectYearError } = await supabase
       .from("academic_years")
@@ -215,7 +267,9 @@ function AcademicsPage() {
         name: subjectForm.name.trim(),
         code: subjectForm.code || null,
         category: subjectForm.category || undefined,
-        position: subjectForm.position ? Number(subjectForm.position) : (data?.subjects.length ?? 0) + 1,
+        position: subjectForm.position
+          ? Number(subjectForm.position)
+          : (data?.subjects.length ?? 0) + 1,
       });
       if (error) throw new Error(error.message);
     },
@@ -237,7 +291,9 @@ function AcademicsPage() {
           name: subjectForm.name.trim(),
           code: subjectForm.code || null,
           category: subjectForm.category || undefined,
-          position: subjectForm.position ? Number(subjectForm.position) : (data?.subjects.length ?? 0) + 1,
+          position: subjectForm.position
+            ? Number(subjectForm.position)
+            : (data?.subjects.length ?? 0) + 1,
         })
         .eq("id", editingSubjectId)
         .eq("school_id", schoolId);
@@ -254,7 +310,8 @@ function AcademicsPage() {
   const addAllocation = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
-      if (!allocForm.teacher_id || !allocForm.subject_id) throw new Error("Pick a teacher and a subject");
+      if (!allocForm.teacher_id || !allocForm.subject_id)
+        throw new Error("Pick a teacher and a subject");
       const payload = {
         school_id: schoolId,
         teacher_id: allocForm.teacher_id,
@@ -264,7 +321,9 @@ function AcademicsPage() {
       };
       const { error } = await supabase.from("teacher_allocations").insert(payload);
       if (error) throw new Error(error.message);
-      await supabase.from("teacher_allocation_history").insert({ ...payload, action: "assigned", performed_by: me?.userId ?? null });
+      await supabase
+        .from("teacher_allocation_history")
+        .insert({ ...payload, action: "assigned", performed_by: me?.userId ?? null });
     },
     onSuccess: () => {
       setAllocForm({ teacher_id: "", subject_id: "", class_id: "", stream_id: "" });
@@ -279,7 +338,11 @@ function AcademicsPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       const name = yearForm.name.trim();
       if (!name) throw new Error("Enter an academic year name");
-      const { data: created, error } = await supabase.from("academic_years").insert({ school_id: schoolId, name }).select("id").single();
+      const { data: created, error } = await supabase
+        .from("academic_years")
+        .insert({ school_id: schoolId, name })
+        .select("id")
+        .single();
       if (error) throw new Error(error.message);
       await setYearAsCurrent(created.id);
       return created.id;
@@ -382,18 +445,29 @@ function AcademicsPage() {
   });
 
   if (!allowed) {
-    return <p className="text-sm text-muted-foreground">Only the Director of Studies and school leadership can manage academic setup.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        Only the Director of Studies and school leadership can manage academic setup.
+      </p>
+    );
   }
 
-  const className = (id: string | null) => data?.classes.find((c) => c.id === id)?.name ?? "All classes";
-  const streamName = (id: string | null) => data?.streams.find((s) => s.id === id)?.name ?? "All streams";
-  const classTeacherName = (id: string | null) => data?.teachers.find((t) => t.id === id)?.full_name ?? "Not assigned";
+  const className = (id: string | null) =>
+    data?.classes.find((c) => c.id === id)?.name ?? "All classes";
+  const streamName = (id: string | null) =>
+    data?.streams.find((s) => s.id === id)?.name ?? "All streams";
+  const classTeacherName = (id: string | null) =>
+    data?.teachers.find((t) => t.id === id)?.full_name ?? "Not assigned";
   const subjectName = (id: string) => data?.subjects.find((s) => s.id === id)?.name ?? "—";
   const teacherName = (id: string) => data?.teachers.find((t) => t.id === id)?.full_name ?? "—";
 
   function startEditingClass(item: any) {
     setEditingClassId(item.id);
-    setClassForm({ name: item.name ?? "", level: item.level?.toString() ?? "", class_teacher_id: item.class_teacher_id ?? "" });
+    setClassForm({
+      name: item.name ?? "",
+      level: item.level?.toString() ?? "",
+      class_teacher_id: item.class_teacher_id ?? "",
+    });
   }
 
   function startEditingStream(item: any) {
@@ -413,7 +487,10 @@ function AcademicsPage() {
 
   return (
     <div>
-      <PageHeader title="Academic setup" description="Classes, streams, subjects and teaching allocations for the current academic year." />
+      <PageHeader
+        title="Academic setup"
+        description="Classes, streams, subjects and teaching allocations for the current academic year."
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Classes">
@@ -426,21 +503,41 @@ function AcademicsPage() {
             }}
           >
             <Field label="Class name">
-              <input required className={inputClass} value={classForm.name} onChange={(e) => setClassForm({ ...classForm, name: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={classForm.name}
+                onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
+              />
             </Field>
             <Field label="Level (order)">
-              <input type="number" className={inputClass} value={classForm.level} onChange={(e) => setClassForm({ ...classForm, level: e.target.value })} />
+              <input
+                type="number"
+                className={inputClass}
+                value={classForm.level}
+                onChange={(e) => setClassForm({ ...classForm, level: e.target.value })}
+              />
             </Field>
             <Field label="Class teacher">
-              <select className={inputClass} value={classForm.class_teacher_id} onChange={(e) => setClassForm({ ...classForm, class_teacher_id: e.target.value })}>
+              <select
+                className={inputClass}
+                value={classForm.class_teacher_id}
+                onChange={(e) => setClassForm({ ...classForm, class_teacher_id: e.target.value })}
+              >
                 <option value="">Not assigned</option>
                 {(data?.teachers ?? []).map((teacher) => (
-                  <option key={teacher.id} value={teacher.id}>{teacher.full_name}</option>
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.full_name}
+                  </option>
                 ))}
               </select>
             </Field>
             <div className="flex flex-wrap gap-2">
-              <Btn type="submit" variant="accent" disabled={addClass.isPending || updateClass.isPending}>
+              <Btn
+                type="submit"
+                variant="accent"
+                disabled={addClass.isPending || updateClass.isPending}
+              >
                 {editingClassId ? "Save changes" : "Add class"}
               </Btn>
               {editingClassId && (
@@ -452,20 +549,31 @@ function AcademicsPage() {
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.classes ?? []).map((item) => (
-              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <li
+                key={item.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
                 <span>
                   <span className="font-medium">{item.name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">Class teacher: {classTeacherName(item.class_teacher_id)}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    Class teacher: {classTeacherName(item.class_teacher_id)}
+                  </span>
                 </span>
                 <div className="flex items-center gap-2">
-                  <Pill tone="muted">{data?.streams.filter((s) => s.class_id === item.id).length ?? 0} streams</Pill>
+                  <Pill tone="muted">
+                    {data?.streams.filter((s) => s.class_id === item.id).length ?? 0} streams
+                  </Pill>
                   <Btn variant="ghost" onClick={() => startEditingClass(item)}>
                     Edit
                   </Btn>
                   <Btn
                     variant="ghost"
                     onClick={() => {
-                      if (window.confirm(`Delete class "${item.name}"? This will also remove related streams.`)) {
+                      if (
+                        window.confirm(
+                          `Delete class "${item.name}"? This will also remove related streams.`,
+                        )
+                      ) {
                         removeClass.mutate(item.id);
                       }
                     }}
@@ -488,18 +596,33 @@ function AcademicsPage() {
             }}
           >
             <Field label="Class">
-              <select className={inputClass} value={streamForm.class_id} onChange={(e) => setStreamForm({ ...streamForm, class_id: e.target.value })}>
+              <select
+                className={inputClass}
+                value={streamForm.class_id}
+                onChange={(e) => setStreamForm({ ...streamForm, class_id: e.target.value })}
+              >
                 <option value="">Select class</option>
                 {(data?.classes ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
             </Field>
             <Field label="Stream name">
-              <input required className={inputClass} value={streamForm.name} onChange={(e) => setStreamForm({ ...streamForm, name: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={streamForm.name}
+                onChange={(e) => setStreamForm({ ...streamForm, name: e.target.value })}
+              />
             </Field>
             <div className="flex flex-wrap gap-2">
-              <Btn type="submit" variant="accent" disabled={addStream.isPending || updateStream.isPending}>
+              <Btn
+                type="submit"
+                variant="accent"
+                disabled={addStream.isPending || updateStream.isPending}
+              >
                 {editingStreamId ? "Save changes" : "Add stream"}
               </Btn>
               {editingStreamId && (
@@ -511,7 +634,10 @@ function AcademicsPage() {
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.streams ?? []).map((item) => (
-              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <li
+                key={item.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
                 <span>
                   {className(item.class_id)} · <span className="font-medium">{item.name}</span>
                 </span>
@@ -545,21 +671,44 @@ function AcademicsPage() {
             }}
           >
             <Field label="Subject name">
-              <input required className={inputClass} value={subjectForm.name} onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={subjectForm.name}
+                onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })}
+              />
             </Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="Code">
-                <input className={inputClass} value={subjectForm.code} onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })} />
+                <input
+                  className={inputClass}
+                  value={subjectForm.code}
+                  onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })}
+                />
               </Field>
               <Field label="Position">
-                <input type="number" className={inputClass} value={subjectForm.position} onChange={(e) => setSubjectForm({ ...subjectForm, position: e.target.value })} />
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={subjectForm.position}
+                  onChange={(e) => setSubjectForm({ ...subjectForm, position: e.target.value })}
+                />
               </Field>
             </div>
             <Field label="Category">
-              <input placeholder="Core / Elective" className={inputClass} value={subjectForm.category} onChange={(e) => setSubjectForm({ ...subjectForm, category: e.target.value })} />
+              <input
+                placeholder="Core / Elective"
+                className={inputClass}
+                value={subjectForm.category}
+                onChange={(e) => setSubjectForm({ ...subjectForm, category: e.target.value })}
+              />
             </Field>
             <div className="flex flex-wrap gap-2">
-              <Btn type="submit" variant="accent" disabled={addSubject.isPending || updateSubject.isPending}>
+              <Btn
+                type="submit"
+                variant="accent"
+                disabled={addSubject.isPending || updateSubject.isPending}
+              >
                 {editingSubjectId ? "Save changes" : "Add subject"}
               </Btn>
               {editingSubjectId && (
@@ -571,7 +720,10 @@ function AcademicsPage() {
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.subjects ?? []).map((item) => (
-              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <li
+                key={item.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
                 <span>{item.name}</span>
                 <div className="flex items-center gap-2">
                   {item.category && <Pill tone="muted">{item.category}</Pill>}
@@ -595,23 +747,39 @@ function AcademicsPage() {
             }}
           >
             <Field label="Year name">
-              <input required className={inputClass} value={yearForm.name} onChange={(e) => setYearForm({ ...yearForm, name: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={yearForm.name}
+                onChange={(e) => setYearForm({ ...yearForm, name: e.target.value })}
+              />
             </Field>
-            <Btn type="submit" variant="accent" disabled={addYear.isPending}>Create year</Btn>
+            <Btn type="submit" variant="accent" disabled={addYear.isPending}>
+              Create year
+            </Btn>
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.academicYears ?? []).map((item) => (
-              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <li
+                key={item.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
                 <span className="flex items-center gap-2">
                   <span>{item.name}</span>
                   {item.is_current && <Pill tone="success">Current</Pill>}
                 </span>
-                <Btn variant="ghost" onClick={() => makeYearCurrent.mutate(item.id)} disabled={makeYearCurrent.isPending || item.is_current}>
+                <Btn
+                  variant="ghost"
+                  onClick={() => makeYearCurrent.mutate(item.id)}
+                  disabled={makeYearCurrent.isPending || item.is_current}
+                >
                   Use this year
                 </Btn>
               </li>
             ))}
-            {(data?.academicYears ?? []).length === 0 && <p className="text-sm text-muted-foreground">No academic years yet.</p>}
+            {(data?.academicYears ?? []).length === 0 && (
+              <p className="text-sm text-muted-foreground">No academic years yet.</p>
+            )}
           </ul>
         </Panel>
 
@@ -624,7 +792,11 @@ function AcademicsPage() {
             }}
           >
             <Field label="Academic year">
-              <select className={inputClass} value={termForm.academic_year_id} onChange={(e) => setTermForm({ ...termForm, academic_year_id: e.target.value })}>
+              <select
+                className={inputClass}
+                value={termForm.academic_year_id}
+                onChange={(e) => setTermForm({ ...termForm, academic_year_id: e.target.value })}
+              >
                 <option value="">Select year</option>
                 {(data?.academicYears ?? []).map((year) => (
                   <option key={year.id} value={year.id}>
@@ -634,31 +806,57 @@ function AcademicsPage() {
               </select>
             </Field>
             <Field label="Term name">
-              <input required className={inputClass} value={termForm.name} onChange={(e) => setTermForm({ ...termForm, name: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={termForm.name}
+                onChange={(e) => setTermForm({ ...termForm, name: e.target.value })}
+              />
             </Field>
             <div className="grid gap-2 md:grid-cols-2">
               <Field label="Start date">
-                <input type="date" className={inputClass} value={termForm.start_date} onChange={(e) => setTermForm({ ...termForm, start_date: e.target.value })} />
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={termForm.start_date}
+                  onChange={(e) => setTermForm({ ...termForm, start_date: e.target.value })}
+                />
               </Field>
               <Field label="End date">
-                <input type="date" className={inputClass} value={termForm.end_date} onChange={(e) => setTermForm({ ...termForm, end_date: e.target.value })} />
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={termForm.end_date}
+                  onChange={(e) => setTermForm({ ...termForm, end_date: e.target.value })}
+                />
               </Field>
             </div>
-            <Btn type="submit" variant="accent" disabled={addTerm.isPending}>Create term</Btn>
+            <Btn type="submit" variant="accent" disabled={addTerm.isPending}>
+              Create term
+            </Btn>
           </form>
           <ul className="space-y-1 text-sm">
             {(data?.terms ?? []).map((item) => (
-              <li key={item.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <li
+                key={item.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
                 <span className="flex items-center gap-2">
                   <span>{item.name}</span>
                   {item.is_current && <Pill tone="success">Current</Pill>}
                 </span>
-                <Btn variant="ghost" onClick={() => makeTermCurrent.mutate(item.id)} disabled={makeTermCurrent.isPending || item.is_current}>
+                <Btn
+                  variant="ghost"
+                  onClick={() => makeTermCurrent.mutate(item.id)}
+                  disabled={makeTermCurrent.isPending || item.is_current}
+                >
                   Use this term
                 </Btn>
               </li>
             ))}
-            {(data?.terms ?? []).length === 0 && <p className="text-sm text-muted-foreground">No terms yet.</p>}
+            {(data?.terms ?? []).length === 0 && (
+              <p className="text-sm text-muted-foreground">No terms yet.</p>
+            )}
           </ul>
         </Panel>
       </div>
@@ -672,39 +870,69 @@ function AcademicsPage() {
           }}
         >
           <Field label="Teacher">
-            <select className={inputClass} value={allocForm.teacher_id} onChange={(e) => setAllocForm({ ...allocForm, teacher_id: e.target.value })}>
+            <select
+              className={inputClass}
+              value={allocForm.teacher_id}
+              onChange={(e) => setAllocForm({ ...allocForm, teacher_id: e.target.value })}
+            >
               <option value="">Select</option>
               {(data?.teachers ?? []).map((t) => (
-                <option key={t.id} value={t.id}>{t.full_name}</option>
+                <option key={t.id} value={t.id}>
+                  {t.full_name}
+                </option>
               ))}
             </select>
           </Field>
           <Field label="Subject">
-            <select className={inputClass} value={allocForm.subject_id} onChange={(e) => setAllocForm({ ...allocForm, subject_id: e.target.value })}>
+            <select
+              className={inputClass}
+              value={allocForm.subject_id}
+              onChange={(e) => setAllocForm({ ...allocForm, subject_id: e.target.value })}
+            >
               <option value="">Select</option>
               {(data?.subjects ?? []).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
             </select>
           </Field>
           <Field label="Class">
-            <select className={inputClass} value={allocForm.class_id} onChange={(e) => setAllocForm({ ...allocForm, class_id: e.target.value, stream_id: "" })}>
+            <select
+              className={inputClass}
+              value={allocForm.class_id}
+              onChange={(e) =>
+                setAllocForm({ ...allocForm, class_id: e.target.value, stream_id: "" })
+              }
+            >
               <option value="">All classes</option>
               {(data?.classes ?? []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </Field>
           <Field label="Stream">
-            <select className={inputClass} value={allocForm.stream_id} onChange={(e) => setAllocForm({ ...allocForm, stream_id: e.target.value })}>
+            <select
+              className={inputClass}
+              value={allocForm.stream_id}
+              onChange={(e) => setAllocForm({ ...allocForm, stream_id: e.target.value })}
+            >
               <option value="">All streams</option>
-              {(data?.streams ?? []).filter((s) => !allocForm.class_id || s.class_id === allocForm.class_id).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
+              {(data?.streams ?? [])
+                .filter((s) => !allocForm.class_id || s.class_id === allocForm.class_id)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
             </select>
           </Field>
           <div className="flex items-end">
-            <Btn type="submit" variant="accent" disabled={addAllocation.isPending}>Allocate</Btn>
+            <Btn type="submit" variant="accent" disabled={addAllocation.isPending}>
+              Allocate
+            </Btn>
           </div>
         </form>
 
@@ -727,13 +955,17 @@ function AcademicsPage() {
                   <td>{className(a.class_id)}</td>
                   <td>{streamName(a.stream_id)}</td>
                   <td className="text-right">
-                    <Btn variant="ghost" onClick={() => removeAllocation.mutate(a.id)}>Remove</Btn>
+                    <Btn variant="ghost" onClick={() => removeAllocation.mutate(a.id)}>
+                      Remove
+                    </Btn>
                   </td>
                 </tr>
               ))}
               {(data?.allocations ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">No allocations yet.</td>
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                    No allocations yet.
+                  </td>
                 </tr>
               )}
             </tbody>

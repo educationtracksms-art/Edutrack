@@ -8,7 +8,8 @@ export type AppRole =
   | "deputy_head_teacher"
   | "dos"
   | "class_teacher"
-  | "subject_teacher";
+  | "subject_teacher"
+  | "librarian";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "Super Admin",
@@ -18,6 +19,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   dos: "Director of Studies",
   class_teacher: "Class Teacher",
   subject_teacher: "Subject Teacher",
+  librarian: "Librarian",
 };
 
 export function useCurrentUser() {
@@ -62,7 +64,12 @@ export function hasAny(roles: AppRole[] | undefined, allowed: AppRole[]) {
 }
 
 /** Roles allowed to configure classes, streams, subjects, allocations and timetables. */
-export const ACADEMIC_MANAGERS: AppRole[] = ["dos", "school_admin", "head_teacher", "deputy_head_teacher"];
+export const ACADEMIC_MANAGERS: AppRole[] = [
+  "dos",
+  "school_admin",
+  "head_teacher",
+  "deputy_head_teacher",
+];
 
 /** Every school-level (non platform) role. */
 export const SCHOOL_ROLES: AppRole[] = [
@@ -72,4 +79,5 @@ export const SCHOOL_ROLES: AppRole[] = [
   "dos",
   "class_teacher",
   "subject_teacher",
+  "librarian",
 ];

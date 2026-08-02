@@ -11,7 +11,10 @@ export const Route = createFileRoute("/_authenticated/change-password")({
   head: () => ({
     meta: [
       { title: "Change password · EduTrack" },
-      { name: "description", content: "Set a new password before continuing to your EduTrack workspace." },
+      {
+        name: "description",
+        content: "Set a new password before continuing to your EduTrack workspace.",
+      },
       { property: "og:title", content: "Change password · EduTrack" },
       { property: "og:description", content: "Mandatory password change at first sign-in." },
     ],
@@ -57,10 +60,24 @@ function ChangePasswordPage() {
       <Panel>
         <form className="space-y-3" onSubmit={submit}>
           <Field label="New password">
-            <input type="password" required minLength={8} className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input
+              type="password"
+              required
+              minLength={8}
+              className={inputClass}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </Field>
           <Field label="Confirm new password">
-            <input type="password" required minLength={8} className={inputClass} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            <input
+              type="password"
+              required
+              minLength={8}
+              className={inputClass}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
           </Field>
           <Btn type="submit" variant="accent" disabled={saving}>
             {saving ? "Saving…" : "Update password"}

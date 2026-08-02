@@ -11,9 +11,15 @@ export const Route = createFileRoute("/_authenticated/timetable")({
   head: () => ({
     meta: [
       { title: "Timetable · EduTrack" },
-      { name: "description", content: "Build conflict-free class timetables and publish them to teachers." },
+      {
+        name: "description",
+        content: "Build conflict-free class timetables and publish them to teachers.",
+      },
       { property: "og:title", content: "Timetable · EduTrack" },
-      { property: "og:description", content: "Weekly timetable builder with teacher and room clash protection." },
+      {
+        property: "og:description",
+        content: "Weekly timetable builder with teacher and room clash protection.",
+      },
     ],
   }),
   component: TimetablePage,
@@ -68,7 +74,8 @@ function TimetablePage() {
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!currentTerm) throw new Error("Create an academic year and term first");
-      if (!form.class_id || !form.subject_id || !form.teacher_id) throw new Error("Class, subject and teacher are required");
+      if (!form.class_id || !form.subject_id || !form.teacher_id)
+        throw new Error("Class, subject and teacher are required");
       const { error } = await supabase.from("timetable_entries").insert({
         school_id: schoolId,
         academic_year_id: currentTerm.academic_year_id,
@@ -126,7 +133,8 @@ function TimetablePage() {
 
   const label = (list: { id: string; name: string }[] | undefined, id: string | null) =>
     list?.find((x) => x.id === id)?.name ?? "—";
-  const teacherName = (id: string | null) => data?.teachers.find((t) => t.id === id)?.full_name ?? "—";
+  const teacherName = (id: string | null) =>
+    data?.teachers.find((t) => t.id === id)?.full_name ?? "—";
 
   const periods = Array.from(new Set(visible.map((e) => e.period))).sort((a, b) => a - b);
 
@@ -138,8 +146,12 @@ function TimetablePage() {
         actions={
           canEdit ? (
             <>
-              <Btn variant="accent" onClick={() => publish.mutate(true)}>Publish</Btn>
-              <Btn variant="ghost" onClick={() => publish.mutate(false)}>Unpublish</Btn>
+              <Btn variant="accent" onClick={() => publish.mutate(true)}>
+                Publish
+              </Btn>
+              <Btn variant="ghost" onClick={() => publish.mutate(false)}>
+                Unpublish
+              </Btn>
             </>
           ) : undefined
         }
@@ -155,68 +167,128 @@ function TimetablePage() {
             }}
           >
             <Field label="Class">
-              <select className={inputClass} value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value, stream_id: "" })}>
+              <select
+                className={inputClass}
+                value={form.class_id}
+                onChange={(e) => setForm({ ...form, class_id: e.target.value, stream_id: "" })}
+              >
                 <option value="">Select</option>
                 {(data?.classes ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
             </Field>
             <Field label="Stream">
-              <select className={inputClass} value={form.stream_id} onChange={(e) => setForm({ ...form, stream_id: e.target.value })}>
+              <select
+                className={inputClass}
+                value={form.stream_id}
+                onChange={(e) => setForm({ ...form, stream_id: e.target.value })}
+              >
                 <option value="">Whole class</option>
-                {(data?.streams ?? []).filter((s) => !form.class_id || s.class_id === form.class_id).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
+                {(data?.streams ?? [])
+                  .filter((s) => !form.class_id || s.class_id === form.class_id)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
               </select>
             </Field>
             <Field label="Subject">
-              <select className={inputClass} value={form.subject_id} onChange={(e) => setForm({ ...form, subject_id: e.target.value })}>
+              <select
+                className={inputClass}
+                value={form.subject_id}
+                onChange={(e) => setForm({ ...form, subject_id: e.target.value })}
+              >
                 <option value="">Select</option>
                 {(data?.subjects ?? []).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </Field>
             <Field label="Teacher">
-              <select className={inputClass} value={form.teacher_id} onChange={(e) => setForm({ ...form, teacher_id: e.target.value })}>
+              <select
+                className={inputClass}
+                value={form.teacher_id}
+                onChange={(e) => setForm({ ...form, teacher_id: e.target.value })}
+              >
                 <option value="">Select</option>
                 {(data?.teachers ?? []).map((t) => (
-                  <option key={t.id} value={t.id}>{t.full_name}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.full_name}
+                  </option>
                 ))}
               </select>
             </Field>
             <Field label="Day">
-              <select className={inputClass} value={form.day_of_week} onChange={(e) => setForm({ ...form, day_of_week: e.target.value })}>
+              <select
+                className={inputClass}
+                value={form.day_of_week}
+                onChange={(e) => setForm({ ...form, day_of_week: e.target.value })}
+              >
                 {DAYS.map((d, i) => (
-                  <option key={d} value={i + 1}>{d}</option>
+                  <option key={d} value={i + 1}>
+                    {d}
+                  </option>
                 ))}
               </select>
             </Field>
             <Field label="Period">
-              <input type="number" min={1} className={inputClass} value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} />
+              <input
+                type="number"
+                min={1}
+                className={inputClass}
+                value={form.period}
+                onChange={(e) => setForm({ ...form, period: e.target.value })}
+              />
             </Field>
             <Field label="Start">
-              <input type="time" className={inputClass} value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+              <input
+                type="time"
+                className={inputClass}
+                value={form.start_time}
+                onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+              />
             </Field>
             <Field label="End">
-              <input type="time" className={inputClass} value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+              <input
+                type="time"
+                className={inputClass}
+                value={form.end_time}
+                onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+              />
             </Field>
             <Field label="Classroom">
-              <input className={inputClass} value={form.classroom} onChange={(e) => setForm({ ...form, classroom: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.classroom}
+                onChange={(e) => setForm({ ...form, classroom: e.target.value })}
+              />
             </Field>
             <div className="flex items-end">
-              <Btn type="submit" variant="accent" disabled={addEntry.isPending}>Add lesson</Btn>
+              <Btn type="submit" variant="accent" disabled={addEntry.isPending}>
+                Add lesson
+              </Btn>
             </div>
           </form>
         </Panel>
       )}
 
       <Panel>
-        <select className={`${inputClass} mb-3 max-w-xs`} value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
+        <select
+          className={`${inputClass} mb-3 max-w-xs`}
+          value={classFilter}
+          onChange={(e) => setClassFilter(e.target.value)}
+        >
           <option value="">All classes</option>
           {(data?.classes ?? []).map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
           ))}
         </select>
 
@@ -226,7 +298,9 @@ function TimetablePage() {
               <tr>
                 <th className="pb-2">Period</th>
                 {DAYS.map((day) => (
-                  <th key={day} className="pb-2">{day}</th>
+                  <th key={day} className="pb-2">
+                    {day}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -235,18 +309,22 @@ function TimetablePage() {
                 <tr key={period} className="border-t border-border align-top">
                   <td className="py-2 font-semibold">{period}</td>
                   {DAYS.map((day, index) => {
-                    const cell = visible.filter((e) => e.day_of_week === index + 1 && e.period === period);
+                    const cell = visible.filter(
+                      (e) => e.day_of_week === index + 1 && e.period === period,
+                    );
                     return (
                       <td key={day} className="py-2 pr-2">
                         {cell.map((entry) => (
                           <div key={entry.id} className="mb-1 rounded-md border border-border p-2">
                             <p className="font-medium">{label(data?.subjects, entry.subject_id)}</p>
                             <p className="text-xs text-muted-foreground">
-                              {teacherName(entry.teacher_id)} · {label(data?.classes, entry.class_id)}{" "}
+                              {teacherName(entry.teacher_id)} ·{" "}
+                              {label(data?.classes, entry.class_id)}{" "}
                               {entry.stream_id ? label(data?.streams, entry.stream_id) : ""}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {entry.start_time}–{entry.end_time} {entry.classroom ? `· ${entry.classroom}` : ""}
+                              {entry.start_time}–{entry.end_time}{" "}
+                              {entry.classroom ? `· ${entry.classroom}` : ""}
                             </p>
                             <div className="mt-1 flex items-center gap-2">
                               <Pill tone={entry.is_published ? "success" : "muted"}>

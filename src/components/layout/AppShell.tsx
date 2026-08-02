@@ -42,7 +42,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-type NavItem = { to: string; label: string; icon: ComponentType<{ className?: string }>; roles: AppRole[] };
+type NavItem = {
+  to: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  roles: AppRole[];
+};
 
 const ALL: AppRole[] = [
   "super_admin",
@@ -64,12 +69,32 @@ const NAV: NavItem[] = [
     roles: ["super_admin", ...SCHOOL_ROLES],
   },
   { to: "/academics", label: "Academic setup", icon: Library, roles: ACADEMIC_MANAGERS },
+  {
+    to: "/library",
+    label: "Library",
+    icon: Library,
+    roles: [
+      "super_admin",
+      "school_admin",
+      "head_teacher",
+      "deputy_head_teacher",
+      "dos",
+      "librarian",
+    ],
+  },
   { to: "/timetable", label: "Timetable", icon: CalendarClock, roles: SCHOOL_ROLES },
   {
     to: "/assessments",
     label: "Assessments",
     icon: ClipboardCheck,
-    roles: ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "subject_teacher", "class_teacher"],
+    roles: [
+      "dos",
+      "school_admin",
+      "head_teacher",
+      "deputy_head_teacher",
+      "subject_teacher",
+      "class_teacher",
+    ],
   },
   {
     to: "/attendance",
@@ -129,7 +154,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         const headerLabels = Array.from(table.querySelectorAll("thead th")).map((header, index) => {
           const label = header.textContent?.trim();
           if (label) return label;
-          return index === table.querySelectorAll("thead th").length - 1 ? "Action" : `Column ${index + 1}`;
+          return index === table.querySelectorAll("thead th").length - 1
+            ? "Action"
+            : `Column ${index + 1}`;
         });
 
         table.querySelectorAll("tbody tr").forEach((row) => {
@@ -191,7 +218,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             />
             {labelsVisible && (
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold leading-tight">{me?.school?.name || "EduTrack"}</p>
+                <p className="truncate text-sm font-semibold leading-tight">
+                  {me?.school?.name || "EduTrack"}
+                </p>
                 <p className="truncate text-xs text-sidebar-foreground/60">School Management</p>
               </div>
             )}
@@ -244,7 +273,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </>
             ) : (
               <div className="flex items-center justify-center">
-                <div className="h-2 w-2 rounded-full bg-sidebar-foreground/40" title={me?.email ?? "Account"} />
+                <div
+                  className="h-2 w-2 rounded-full bg-sidebar-foreground/40"
+                  title={me?.email ?? "Account"}
+                />
               </div>
             )}
             <button
@@ -264,7 +296,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {isMobile && (
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-          <SheetContent side="left" className="w-[88vw] max-w-sm bg-sidebar p-0 text-sidebar-foreground">
+          <SheetContent
+            side="left"
+            className="w-[88vw] max-w-sm bg-sidebar p-0 text-sidebar-foreground"
+          >
             <SheetHeader className="border-b border-sidebar-border px-4 py-5 text-left">
               <SheetTitle className="flex items-center gap-3 text-base text-sidebar-foreground">
                 <img
@@ -304,7 +339,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </nav>
 
               <div className="border-t border-sidebar-border p-3">
-                <p className="truncate text-sm font-medium">{me?.profile?.full_name || me?.email}</p>
+                <p className="truncate text-sm font-medium">
+                  {me?.profile?.full_name || me?.email}
+                </p>
                 <p className="text-xs text-sidebar-foreground/60">
                   {primaryRole ? ROLE_LABELS[primaryRole] : "No role"}
                 </p>

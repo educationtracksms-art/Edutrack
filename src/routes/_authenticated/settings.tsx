@@ -25,7 +25,14 @@ function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const [form, setForm] = useState({ name: "", address: "", email: "", phone: "", motto: "", logo_url: "" });
+  const [form, setForm] = useState({
+    name: "",
+    address: "",
+    email: "",
+    phone: "",
+    motto: "",
+    logo_url: "",
+  });
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -52,14 +59,20 @@ function SettingsPage() {
   const { data: toggles } = useQuery({
     queryKey: ["feature-toggles", schoolId],
     enabled: !!schoolId,
-    queryFn: async () => (await supabase.from("feature_toggles").select("*").order("module")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("feature_toggles").select("*").order("module")).data ?? [],
   });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("No school linked to your account");
-      const logoUrl = logoFile ? await uploadImage(logoFile, `schools/${schoolId}/logo`) : form.logo_url;
-      const { error } = await supabase.from("schools").update({ ...form, logo_url: logoUrl }).eq("id", schoolId);
+      const logoUrl = logoFile
+        ? await uploadImage(logoFile, `schools/${schoolId}/logo`)
+        : form.logo_url;
+      const { error } = await supabase
+        .from("schools")
+        .update({ ...form, logo_url: logoUrl })
+        .eq("id", schoolId);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
@@ -72,7 +85,10 @@ function SettingsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async (vars: { id: string; enabled: boolean }) => {
-      const { error } = await supabase.from("feature_toggles").update({ enabled: vars.enabled }).eq("id", vars.id);
+      const { error } = await supabase
+        .from("feature_toggles")
+        .update({ enabled: vars.enabled })
+        .eq("id", vars.id);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feature-toggles", schoolId] }),
@@ -81,7 +97,10 @@ function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="School settings" description="Branding shown on report cards and the modules your staff can use." />
+      <PageHeader
+        title="School settings"
+        description="Branding shown on report cards and the modules your staff can use."
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="School profile">
@@ -93,19 +112,39 @@ function SettingsPage() {
             }}
           >
             <Field label="Name">
-              <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </Field>
             <Field label="Address">
-              <input className={inputClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+              />
             </Field>
             <Field label="Email">
-              <input className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
             </Field>
             <Field label="Phone">
-              <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
             </Field>
             <Field label="Motto">
-              <input className={inputClass} value={form.motto} onChange={(e) => setForm({ ...form, motto: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.motto}
+                onChange={(e) => setForm({ ...form, motto: e.target.value })}
+              />
             </Field>
             <Field label="School logo">
               {form.logo_url && (
@@ -124,7 +163,8 @@ function SettingsPage() {
                 onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Upload an image up to 1 MB. New uploads replace the current logo in the images bucket.
+                Upload an image up to 1 MB. New uploads replace the current logo in the images
+                bucket.
               </p>
             </Field>
             <Btn type="submit" variant="accent" disabled={saveMutation.isPending}>
@@ -136,16 +176,23 @@ function SettingsPage() {
         <Panel title="Modules">
           <ul className="space-y-2 text-sm">
             {(toggles ?? []).map((toggle) => (
-              <li key={toggle.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <li
+                key={toggle.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
                 <span className="capitalize">{toggle.module.replace(/_/g, " ")}</span>
                 <input
                   type="checkbox"
                   checked={toggle.enabled}
-                  onChange={(e) => toggleMutation.mutate({ id: toggle.id, enabled: e.target.checked })}
+                  onChange={(e) =>
+                    toggleMutation.mutate({ id: toggle.id, enabled: e.target.checked })
+                  }
                 />
               </li>
             ))}
-            {(toggles ?? []).length === 0 && <p className="text-muted-foreground">No modules configured.</p>}
+            {(toggles ?? []).length === 0 && (
+              <p className="text-muted-foreground">No modules configured.</p>
+            )}
           </ul>
         </Panel>
       </div>

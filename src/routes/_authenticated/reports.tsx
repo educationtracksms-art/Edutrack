@@ -20,9 +20,15 @@ export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
     meta: [
       { title: "Report Cards · EduTrack" },
-      { name: "description", content: "Generate and print A4 learner report cards built from approved assessment data." },
+      {
+        name: "description",
+        content: "Generate and print A4 learner report cards built from approved assessment data.",
+      },
       { property: "og:title", content: "Report Cards · EduTrack" },
-      { property: "og:description", content: "Dynamic, print-ready report cards for individual learners or whole classes." },
+      {
+        property: "og:description",
+        content: "Dynamic, print-ready report cards for individual learners or whole classes.",
+      },
     ],
   }),
   component: ReportsPage,
@@ -38,26 +44,43 @@ function ReportsPage() {
 
   const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["classes"],
-    queryFn: async () => (await supabase.from("classes").select("id, name").order("name")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("classes").select("id, name").order("name")).data ?? [],
   });
   const { data: students } = useQuery<StudentRow[]>({
     queryKey: ["students-active"],
     queryFn: async () =>
-      (await supabase.from("students").select("id, full_name, class_id").eq("status", "active").order("full_name")).data ?? [],
+      (
+        await supabase
+          .from("students")
+          .select("id, full_name, class_id")
+          .eq("status", "active")
+          .order("full_name")
+      ).data ?? [],
   });
   const { data: terms } = useQuery<TermRow[]>({
     queryKey: ["report-terms"],
     queryFn: async () =>
-      (await supabase.from("terms").select("id, name, is_current").order("start_date", { ascending: false })).data ?? [],
+      (
+        await supabase
+          .from("terms")
+          .select("id, name, is_current")
+          .order("start_date", { ascending: false })
+      ).data ?? [],
   });
 
-  const currentTermId = useMemo(() => terms?.find((term) => term.is_current)?.id ?? terms?.[0]?.id ?? "", [terms]);
+  const currentTermId = useMemo(
+    () => terms?.find((term) => term.is_current)?.id ?? terms?.[0]?.id ?? "",
+    [terms],
+  );
 
   useEffect(() => {
     if (!termId && currentTermId) setTermId(currentTermId);
   }, [currentTermId, termId]);
 
-  const visible = (students ?? []).filter((student) => (classId ? student.class_id === classId : true));
+  const visible = (students ?? []).filter((student) =>
+    classId ? student.class_id === classId : true,
+  );
 
   const generate = useMutation({
     mutationFn: async () => {
@@ -94,7 +117,11 @@ function ReportsPage() {
 
       <Panel className="no-print mb-6">
         <div className="flex flex-wrap items-center gap-3">
-          <select className={`${inputClass} max-w-xs`} value={termId} onChange={(event) => setTermId(event.target.value)}>
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={termId}
+            onChange={(event) => setTermId(event.target.value)}
+          >
             <option value="">Select term</option>
             {(terms ?? []).map((term) => (
               <option key={term.id} value={term.id}>
@@ -119,17 +146,26 @@ function ReportsPage() {
             ))}
           </select>
           <span className="text-sm text-muted-foreground">
-            {selected.length ? `${selected.length} selected` : `${visible.length} learner(s) in scope`}
+            {selected.length
+              ? `${selected.length} selected`
+              : `${visible.length} learner(s) in scope`}
           </span>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((student) => (
-            <label key={student.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+            <label
+              key={student.id}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+            >
               <input
                 type="checkbox"
                 checked={selected.includes(student.id)}
                 onChange={(event) =>
-                  setSelected(event.target.checked ? [...selected, student.id] : selected.filter((id) => id !== student.id))
+                  setSelected(
+                    event.target.checked
+                      ? [...selected, student.id]
+                      : selected.filter((id) => id !== student.id),
+                  )
                 }
               />
               {student.full_name}

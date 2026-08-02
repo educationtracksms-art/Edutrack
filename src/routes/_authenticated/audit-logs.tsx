@@ -8,9 +8,15 @@ export const Route = createFileRoute("/_authenticated/audit-logs")({
   head: () => ({
     meta: [
       { title: "Audit Logs · EduTrack" },
-      { name: "description", content: "Immutable record of every sensitive action taken in your school." },
+      {
+        name: "description",
+        content: "Immutable record of every sensitive action taken in your school.",
+      },
       { property: "og:title", content: "Audit Logs · EduTrack" },
-      { property: "og:description", content: "Track approvals, resets, verifications and report printing." },
+      {
+        property: "og:description",
+        content: "Track approvals, resets, verifications and report printing.",
+      },
     ],
   }),
   component: AuditLogsPage,
@@ -20,7 +26,13 @@ function AuditLogsPage() {
   const { data } = useQuery({
     queryKey: ["audit-logs"],
     queryFn: async () =>
-      (await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(200)).data ?? [],
+      (
+        await supabase
+          .from("audit_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(200)
+      ).data ?? [],
   });
 
   return (
@@ -42,7 +54,9 @@ function AuditLogsPage() {
                 <tbody>
                   {(data ?? []).map((log) => (
                     <tr key={log.id} className="border-t border-border">
-                      <td className="py-2 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
+                      <td className="py-2 text-muted-foreground">
+                        {new Date(log.created_at).toLocaleString()}
+                      </td>
                       <td>{log.user_name ?? "System"}</td>
                       <td className="font-medium">{log.action}</td>
                       <td>{log.entity ?? "—"}</td>
@@ -62,11 +76,16 @@ function AuditLogsPage() {
           mobile={
             <>
               {(data ?? []).map((log) => (
-                <div key={log.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <div
+                  key={log.id}
+                  className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{log.action}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(log.created_at).toLocaleString()}
+                      </p>
                     </div>
                     <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                       {log.entity ?? "—"}

@@ -1,102 +1,276 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, ResponsiveTable, inputClass } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({
     meta: [
-      { title: "Attendance · EduTrack" },
-      { name: "description", content: "Mark daily attendance per class and feed report card attendance totals." },
-      { property: "og:title", content: "Attendance · EduTrack" },
-      { property: "og:description", content: "Daily register with present, absent and late tracking." },
+      { title: "Attendance Â· EduTrack" },
+      {
+        name: "description",
+        content: "Edit learner attendance totals and feed report card attendance summaries.",
+      },
+      { property: "og:title", content: "Attendance Â· EduTrack" },
+      {
+        property: "og:description",
+        content: "Attendance summary editor with class-based access controls.",
+      },
     ],
   }),
   component: AttendancePage,
 });
 
-const STATUSES = ["present", "absent", "late", "excused"] as const;
+type SummaryDraft = { daysPresent: string; daysAbsent: string };
 
 function AttendancePage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
+  const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
+  const canSeeAllStudents = hasAny(me?.roles, [
+    "dos",
+    "head_teacher",
+    "deputy_head_teacher",
+    "school_admin",
+    "super_admin",
+  ]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [classFilter, setClassFilter] = useState("");
-  const [marks, setMarks] = useState<Record<string, string>>({});
+  const [summaryDrafts, setSummaryDrafts] = useState<Record<string, SummaryDraft>>({});
 
   const { data } = useQuery({
     queryKey: ["attendance", schoolId, date],
     enabled: !!schoolId,
     queryFn: async () => {
-      const [students, classes, records, terms] = await Promise.all([
-        supabase.from("students").select("id, full_name, class_id, stream_id").is("deleted_at", null).order("full_name"),
-        supabase.from("classes").select("id, name").order("name"),
-        supabase.from("attendance_records").select("*").eq("attendance_date", date),
+      const [students, classes, terms] = await Promise.all([
+        supabase
+          .from("students")
+          .select("id, full_name, class_id, stream_id")
+          .is("deleted_at", null)
+          .order("full_name"),
+        supabase.from("classes").select("id, name, class_teacher_id").order("name"),
         supabase.from("terms").select("id, is_current"),
       ]);
       return {
         students: students.data ?? [],
         classes: classes.data ?? [],
-        records: records.data ?? [],
         term: (terms.data ?? []).find((t) => t.is_current) ?? (terms.data ?? [])[0] ?? null,
       };
     },
   });
 
-  const save = useMutation({
-    mutationFn: async () => {
+  const { data: summaries } = useQuery({
+    queryKey: ["attendance-summaries", schoolId, data?.term?.id, classFilter],
+    enabled: !!schoolId && !!data?.term?.id,
+    queryFn: async () => {
+      const { data: summaryRows } = await supabase
+        .from("attendance_summaries")
+        .select("student_id, days_present, days_absent, term_id")
+        .eq("term_id", data!.term!.id);
+      return summaryRows ?? [];
+    },
+  });
+
+  const attendanceSummaryByStudent = useMemo(
+    () =>
+      new Map(
+        (summaries ?? []).map((row) => [
+          row.student_id,
+          {
+            daysPresent: row.days_present ?? 0,
+            daysAbsent: row.days_absent ?? 0,
+            total: (row.days_present ?? 0) + (row.days_absent ?? 0),
+          },
+        ]),
+      ),
+    [summaries],
+  );
+
+  useEffect(() => {
+    setSummaryDrafts((current) => {
+      const next = { ...current };
+      for (const row of summaries ?? []) {
+        next[row.student_id] = {
+          daysPresent: row.days_present?.toString() ?? "0",
+          daysAbsent: row.days_absent?.toString() ?? "0",
+        };
+      }
+      return next;
+    });
+  }, [summaries]);
+
+  const assignedClass = useMemo(() => {
+    if (!isClassTeacher || canSeeAllStudents || !data || !me?.userId) return null;
+    return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
+  }, [canSeeAllStudents, data, isClassTeacher, me?.userId]);
+
+  const students = (data?.students ?? []).filter((student) => {
+    if (isClassTeacher && !canSeeAllStudents) {
+      return assignedClass ? student.class_id === assignedClass.id : false;
+    }
+    return classFilter ? student.class_id === classFilter : true;
+  });
+
+  const saveSummary = useMutation({
+    mutationFn: async (studentId: string) => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!data?.term) throw new Error("Create a term before recording attendance");
-      const rows = Object.entries(marks).map(([studentId, status]) => ({
-        school_id: schoolId,
-        student_id: studentId,
-        term_id: data.term!.id,
-        attendance_date: date,
-        status,
-        recorded_by: me?.userId ?? null,
-      }));
-      if (rows.length === 0) throw new Error("Nothing to save");
-      const { error } = await supabase
-        .from("attendance_records")
-        .upsert(rows, { onConflict: "student_id,attendance_date" });
+      if (isClassTeacher && !canSeeAllStudents && !assignedClass) {
+        throw new Error("No class is assigned to your account");
+      }
+      const draft = summaryDrafts[studentId] ?? { daysPresent: "0", daysAbsent: "0" };
+      const daysPresent = Number(draft.daysPresent || 0);
+      const daysAbsent = Number(draft.daysAbsent || 0);
+      const { error } = await supabase.from("attendance_summaries").upsert(
+        [
+          {
+            school_id: schoolId,
+            student_id: studentId,
+            term_id: data.term!.id,
+            days_present: daysPresent,
+            days_absent: daysAbsent,
+          },
+        ],
+        { onConflict: "student_id,term_id" },
+      );
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      toast.success("Attendance saved");
-      setMarks({});
-      queryClient.invalidateQueries({ queryKey: ["attendance", schoolId, date] });
+      toast.success("Attendance summary saved");
+      queryClient.invalidateQueries({
+        queryKey: ["attendance-summaries", schoolId, data?.term?.id],
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  const students = (data?.students ?? []).filter((s) => (classFilter ? s.class_id === classFilter : true));
 
   return (
     <div>
       <PageHeader
         title="Attendance"
-        description="Daily register per class. Totals roll up into each learner's report card."
-        actions={<Btn variant="accent" onClick={() => save.mutate()} disabled={save.isPending}>Save register</Btn>}
+        description="Edit days present and days absent per learner. Total updates automatically."
       />
 
       <Panel>
         <div className="mb-3 grid gap-3 md:grid-cols-3">
           <Field label="Date">
-            <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
           </Field>
           <Field label="Class">
-            <select className={inputClass} value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
-              <option value="">All classes</option>
+            <select
+              className={inputClass}
+              value={isClassTeacher && !canSeeAllStudents ? (assignedClass?.id ?? "") : classFilter}
+              onChange={(e) => setClassFilter(e.target.value)}
+              disabled={isClassTeacher && !canSeeAllStudents}
+            >
+              {isClassTeacher && !canSeeAllStudents ? (
+                <option value={assignedClass?.id ?? ""}>
+                  {assignedClass?.name ?? "Assigned class"}
+                </option>
+              ) : (
+                <option value="">All classes</option>
+              )}
               {(data?.classes ?? []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </Field>
+        </div>
+
+        <div className="mb-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="pb-2">Learner</th>
+                <th className="pb-2">Days Present</th>
+                <th className="pb-2">Days Absent</th>
+                <th className="pb-2">Total</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((student) => {
+                const summary = attendanceSummaryByStudent.get(student.id) ?? {
+                  daysPresent: 0,
+                  daysAbsent: 0,
+                  total: 0,
+                };
+                const draft = summaryDrafts[student.id] ?? {
+                  daysPresent: summary.daysPresent.toString(),
+                  daysAbsent: summary.daysAbsent.toString(),
+                };
+                const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
+                return (
+                  <tr key={student.id} className="border-t border-border">
+                    <td className="py-2 font-medium">{student.full_name}</td>
+                    <td className="py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        className={`${inputClass} w-24`}
+                        value={draft.daysPresent}
+                        onChange={(event) =>
+                          setSummaryDrafts((current) => ({
+                            ...current,
+                            [student.id]: {
+                              ...draft,
+                              daysPresent: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        className={`${inputClass} w-24`}
+                        value={draft.daysAbsent}
+                        onChange={(event) =>
+                          setSummaryDrafts((current) => ({
+                            ...current,
+                            [student.id]: {
+                              ...draft,
+                              daysAbsent: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="py-2">{total}</td>
+                    <td className="py-2 text-right">
+                      <Btn
+                        variant="accent"
+                        onClick={() => saveSummary.mutate(student.id)}
+                        disabled={saveSummary.isPending}
+                      >
+                        Save
+                      </Btn>
+                    </td>
+                  </tr>
+                );
+              })}
+              {students.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                    No learners in this class.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
 
         <ResponsiveTable
@@ -106,39 +280,42 @@ function AttendancePage() {
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="pb-2">Learner</th>
-                    <th className="pb-2">Status</th>
+                    <th className="pb-2">Days Present</th>
+                    <th className="pb-2">Days Absent</th>
+                    <th className="pb-2">Total</th>
+                    <th className="pb-2" />
                   </tr>
                 </thead>
                 <tbody>
                   {students.map((student) => {
-                    const saved = data?.records.find((r) => r.student_id === student.id)?.status ?? "";
-                    const value = marks[student.id] ?? saved;
+                    const summary = attendanceSummaryByStudent.get(student.id) ?? {
+                      daysPresent: 0,
+                      daysAbsent: 0,
+                      total: 0,
+                    };
+                    const draft = summaryDrafts[student.id] ?? {
+                      daysPresent: summary.daysPresent.toString(),
+                      daysAbsent: summary.daysAbsent.toString(),
+                    };
+                    const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
                     return (
                       <tr key={student.id} className="border-t border-border">
                         <td className="py-2 font-medium">{student.full_name}</td>
-                        <td className="py-2">
-                          <div className="flex flex-wrap gap-2">
-                            {STATUSES.map((status) => (
-                              <label key={status} className="flex items-center gap-1 text-xs capitalize">
-                                <input
-                                  type="radio"
-                                  name={`att-${student.id}`}
-                                  checked={value === status}
-                                  onChange={() => setMarks({ ...marks, [student.id]: status })}
-                                />
-                                {status}
-                              </label>
-                            ))}
-                          </div>
+                        <td className="py-2">{draft.daysPresent}</td>
+                        <td className="py-2">{draft.daysAbsent}</td>
+                        <td className="py-2">{total}</td>
+                        <td className="py-2 text-right">
+                          <Btn
+                            variant="ghost"
+                            onClick={() => saveSummary.mutate(student.id)}
+                            disabled={saveSummary.isPending}
+                          >
+                            Edit
+                          </Btn>
                         </td>
                       </tr>
                     );
                   })}
-                  {students.length === 0 && (
-                    <tr>
-                      <td colSpan={2} className="py-6 text-center text-muted-foreground">No learners in this class.</td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -146,36 +323,78 @@ function AttendancePage() {
           mobile={
             <>
               {students.map((student) => {
-                const saved = data?.records.find((r) => r.student_id === student.id)?.status ?? "";
-                const value = marks[student.id] ?? saved;
+                const summary = attendanceSummaryByStudent.get(student.id) ?? {
+                  daysPresent: 0,
+                  daysAbsent: 0,
+                  total: 0,
+                };
+                const draft = summaryDrafts[student.id] ?? {
+                  daysPresent: summary.daysPresent.toString(),
+                  daysAbsent: summary.daysAbsent.toString(),
+                };
+                const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
                 return (
-                  <div key={student.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <div
+                    key={student.id}
+                    className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium">{student.full_name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">Set today’s attendance below.</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Edit the counts, then save.
+                        </p>
                       </div>
-                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs capitalize text-muted-foreground">
-                        {value || "Not marked"}
-                      </span>
+                      <Btn
+                        variant="accent"
+                        onClick={() => saveSummary.mutate(student.id)}
+                        disabled={saveSummary.isPending}
+                      >
+                        Save
+                      </Btn>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {STATUSES.map((status) => (
-                        <label
-                          key={status}
-                          className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs capitalize ${
-                            value === status ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`att-mobile-${student.id}`}
-                            checked={value === status}
-                            onChange={() => setMarks({ ...marks, [student.id]: status })}
-                          />
-                          {status}
-                        </label>
-                      ))}
+
+                    <div className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-muted/40 p-3 text-center text-xs">
+                      <div>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-center text-sm"
+                          value={draft.daysPresent}
+                          onChange={(event) =>
+                            setSummaryDrafts((current) => ({
+                              ...current,
+                              [student.id]: {
+                                ...draft,
+                                daysPresent: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                        <div className="text-muted-foreground">Present</div>
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-center text-sm"
+                          value={draft.daysAbsent}
+                          onChange={(event) =>
+                            setSummaryDrafts((current) => ({
+                              ...current,
+                              [student.id]: {
+                                ...draft,
+                                daysAbsent: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                        <div className="text-muted-foreground">Absent</div>
+                      </div>
+                      <div>
+                        <div className="font-semibold">{total}</div>
+                        <div className="text-muted-foreground">Total</div>
+                      </div>
                     </div>
                   </div>
                 );

@@ -13,23 +13,43 @@ export function PageHeader({
     <div className="no-print mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-        {description && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>}
+        {description && (
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+        )}
       </div>
       {actions && <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">{actions}</div>}
     </div>
   );
 }
 
-export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
+export function Panel({
+  title,
+  children,
+  className = "",
+}: {
+  title?: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <section className={`rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4 ${className}`}>
+    <section
+      className={`rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4 ${className}`}
+    >
       {title && <h2 className="mb-3 text-sm font-semibold text-foreground">{title}</h2>}
       {children}
     </section>
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+export function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) {
   return (
     <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
@@ -39,14 +59,24 @@ export function Stat({ label, value, hint }: { label: string; value: string | nu
   );
 }
 
-export function Pill({ tone, children }: { tone: "success" | "warning" | "muted" | "danger"; children: ReactNode }) {
+export function Pill({
+  tone,
+  children,
+}: {
+  tone: "success" | "warning" | "muted" | "danger";
+  children: ReactNode;
+}) {
   const tones: Record<string, string> = {
     success: "bg-success/10 text-success",
     warning: "bg-accent/15 text-accent",
     muted: "bg-muted text-muted-foreground",
     danger: "bg-destructive/10 text-destructive",
   };
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tones[tone]}`}>{children}</span>;
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tones[tone]}`}>
+      {children}
+    </span>
+  );
 }
 
 export function Btn({

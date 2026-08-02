@@ -5,13 +5,19 @@ export function descriptorFromIdentifier(identifier: number) {
   return "";
 }
 
-export function identifierFromAssessmentScore(formative: number | string | null | undefined, summative: number | string | null | undefined) {
+export function identifierFromAssessmentScore(
+  formative: number | string | null | undefined,
+  summative: number | string | null | undefined,
+) {
   const formativeScore = Number(formative ?? 0);
   const summativeScore = Number(summative ?? 0);
   const totalScore = formativeScore + summativeScore;
   return (totalScore / 100) * 3;
 }
 
-export function descriptorFromAssessmentScore(formative: number | string | null | undefined, summative: number | string | null | undefined) {
+export function descriptorFromAssessmentScore(
+  formative: number | string | null | undefined,
+  summative: number | string | null | undefined,
+) {
   return descriptorFromIdentifier(identifierFromAssessmentScore(formative, summative));
 }

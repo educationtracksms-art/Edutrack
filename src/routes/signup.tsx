@@ -23,7 +23,8 @@ export const Route = createFileRoute("/signup")({
       { property: "og:title", content: "Request Access | Education Track SMS" },
       {
         property: "og:description",
-        content: "Submit a school signup request and receive a response from the Education Track SMS team.",
+        content:
+          "Submit a school signup request and receive a response from the Education Track SMS team.",
       },
     ],
   }),
@@ -88,7 +89,9 @@ function SignupPage() {
 
       setSent(true);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to send the signup request.");
+      setError(
+        submitError instanceof Error ? submitError.message : "Unable to send the signup request.",
+      );
     } finally {
       setLoading(false);
     }
@@ -102,7 +105,8 @@ function SignupPage() {
             <CheckCircle2 className="h-14 w-14 text-emerald-500" />
             <h1 className="mt-5 text-3xl font-bold tracking-tight">Your request has been sent</h1>
             <p className="mt-3 max-w-lg text-sm text-muted-foreground">
-              A signup request has been sent successfully. A response will be provided by email shortly.
+              A signup request has been sent successfully. A response will be provided by email
+              shortly.
             </p>
             <div className="mt-8 flex gap-3">
               <Link
@@ -130,28 +134,54 @@ function SignupPage() {
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
           <section className="rounded-3xl border border-border bg-card p-8 shadow-sm">
             <div className="flex items-center gap-3">
-              <img src={logoUrl} alt="Education Track SMS logo" className="h-12 w-12 object-cover" />
+              <img
+                src={logoUrl}
+                alt="Education Track SMS logo"
+                className="h-12 w-12 object-cover"
+              />
               <div>
                 <p className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                   Education Track SMS
                 </p>
-                <h1 className="text-2xl font-bold tracking-tight">Request access for your school</h1>
+                <h1 className="text-2xl font-bold tracking-tight">
+                  Request access for your school
+                </h1>
               </div>
             </div>
 
             <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
-              Send a request to the team and we will respond by email. This page does not connect to the
-              database; it sends the request directly through EmailJS.
+              Send a request to the team and we will respond by email. This page does not connect to
+              the database; it sends the request directly through EmailJS.
             </p>
 
             <form onSubmit={submit} className="mt-8 grid gap-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Full name" value={form.fullName} onChange={(value) => setForm({ ...form, fullName: value })} required />
-                <Field label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required />
+                <Field
+                  label="Full name"
+                  value={form.fullName}
+                  onChange={(value) => setForm({ ...form, fullName: value })}
+                  required
+                />
+                <Field
+                  label="Email"
+                  type="email"
+                  value={form.email}
+                  onChange={(value) => setForm({ ...form, email: value })}
+                  required
+                />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="School name" value={form.schoolName} onChange={(value) => setForm({ ...form, schoolName: value })} required />
-                <Field label="Phone number" value={form.phone} onChange={(value) => setForm({ ...form, phone: value })} />
+                <Field
+                  label="School name"
+                  value={form.schoolName}
+                  onChange={(value) => setForm({ ...form, schoolName: value })}
+                  required
+                />
+                <Field
+                  label="Phone number"
+                  value={form.phone}
+                  onChange={(value) => setForm({ ...form, phone: value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium" htmlFor="message">

@@ -50,7 +50,8 @@ export default {
     const previousProcessEnv = typeof process !== "undefined" ? process.env : undefined;
     try {
       const handler = await getServerEntry();
-      const runtimeEnv = env && typeof env === "object" ? (env as Record<string, string | undefined>) : {};
+      const runtimeEnv =
+        env && typeof env === "object" ? (env as Record<string, string | undefined>) : {};
       globalThis.__EDUTRACK_RUNTIME_ENV__ = runtimeEnv;
       if (typeof process !== "undefined" && process.env) {
         for (const [key, value] of Object.entries(runtimeEnv)) {

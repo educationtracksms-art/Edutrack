@@ -5,7 +5,12 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { deleteStudent, updateStudentStatus, verifyStudent } from "@/lib/admin.functions";
+import {
+  deleteStudent,
+  updateStudentFeesBalance,
+  updateStudentStatus,
+  verifyStudent,
+} from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { hasAny, SCHOOL_ROLES, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
@@ -15,9 +20,15 @@ export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({
     meta: [
       { title: "Students Â· EduTrack" },
-      { name: "description", content: "Register learners, verify admissions and manage class placement." },
+      {
+        name: "description",
+        content: "Register learners, verify admissions and manage class placement.",
+      },
       { property: "og:title", content: "Students Â· EduTrack" },
-      { property: "og:description", content: "Learner records with verification workflow and soft delete." },
+      {
+        property: "og:description",
+        content: "Learner records with verification workflow and soft delete.",
+      },
     ],
   }),
   component: StudentsPage,
@@ -27,17 +38,30 @@ function StudentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const canAccessStudents = hasAny(me?.roles, ["super_admin", ...SCHOOL_ROLES]);
-  const canManageStudents = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "super_admin"]);
-  const canChangeStatus = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]);
+  const canManageStudents = hasAny(me?.roles, [
+    "school_admin",
+    "head_teacher",
+    "deputy_head_teacher",
+    "dos",
+    "super_admin",
+  ]);
+  const canChangeStatus = hasAny(me?.roles, [
+    "school_admin",
+    "head_teacher",
+    "deputy_head_teacher",
+    "super_admin",
+  ]);
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const canVerify = canManageStudents || isClassTeacher;
   const verify = useServerFn(verifyStudent);
   const updateStatus = useServerFn(updateStudentStatus);
+  const updateFeesBalance = useServerFn(updateStudentFeesBalance);
   const deleteStudentFn = useServerFn(deleteStudent);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [feesDrafts, setFeesDrafts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     full_name: "",
     lin: "",
@@ -52,7 +76,9 @@ function StudentsPage() {
 
   const { data: classes } = useQuery({
     queryKey: ["classes"],
-    queryFn: async () => (await supabase.from("classes").select("id, name, class_teacher_id").order("name")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("classes").select("id, name, class_teacher_id").order("name")).data ??
+      [],
   });
   const { data: streams } = useQuery({
     queryKey: ["streams"],
@@ -61,13 +87,8 @@ function StudentsPage() {
   const { data: students } = useQuery({
     queryKey: ["students"],
     queryFn: async () =>
-      (
-        await supabase
-          .from("students")
-          .select("*")
-          .is("deleted_at", null)
-          .order("full_name")
-      ).data ?? [],
+      (await supabase.from("students").select("*").is("deleted_at", null).order("full_name"))
+        .data ?? [],
   });
 
   const filtered = useMemo(() => {
@@ -81,10 +102,24 @@ function StudentsPage() {
     );
   }, [students, search]);
 
+  const assignedClass = useMemo(() => {
+    if (!isClassTeacher || !me?.userId) return null;
+    return classes?.find((item) => item.class_teacher_id === me.userId) ?? null;
+  }, [classes, isClassTeacher, me?.userId]);
+
+  const visibleStudents = useMemo(() => {
+    if (isClassTeacher) {
+      return filtered.filter((student) => student.class_id === assignedClass?.id);
+    }
+    return filtered;
+  }, [assignedClass?.id, filtered, isClassTeacher]);
+
   const addMutation = useMutation({
     mutationFn: async () => {
       if (!me?.profile?.school_id) throw new Error("Your account is not linked to a school");
-      const photoUrl = photoFile ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`) : null;
+      const photoUrl = photoFile
+        ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`)
+        : null;
       const { error } = await supabase.from("students").insert({
         school_id: me.profile.school_id,
         full_name: form.full_name.trim(),
@@ -112,7 +147,9 @@ function StudentsPage() {
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!me?.profile?.school_id || !editingStudentId) throw new Error("Select a learner to edit");
-      const photoUrl = photoFile ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`) : undefined;
+      const photoUrl = photoFile
+        ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`)
+        : undefined;
       const payload: Record<string, unknown> = {
         full_name: form.full_name.trim(),
         lin: form.lin || null,
@@ -125,7 +162,11 @@ function StudentsPage() {
         parent_phone: form.parent_phone || null,
       };
       if (photoUrl) payload.photo_url = photoUrl;
-      const { error } = await supabase.from("students").update(payload).eq("id", editingStudentId).eq("school_id", me.profile.school_id);
+      const { error } = await supabase
+        .from("students")
+        .update(payload)
+        .eq("id", editingStudentId)
+        .eq("school_id", me.profile.school_id);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
@@ -146,7 +187,8 @@ function StudentsPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: (vars: { studentId: string; status: "pending" | "active" | "inactive" }) => updateStatus({ data: vars }),
+    mutationFn: (vars: { studentId: string; status: "pending" | "active" | "inactive" }) =>
+      updateStatus({ data: vars }),
     onSuccess: () => {
       toast.success("Student status updated");
       queryClient.invalidateQueries({ queryKey: ["students"] });
@@ -158,6 +200,16 @@ function StudentsPage() {
     mutationFn: (studentId: string) => deleteStudentFn({ data: { studentId } }),
     onSuccess: () => {
       toast.success("Learner deleted");
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  const feesMutation = useMutation({
+    mutationFn: (vars: { studentId: string; feesBalance: number }) =>
+      updateFeesBalance({ data: vars }),
+    onSuccess: () => {
+      toast.success("Fees balance updated");
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -198,10 +250,12 @@ function StudentsPage() {
   const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "â€”";
   const streamName = (id: string | null) => streams?.find((s) => s.id === id)?.name ?? "";
 
-if (!canAccessStudents) {
+  if (!canAccessStudents) {
     return (
       <Panel>
-        <p className="text-sm text-muted-foreground">You do not have access to the learner records area yet.</p>
+        <p className="text-sm text-muted-foreground">
+          You do not have access to the learner records area yet.
+        </p>
       </Panel>
     );
   }
@@ -231,19 +285,36 @@ if (!canAccessStudents) {
             }}
           >
             <Field label="Full name">
-              <input required className={inputClass} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+              <input
+                required
+                className={inputClass}
+                value={form.full_name}
+                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              />
             </Field>
             <Field label="LIN">
-              <input className={inputClass} value={form.lin} onChange={(e) => setForm({ ...form, lin: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.lin}
+                onChange={(e) => setForm({ ...form, lin: e.target.value })}
+              />
             </Field>
             <Field label="Gender">
-              <select className={inputClass} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+              <select
+                className={inputClass}
+                value={form.gender}
+                onChange={(e) => setForm({ ...form, gender: e.target.value })}
+              >
                 <option>Female</option>
                 <option>Male</option>
               </select>
             </Field>
             <Field label="Class">
-              <select className={inputClass} value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value, stream_id: "" })}>
+              <select
+                className={inputClass}
+                value={form.class_id}
+                onChange={(e) => setForm({ ...form, class_id: e.target.value, stream_id: "" })}
+              >
                 <option value="">Select class</option>
                 {(classes ?? []).map((item) => (
                   <option key={item.id} value={item.id}>
@@ -253,26 +324,48 @@ if (!canAccessStudents) {
               </select>
             </Field>
             <Field label="Stream">
-              <select className={inputClass} value={form.stream_id} onChange={(e) => setForm({ ...form, stream_id: e.target.value })}>
+              <select
+                className={inputClass}
+                value={form.stream_id}
+                onChange={(e) => setForm({ ...form, stream_id: e.target.value })}
+              >
                 <option value="">Select stream</option>
-                {(streams ?? []).filter((s) => !form.class_id || s.class_id === form.class_id).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
+                {(streams ?? [])
+                  .filter((s) => !form.class_id || s.class_id === form.class_id)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
               </select>
             </Field>
             <Field label="House">
-              <input className={inputClass} value={form.house} onChange={(e) => setForm({ ...form, house: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.house}
+                onChange={(e) => setForm({ ...form, house: e.target.value })}
+              />
             </Field>
             <Field label="SCHPAY code">
-              <input className={inputClass} value={form.schpay_code} onChange={(e) => setForm({ ...form, schpay_code: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.schpay_code}
+                onChange={(e) => setForm({ ...form, schpay_code: e.target.value })}
+              />
             </Field>
             <Field label="Parent / guardian">
-              <input className={inputClass} value={form.parent_name} onChange={(e) => setForm({ ...form, parent_name: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.parent_name}
+                onChange={(e) => setForm({ ...form, parent_name: e.target.value })}
+              />
             </Field>
             <Field label="Parent phone">
-              <input className={inputClass} value={form.parent_phone} onChange={(e) => setForm({ ...form, parent_phone: e.target.value })} />
+              <input
+                className={inputClass}
+                value={form.parent_phone}
+                onChange={(e) => setForm({ ...form, parent_phone: e.target.value })}
+              />
             </Field>
             <Field label="Learner image">
               <input
@@ -281,12 +374,24 @@ if (!canAccessStudents) {
                 className={inputClass}
                 onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
               />
-              <p className="mt-1 text-xs text-muted-foreground">Upload an image up to 1 MB. The file will be stored in the images bucket.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Upload an image up to 1 MB. The file will be stored in the images bucket.
+              </p>
             </Field>
             <div className="md:col-span-3">
               <div className="flex flex-wrap gap-2">
-                <Btn type="submit" variant="accent" disabled={addMutation.isPending || updateMutation.isPending}>
-                  {editingStudentId ? (updateMutation.isPending ? "Saving…" : "Save changes") : addMutation.isPending ? "Saving…" : "Save learner"}
+                <Btn
+                  type="submit"
+                  variant="accent"
+                  disabled={addMutation.isPending || updateMutation.isPending}
+                >
+                  {editingStudentId
+                    ? updateMutation.isPending
+                      ? "Saving…"
+                      : "Save changes"
+                    : addMutation.isPending
+                      ? "Saving…"
+                      : "Save learner"}
                 </Btn>
                 {editingStudentId && (
                   <Btn variant="ghost" onClick={resetForm}>
@@ -298,7 +403,6 @@ if (!canAccessStudents) {
           </form>
         </Panel>
       )}
-
       <Panel>
         <input
           placeholder="Search by name, LIN or SCHPAY code"
@@ -315,12 +419,13 @@ if (!canAccessStudents) {
                 <th className="pb-2">LIN</th>
                 <th className="pb-2">Class</th>
                 <th className="pb-2">House</th>
+                <th className="pb-2">Fees balance</th>
                 <th className="pb-2">Status</th>
                 <th className="pb-2" />
               </tr>
             </thead>
             <tbody>
-              {filtered.map((student) => (
+              {visibleStudents.map((student) => (
                 <tr key={student.id} className="border-t border-border">
                   <td className="py-2.5">
                     {student.photo_url ? (
@@ -331,29 +436,76 @@ if (!canAccessStudents) {
                       />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
-                        —
+                        �
                       </div>
                     )}
                   </td>
                   <td className="py-2.5 font-medium">{student.full_name}</td>
-                  <td>{student.lin ?? "â€”"}</td>
+                  <td>{student.lin ?? "�"}</td>
                   <td>
                     {className(student.class_id)} {streamName(student.stream_id)}
                   </td>
-                  <td>{student.house ?? "â€”"}</td>
+                  <td>{student.house ?? "�"}</td>
+                  <td>
+                    {canManageStudents || (isClassTeacher && student.class_id === assignedClass?.id) ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          className={`${inputClass} w-28`}
+                          value={feesDrafts[student.id] ?? String(student.fees_balance ?? 0)}
+                          onChange={(event) =>
+                            setFeesDrafts((current) => ({
+                              ...current,
+                              [student.id]: event.target.value,
+                            }))
+                          }
+                        />
+                        <Btn
+                          variant="ghost"
+                          onClick={() =>
+                            feesMutation.mutate({
+                              studentId: student.id,
+                              feesBalance: Number(
+                                feesDrafts[student.id] ?? student.fees_balance ?? 0,
+                              ),
+                                feesDrafts[student.id] ?? student.fees_balance ?? 0,
+                            })
+                          }
+                          disabled={feesMutation.isPending}
+                        >
+                          Save
+                        </Btn>
+                      </div>
+                    ) : (
+                      String(student.fees_balance ?? 0)
+                    )}
+                  </td>
                   <td>
                     {canChangeStatus ? (
                       <select
                         className={`${inputClass} max-w-[120px]`}
                         value={student.status ?? "pending"}
-                        onChange={(event) => statusMutation.mutate({ studentId: student.id, status: event.target.value as "pending" | "active" | "inactive" })}
+                        onChange={(event) =>
+                          statusMutation.mutate({
+                            studentId: student.id,
+                            status: event.target.value as "pending" | "active" | "inactive",
+                          })
+                        }
                       >
                         <option value="pending">Pending</option>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                       </select>
                     ) : (
-                      <Pill tone={student.status === "active" ? "success" : student.status === "pending" ? "warning" : "muted"}>
+                      <Pill
+                        tone={
+                          student.status === "active"
+                            ? "success"
+                            : student.status === "pending"
+                              ? "warning"
+                              : "muted"
+                        }
+                      >
                         {student.status}
                       </Pill>
                     )}
@@ -384,9 +536,9 @@ if (!canAccessStudents) {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {visibleStudents.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={8} className="py-6 text-center text-muted-foreground">
                     No learners found.
                   </td>
                 </tr>

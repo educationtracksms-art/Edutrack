@@ -39,10 +39,21 @@ export async function buildReportCards(
     supabase.from("profiles").select("id, full_name, school_id").eq("school_id", schoolId),
     supabase.from("user_roles").select("user_id, role"),
     supabase.from("streams").select("id, name").eq("school_id", schoolId),
-    supabase.from("subjects").select("id, name, position").eq("school_id", schoolId).order("position"),
-    supabase.from("grading_scales").select("*").eq("school_id", schoolId).order("min_score", { ascending: false }),
+    supabase
+      .from("subjects")
+      .select("id, name, position")
+      .eq("school_id", schoolId)
+      .order("position"),
+    supabase
+      .from("grading_scales")
+      .select("*")
+      .eq("school_id", schoolId)
+      .order("min_score", { ascending: false }),
     supabase.from("feature_toggles").select("module, enabled").eq("school_id", schoolId),
-    supabase.from("terms").select("id, name, is_current, academic_year_id").eq("school_id", schoolId),
+    supabase
+      .from("terms")
+      .select("id, name, is_current, academic_year_id")
+      .eq("school_id", schoolId),
   ]);
 
   const term =
@@ -66,36 +77,56 @@ export async function buildReportCards(
     await Promise.all([
       supabase
         .from("assessments")
-        .select("student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status")
+        .select(
+          "student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status",
+        )
         .in("student_id", ids)
         .eq("term_id", termFilterId)
         .eq("status", "approved"),
-      supabase.from("attendance_summaries").select("*").in("student_id", ids).eq("term_id", termFilterId),
-      supabase.from("report_comments").select("*").in("student_id", ids).eq("term_id", termFilterId),
+      supabase
+        .from("attendance_summaries")
+        .select("*")
+        .in("student_id", ids)
+        .eq("term_id", termFilterId),
+      supabase
+        .from("report_comments")
+        .select("*")
+        .in("student_id", ids)
+        .eq("term_id", termFilterId),
       supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
     ]);
 
   const feesEnabled = toggles?.find((t: any) => t.module === "fees")?.enabled ?? true;
   const attendanceEnabled = toggles?.find((t: any) => t.module === "attendance")?.enabled ?? true;
-  const coCurricularEnabled = toggles?.find((t: any) => t.module === "co_curricular")?.enabled ?? true;
+  const coCurricularEnabled =
+    toggles?.find((t: any) => t.module === "co_curricular")?.enabled ?? true;
 
   const gradeFor = (total: number) => {
     const hit = (scales ?? []).find(
       (s: any) => total >= Number(s.min_score) && total <= Number(s.max_score),
     );
     return hit
-      ? { grade: hit.grade as string, descriptor: hit.descriptor as string, identifier: Number(hit.identifier) }
+      ? {
+          grade: hit.grade as string,
+          descriptor: hit.descriptor as string,
+          identifier: Number(hit.identifier),
+        }
       : { grade: "", descriptor: "", identifier: 0 };
   };
 
-  const schoolInitials = (school?.code as string) ?? (school?.name as string ?? "").slice(0, 3).toUpperCase();
-  const headTeacherIds = new Set((roles ?? []).filter((r: any) => r.role === "head_teacher").map((r: any) => r.user_id));
-  const headTeacherName = (profiles ?? []).find((p: any) => headTeacherIds.has(p.id))?.full_name ?? "";
+  const schoolInitials =
+    (school?.code as string) ?? ((school?.name as string) ?? "").slice(0, 3).toUpperCase();
+  const headTeacherIds = new Set(
+    (roles ?? []).filter((r: any) => r.role === "head_teacher").map((r: any) => r.user_id),
+  );
+  const headTeacherName =
+    (profiles ?? []).find((p: any) => headTeacherIds.has(p.id))?.full_name ?? "";
 
   return students.map((student: any) => {
     const cls = classes?.find((c: any) => c.id === student.class_id);
     const className = cls?.name ?? "";
-    const classTeacherName = (profiles ?? []).find((p: any) => p.id === cls?.class_teacher_id)?.full_name ?? "";
+    const classTeacherName =
+      (profiles ?? []).find((p: any) => p.id === cls?.class_teacher_id)?.full_name ?? "";
     const streamName = streams?.find((s: any) => s.id === student.stream_id)?.name ?? "";
     const marks = (assessments ?? []).filter((a: any) => a.student_id === student.id);
 
@@ -152,7 +183,9 @@ export async function buildReportCards(
         logoUrl: school?.logo_url ?? null,
         initials: schoolInitials,
       },
-      title: `LEARNER'S END OF ${term?.name ?? ""} REPORT CARD ${yearName}`.replace(/\s+/g, " ").trim(),
+      title: `LEARNER'S END OF ${term?.name ?? ""} REPORT CARD ${yearName}`
+        .replace(/\s+/g, " ")
+        .trim(),
       student: {
         lin: student.lin ?? student.student_number ?? "",
         name: student.full_name,

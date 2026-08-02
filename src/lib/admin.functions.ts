@@ -19,7 +19,11 @@ async function logAudit(
   entity: string,
   details?: Record<string, unknown>,
 ) {
-  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", userId)
+    .maybeSingle();
   await supabase.from("audit_logs").insert({
     school_id: schoolId,
     user_id: userId,
@@ -85,7 +89,9 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
     };
 
     await context.supabase.from("profiles").upsert(adminProfilePayload, { onConflict: "id" });
-    await context.supabase.from("user_roles").insert({ user_id: uid, role: "school_admin", school_id: school.id });
+    await context.supabase
+      .from("user_roles")
+      .insert({ user_id: uid, role: "school_admin", school_id: school.id });
 
     const modules = [
       "fees",
@@ -124,7 +130,13 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
 export const createStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (data: { fullName: string; email: string; role: string; initials?: string; schoolId?: string }) => data,
+    (data: {
+      fullName: string;
+      email: string;
+      role: string;
+      initials?: string;
+      schoolId?: string;
+    }) => data,
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
@@ -180,7 +192,14 @@ export const createStaffUser = createServerFn({ method: "POST" })
 export const updateStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (data: { userId: string; fullName: string; email: string; role: string; initials?: string; schoolId?: string }) => data,
+    (data: {
+      userId: string;
+      fullName: string;
+      email: string;
+      role: string;
+      initials?: string;
+      schoolId?: string;
+    }) => data,
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
@@ -200,9 +219,12 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       .eq("id", context.userId)
       .maybeSingle();
 
-    const schoolId = isSuper ? (data.schoolId ?? target.school_id ?? profile?.school_id) : profile?.school_id;
+    const schoolId = isSuper
+      ? (data.schoolId ?? target.school_id ?? profile?.school_id)
+      : profile?.school_id;
     if (!schoolId) throw new Error("A school must be selected");
-    if (data.role === "super_admin") throw new Error("Super Admin accounts cannot be assigned here");
+    if (data.role === "super_admin")
+      throw new Error("Super Admin accounts cannot be assigned here");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: profileError } = await context.supabase
@@ -216,7 +238,10 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       .eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
 
-    const { error: roleDeleteError } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: roleDeleteError } = await context.supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId);
     if (roleDeleteError) throw new Error(roleDeleteError.message);
 
     const { error: roleInsertError } = await context.supabase
@@ -262,11 +287,21 @@ export const resetUserPassword = createServerFn({ method: "POST" })
     const password = otp();
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { password });
     if (error) throw new Error(error.message);
-    await supabaseAdmin.from("profiles").update({ must_change_password: true }).eq("id", data.userId);
+    await supabaseAdmin
+      .from("profiles")
+      .update({ must_change_password: true })
+      .eq("id", data.userId);
 
-    await logAudit(context.supabase, context.userId, target.school_id, "PASSWORD_RESET", "profiles", {
-      user_id: data.userId,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      target.school_id,
+      "PASSWORD_RESET",
+      "profiles",
+      {
+        user_id: data.userId,
+      },
+    );
     return { oneTimePassword: password };
   });
 
@@ -275,15 +310,23 @@ export const setSchoolStatus = createServerFn({ method: "POST" })
   .inputValidator((data: { schoolId: string; status: "active" | "suspended" }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can change school status");
+    if (!roles.includes("super_admin"))
+      throw new Error("Only the Super Admin can change school status");
     const { error } = await context.supabase
       .from("schools")
       .update({ status: data.status })
       .eq("id", data.schoolId);
     if (error) throw new Error(error.message);
-    await logAudit(context.supabase, context.userId, data.schoolId, "SCHOOL_STATUS_CHANGED", "schools", {
-      status: data.status,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      data.schoolId,
+      "SCHOOL_STATUS_CHANGED",
+      "schools",
+      {
+        status: data.status,
+      },
+    );
     return { ok: true };
   });
 
@@ -292,7 +335,9 @@ export const reviewAssessments = createServerFn({ method: "POST" })
   .inputValidator((data: { ids: string[]; action: "approve" | "reject"; reason?: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    const canReviewAny = roles.some((r) => ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r));
+    const canReviewAny = roles.some((r) =>
+      ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+    );
     const isClassTeacher = roles.includes("class_teacher");
     if (!canReviewAny && !isClassTeacher) throw new Error("Not allowed to review assessments");
 
@@ -317,7 +362,10 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       const { data: students } = await context.supabase
         .from("students")
         .select("id, class_id")
-        .in("id", assessments.map((assessment: any) => assessment.student_id));
+        .in(
+          "id",
+          assessments.map((assessment: any) => assessment.student_id),
+        );
 
       const { data: classes } = await context.supabase
         .from("classes")
@@ -325,9 +373,13 @@ export const reviewAssessments = createServerFn({ method: "POST" })
         .eq("school_id", schoolId)
         .eq("class_teacher_id", context.userId);
       const assignedClassIds = new Set((classes ?? []).map((cls: any) => cls.id));
-      const studentClassById = new Map((students ?? []).map((student: any) => [student.id, student.class_id]));
+      const studentClassById = new Map(
+        (students ?? []).map((student: any) => [student.id, student.class_id]),
+      );
 
-      const unauthorized = assessments.some((assessment: any) => !assignedClassIds.has(studentClassById.get(assessment.student_id)));
+      const unauthorized = assessments.some(
+        (assessment: any) => !assignedClassIds.has(studentClassById.get(assessment.student_id)),
+      );
       if (unauthorized) {
         throw new Error("Class teachers can only review assessments for their assigned class");
       }
@@ -335,10 +387,22 @@ export const reviewAssessments = createServerFn({ method: "POST" })
 
     const patch =
       data.action === "approve"
-        ? { status: "approved", locked: true, approved_by: context.userId, approved_at: new Date().toISOString() }
-        : { status: "rejected", locked: false, rejection_reason: data.reason ?? "Returned for correction" };
+        ? {
+            status: "approved",
+            locked: true,
+            approved_by: context.userId,
+            approved_at: new Date().toISOString(),
+          }
+        : {
+            status: "rejected",
+            locked: false,
+            rejection_reason: data.reason ?? "Returned for correction",
+          };
 
-    const { error } = await context.supabase.from("assessments").update(patch as never).in("id", data.ids);
+    const { error } = await context.supabase
+      .from("assessments")
+      .update(patch as never)
+      .in("id", data.ids);
     if (error) throw new Error(error.message);
 
     const { data: profile } = await context.supabase
@@ -365,11 +429,25 @@ export const upsertReportComment = createServerFn({ method: "POST" })
       termId: string;
       classTeacherComment?: string | null;
       headTeacherComment?: string | null;
+      games?: string | null;
+      clubs?: string | null;
+      projects?: string | null;
     }) => data,
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["class_teacher", "head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"].includes(r))) {
+    if (
+      !roles.some((r) =>
+        [
+          "class_teacher",
+          "head_teacher",
+          "deputy_head_teacher",
+          "dos",
+          "school_admin",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
       throw new Error("Not allowed to edit report comments");
     }
 
@@ -377,7 +455,11 @@ export const upsertReportComment = createServerFn({ method: "POST" })
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
     const [{ data: student }, { data: term }, { data: existing }] = await Promise.all([
-      context.supabase.from("students").select("id, school_id").eq("id", data.studentId).maybeSingle(),
+      context.supabase
+        .from("students")
+        .select("id, school_id")
+        .eq("id", data.studentId)
+        .maybeSingle(),
       context.supabase.from("terms").select("id, school_id").eq("id", data.termId).maybeSingle(),
       context.supabase
         .from("report_comments")
@@ -387,8 +469,55 @@ export const upsertReportComment = createServerFn({ method: "POST" })
         .maybeSingle(),
     ]);
 
-    if (!student || student.school_id !== schoolId) throw new Error("Student not found in your school");
+    if (!student || student.school_id !== schoolId)
+      throw new Error("Student not found in your school");
     if (!term || term.school_id !== schoolId) throw new Error("Term not found in your school");
+
+    if (
+      roles.includes("class_teacher") &&
+      !roles.some((r) =>
+        ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"].includes(r),
+      )
+    ) {
+      const { data: assignedClasses } = await context.supabase
+        .from("classes")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("class_teacher_id", context.userId);
+      const assignedClassIds = new Set((assignedClasses ?? []).map((cls: any) => cls.id));
+      const { data: studentClass } = await context.supabase
+        .from("students")
+        .select("class_id")
+        .eq("id", data.studentId)
+        .maybeSingle();
+      if (!studentClass || !assignedClassIds.has(studentClass.class_id)) {
+        throw new Error("Class teachers can only comment on learners in their assigned class");
+      }
+    }
+
+    const canEditCoCurricular =
+      !roles.includes("class_teacher") ||
+      roles.some((r) =>
+        ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"].includes(r),
+      );
+    if (!canEditCoCurricular) {
+      const { data: assignedClasses } = await context.supabase
+        .from("classes")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("class_teacher_id", context.userId);
+      const assignedClassIds = new Set((assignedClasses ?? []).map((cls: any) => cls.id));
+      const { data: studentClass } = await context.supabase
+        .from("students")
+        .select("class_id")
+        .eq("id", data.studentId)
+        .maybeSingle();
+      if (!studentClass || !assignedClassIds.has(studentClass.class_id)) {
+        throw new Error(
+          "Class teachers can only update co-curricular entries for their assigned class",
+        );
+      }
+    }
 
     const payload = {
       school_id: schoolId,
@@ -398,13 +527,35 @@ export const upsertReportComment = createServerFn({ method: "POST" })
       head_teacher_comment: data.headTeacherComment ?? existing?.head_teacher_comment ?? null,
     };
 
-    const { error } = await context.supabase.from("report_comments").upsert(payload, { onConflict: "student_id,term_id" });
+    const { error } = await context.supabase
+      .from("report_comments")
+      .upsert(payload, { onConflict: "student_id,term_id" });
     if (error) throw new Error(error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "REPORT_COMMENT_SAVED", "report_comments", {
+    const coCurricularPayload = {
+      school_id: schoolId,
       student_id: data.studentId,
       term_id: data.termId,
-    });
+      games: data.games ?? null,
+      clubs: data.clubs ?? null,
+      projects: data.projects ?? null,
+    };
+    const { error: coCurricularError } = await context.supabase
+      .from("co_curricular")
+      .upsert(coCurricularPayload, { onConflict: "student_id,term_id" });
+    if (coCurricularError) throw new Error(coCurricularError.message);
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "REPORT_COMMENT_SAVED",
+      "report_comments",
+      {
+        student_id: data.studentId,
+        term_id: data.termId,
+      },
+    );
 
     return { ok: true };
   });
@@ -425,7 +576,19 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["subject_teacher", "class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r))) {
+    if (
+      !roles.some((r) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
       throw new Error("Not allowed to enter assessments");
     }
 
@@ -433,8 +596,16 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
     const [studentResult, subjectResult, termResult, profileResult] = await Promise.all([
-      context.supabase.from("students").select("id, school_id, class_id, stream_id, status").eq("id", data.studentId).maybeSingle(),
-      context.supabase.from("subjects").select("id, school_id").eq("id", data.subjectId).maybeSingle(),
+      context.supabase
+        .from("students")
+        .select("id, school_id, class_id, stream_id, status")
+        .eq("id", data.studentId)
+        .maybeSingle(),
+      context.supabase
+        .from("subjects")
+        .select("id, school_id")
+        .eq("id", data.subjectId)
+        .maybeSingle(),
       context.supabase.from("terms").select("id, school_id").eq("id", data.termId).maybeSingle(),
       context.supabase.from("profiles").select("initials").eq("id", context.userId).maybeSingle(),
     ]);
@@ -442,8 +613,10 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
     const student = studentResult.data;
     const subject = subjectResult.data;
     const term = termResult.data;
-    if (!student || student.school_id !== schoolId) throw new Error("Student not found in your school");
-    if (!subject || subject.school_id !== schoolId) throw new Error("Subject not found in your school");
+    if (!student || student.school_id !== schoolId)
+      throw new Error("Student not found in your school");
+    if (!subject || subject.school_id !== schoolId)
+      throw new Error("Subject not found in your school");
     if (!term || term.school_id !== schoolId) throw new Error("Term not found in your school");
 
     if (student.status !== "active") {
@@ -469,7 +642,8 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       }
     }
 
-    const teacherInitials = data.teacherInitials?.trim() || profileResult.data?.initials?.trim() || null;
+    const teacherInitials =
+      data.teacherInitials?.trim() || profileResult.data?.initials?.trim() || null;
     const { error } = await context.supabase.from("assessments").upsert(
       {
         school_id: schoolId,
@@ -493,11 +667,18 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
     );
     if (error) throw new Error(error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_DRAFT_SAVED", "assessments", {
-      student_id: data.studentId,
-      subject_id: data.subjectId,
-      term_id: data.termId,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ASSESSMENT_DRAFT_SAVED",
+      "assessments",
+      {
+        student_id: data.studentId,
+        subject_id: data.subjectId,
+        term_id: data.termId,
+      },
+    );
 
     return { ok: true };
   });
@@ -507,7 +688,9 @@ export const verifyStudent = createServerFn({ method: "POST" })
   .inputValidator((data: { studentId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    const canVerifyAny = roles.some((r) => ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r));
+    const canVerifyAny = roles.some((r) =>
+      ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+    );
     const isClassTeacher = roles.includes("class_teacher");
     if (!canVerifyAny && !isClassTeacher) {
       throw new Error("Not allowed to verify students");
@@ -523,26 +706,42 @@ export const verifyStudent = createServerFn({ method: "POST" })
       .select("id, school_id, class_id")
       .eq("id", data.studentId)
       .maybeSingle();
-    if (!student || student.school_id !== profile?.school_id) throw new Error("Student not found in your school");
+    if (!student || student.school_id !== profile?.school_id)
+      throw new Error("Student not found in your school");
 
     if (!canVerifyAny) {
+      if (!student.class_id) {
+        throw new Error("Student is not assigned to a class");
+      }
       const { data: assignedClass } = await context.supabase
         .from("classes")
         .select("id")
         .eq("id", student.class_id)
         .eq("class_teacher_id", context.userId)
         .maybeSingle();
-      if (!assignedClass) throw new Error("Class teachers can only approve learners in their assigned class");
+      if (!assignedClass)
+        throw new Error("Class teachers can only approve learners in their assigned class");
     }
 
     const { error } = await context.supabase
       .from("students")
-      .update({ status: "active", verified_by: context.userId, verified_at: new Date().toISOString() })
+      .update({
+        status: "active",
+        verified_by: context.userId,
+        verified_at: new Date().toISOString(),
+      })
       .eq("id", data.studentId);
     if (error) throw new Error(error.message);
-    await logAudit(context.supabase, context.userId, profile?.school_id ?? null, "STUDENT_VERIFIED", "students", {
-      student_id: data.studentId,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      profile?.school_id ?? null,
+      "STUDENT_VERIFIED",
+      "students",
+      {
+        student_id: data.studentId,
+      },
+    );
     return { ok: true };
   });
 
@@ -551,11 +750,19 @@ export const updateStudentStatus = createServerFn({ method: "POST" })
   .inputValidator((data: { studentId: string; status: "pending" | "active" | "inactive" }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r))) {
+    if (
+      !roles.some((r) =>
+        ["school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+      )
+    ) {
       throw new Error("Not allowed to change student status");
     }
 
-    const patch: { status: "pending" | "active" | "inactive"; verified_by?: string; verified_at?: string } = {
+    const patch: {
+      status: "pending" | "active" | "inactive";
+      verified_by?: string;
+      verified_at?: string;
+    } = {
       status: data.status,
     };
     if (data.status === "active") {
@@ -563,7 +770,10 @@ export const updateStudentStatus = createServerFn({ method: "POST" })
       patch.verified_at = new Date().toISOString();
     }
 
-    const { error } = await context.supabase.from("students").update(patch).eq("id", data.studentId);
+    const { error } = await context.supabase
+      .from("students")
+      .update(patch)
+      .eq("id", data.studentId);
     if (error) throw new Error(error.message);
 
     const { data: profile } = await context.supabase
@@ -571,9 +781,64 @@ export const updateStudentStatus = createServerFn({ method: "POST" })
       .select("school_id")
       .eq("id", context.userId)
       .maybeSingle();
-    await logAudit(context.supabase, context.userId, profile?.school_id ?? null, "STUDENT_STATUS_CHANGED", "students", {
+    await logAudit(
+      context.supabase,
+      context.userId,
+      profile?.school_id ?? null,
+      "STUDENT_STATUS_CHANGED",
+      "students",
+      {
+        student_id: data.studentId,
+        status: data.status,
+      },
+    );
+    return { ok: true };
+  });
+
+export const updateStudentFeesBalance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { studentId: string; feesBalance: number }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    const canEditAny = roles.some((r) =>
+      ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos"].includes(r),
+    );
+    const isClassTeacher = roles.includes("class_teacher");
+    if (!canEditAny && !isClassTeacher) throw new Error("Not allowed to update fees balance");
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: student } = await context.supabase
+      .from("students")
+      .select("id, school_id, class_id")
+      .eq("id", data.studentId)
+      .maybeSingle();
+    if (!student || student.school_id !== schoolId)
+      throw new Error("Student not found in your school");
+
+    if (isClassTeacher && !canEditAny) {
+      const { data: assignedClasses } = await context.supabase
+        .from("classes")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("class_teacher_id", context.userId);
+      const assignedClassIds = new Set((assignedClasses ?? []).map((cls: any) => cls.id));
+      if (!student.class_id || !assignedClassIds.has(student.class_id)) {
+        throw new Error("Class teachers can only update fees for their assigned class");
+      }
+    }
+
+    const { error } = await context.supabase
+      .from("students")
+      .update({ fees_balance: data.feesBalance })
+      .eq("id", data.studentId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "STUDENT_FEES_UPDATED", "students", {
       student_id: data.studentId,
-      status: data.status,
+      fees_balance: data.feesBalance,
     });
     return { ok: true };
   });
@@ -596,13 +861,20 @@ export const deleteClass = createServerFn({ method: "POST" })
   .inputValidator((data: { classId: string }) => data)
   .handler(async ({ data, context }) => {
     const schoolId = await ensureCanManageSchool(context);
-    const { data: cls } = await context.supabase.from("classes").select("id, school_id, name").eq("id", data.classId).maybeSingle();
+    const { data: cls } = await context.supabase
+      .from("classes")
+      .select("id, school_id, name")
+      .eq("id", data.classId)
+      .maybeSingle();
     if (!cls) throw new Error("Class not found");
     if (schoolId && cls.school_id !== schoolId) throw new Error("Not allowed to delete this class");
 
     const { error } = await context.supabase.from("classes").delete().eq("id", data.classId);
     if (error) throw new Error(error.message);
-    await logAudit(context.supabase, context.userId, cls.school_id, "CLASS_DELETED", "classes", { class_id: data.classId, name: cls.name });
+    await logAudit(context.supabase, context.userId, cls.school_id, "CLASS_DELETED", "classes", {
+      class_id: data.classId,
+      name: cls.name,
+    });
     return { ok: true };
   });
 
@@ -611,13 +883,25 @@ export const deleteStream = createServerFn({ method: "POST" })
   .inputValidator((data: { streamId: string }) => data)
   .handler(async ({ data, context }) => {
     const schoolId = await ensureCanManageSchool(context);
-    const { data: stream } = await context.supabase.from("streams").select("id, school_id, name").eq("id", data.streamId).maybeSingle();
+    const { data: stream } = await context.supabase
+      .from("streams")
+      .select("id, school_id, name")
+      .eq("id", data.streamId)
+      .maybeSingle();
     if (!stream) throw new Error("Stream not found");
-    if (schoolId && stream.school_id !== schoolId) throw new Error("Not allowed to delete this stream");
+    if (schoolId && stream.school_id !== schoolId)
+      throw new Error("Not allowed to delete this stream");
 
     const { error } = await context.supabase.from("streams").delete().eq("id", data.streamId);
     if (error) throw new Error(error.message);
-    await logAudit(context.supabase, context.userId, stream.school_id, "STREAM_DELETED", "streams", { stream_id: data.streamId, name: stream.name });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      stream.school_id,
+      "STREAM_DELETED",
+      "streams",
+      { stream_id: data.streamId, name: stream.name },
+    );
     return { ok: true };
   });
 
@@ -632,14 +916,22 @@ export const deleteStudent = createServerFn({ method: "POST" })
       .eq("id", data.studentId)
       .maybeSingle();
     if (!student) throw new Error("Student not found");
-    if (schoolId && student.school_id !== schoolId) throw new Error("Not allowed to delete this student");
+    if (schoolId && student.school_id !== schoolId)
+      throw new Error("Not allowed to delete this student");
 
     const { error } = await context.supabase.from("students").delete().eq("id", data.studentId);
     if (error) throw new Error(error.message);
-    await logAudit(context.supabase, context.userId, student.school_id, "STUDENT_DELETED", "students", {
-      student_id: data.studentId,
-      name: student.full_name,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      student.school_id,
+      "STUDENT_DELETED",
+      "students",
+      {
+        student_id: data.studentId,
+        name: student.full_name,
+      },
+    );
     return { ok: true };
   });
 
@@ -648,7 +940,8 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
   .inputValidator((data: { userId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["super_admin", "school_admin"].includes(r))) throw new Error("Not allowed to delete users");
+    if (!roles.some((r) => ["super_admin", "school_admin"].includes(r)))
+      throw new Error("Not allowed to delete users");
     if (data.userId === context.userId) throw new Error("You cannot delete your own account");
 
     const { data: target } = await context.supabase
@@ -660,7 +953,10 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
-    const { error: profileError } = await context.supabase.from("profiles").delete().eq("id", data.userId);
+    const { error: profileError } = await context.supabase
+      .from("profiles")
+      .delete()
+      .eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (authError) throw new Error(authError.message);
@@ -682,6 +978,13 @@ export const logReportPrint = createServerFn({ method: "POST" })
       .select("school_id")
       .eq("id", context.userId)
       .maybeSingle();
-    await logAudit(context.supabase, context.userId, profile?.school_id ?? null, "REPORTS_PRINTED", "reports", data);
+    await logAudit(
+      context.supabase,
+      context.userId,
+      profile?.school_id ?? null,
+      "REPORTS_PRINTED",
+      "reports",
+      data,
+    );
     return { ok: true };
   });

@@ -1,8 +1,12 @@
 <<<<<<< HEAD
+
 # School Connect
+
 =======
+
 # Education Track School Management System
->>>>>>> aba4fe8f3fe34a872f429f374700164ac11398b5
+
+> > > > > > > aba4fe8f3fe34a872f429f374700164ac11398b5
 
 # Build a Multi-Tenant School Management & Report Card System
 
@@ -20,65 +24,65 @@ Use the following technologies:
 
 Frontend
 
-* React
+- React
 
-* TypeScript
+- TypeScript
 
-* Vite
+- Vite
 
-* Tailwind CSS
+- Tailwind CSS
 
-* React Router
+- React Router
 
-* React Hook Form
+- React Hook Form
 
-* TanStack Query
+- TanStack Query
 
-* Zod Validation
+- Zod Validation
 
-* Recharts (for charts)
+- Recharts (for charts)
 
-* React PDF (optional)
+- React PDF (optional)
 
-* Axios
+- Axios
 
 Backend
 
-* Node.js
+- Node.js
 
-* Express.js
+- Express.js
 
-* TypeScript
+- TypeScript
 
 Database
 
-* PostgreSQL
+- PostgreSQL
 
 ORM
 
-* Prisma ORM
+- Prisma ORM
 
 Authentication
 
-* JWT
+- JWT
 
-* Refresh Tokens
+- Refresh Tokens
 
-* bcrypt/Argon2 Password Hashing
+- bcrypt/Argon2 Password Hashing
 
 Storage
 
-* Local Storage or Supabase Storage
+- Local Storage or Supabase Storage
 
-* Images stored separately per school
+- Images stored separately per school
 
 Deployment Ready
 
-* Docker support
+- Docker support
 
-* Environment variables
+- Environment variables
 
-* REST API
+- REST API
 
 ---
 
@@ -162,31 +166,31 @@ Every route, API, menu, and action must be permission-based.
 
 Can:
 
-* Create schools
+- Create schools
 
-* Edit schools
+- Edit schools
 
-* Suspend schools
+- Suspend schools
 
-* Activate schools
+- Activate schools
 
-* Delete schools
+- Delete schools
 
-* View platform analytics
+- View platform analytics
 
-* Create School Administrators
+- Create School Administrators
 
-* Generate one-time passwords
+- Generate one-time passwords
 
-* Reset School Administrator passwords
+- Reset School Administrator passwords
 
-* Manage subscription plans
+- Manage subscription plans
 
-* View audit logs
+- View audit logs
 
-* Manage global grading templates
+- Manage global grading templates
 
-* Manage report templates
+- Manage report templates
 
 ---
 
@@ -194,37 +198,37 @@ Can:
 
 Can:
 
-* Configure school information
+- Configure school information
 
-* Upload school logo
+- Upload school logo
 
-* Create users
+- Create users
 
-* Assign roles
+- Assign roles
 
-* Reset passwords
+- Reset passwords
 
-* Enable or disable system modules
+- Enable or disable system modules
 
-* Manage academic years
+- Manage academic years
 
-* Manage terms
+- Manage terms
 
-* Manage classes
+- Manage classes
 
-* Manage streams
+- Manage streams
 
-* Manage subjects
+- Manage subjects
 
-* Manage grading systems
+- Manage grading systems
 
-* Allocate teachers
+- Allocate teachers
 
-* Verify students
+- Verify students
 
-* Create and edit student records
+- Create and edit student records
 
-* Configure reports
+- Configure reports
 
 ---
 
@@ -232,25 +236,25 @@ Can:
 
 Can:
 
-* View all dashboards
+- View all dashboards
 
-* View reports
+- View reports
 
-* Print reports
+- Print reports
 
-* Verify students
+- Verify students
 
-* Update student records
+- Update student records
 
-* View analytics
+- View analytics
 
-* View teacher performance
+- View teacher performance
 
-* View attendance
+- View attendance
 
-* View academic performance
+- View academic performance
 
-* Sign reports
+- Sign reports
 
 ---
 
@@ -264,35 +268,35 @@ Must have the SAME permissions as the Head Teacher.
 
 Can:
 
-* View all submitted assessments
+- View all submitted assessments
 
-* Approve assessments
+- Approve assessments
 
-* Reject assessments
+- Reject assessments
 
-* Return assessments for correction
+- Return assessments for correction
 
-* Lock approved assessments
+- Lock approved assessments
 
-* Print report cards
+- Print report cards
 
-* Print class reports
+- Print class reports
 
-* Print stream reports
+- Print stream reports
 
-* Print whole-school reports
+- Print whole-school reports
 
-* Monitor assessment completion
+- Monitor assessment completion
 
 Important Rule:
 
 Once marks are approved:
 
-* Teachers CANNOT edit them.
+- Teachers CANNOT edit them.
 
-* Marks become locked.
+- Marks become locked.
 
-* Any change requires reopening by an authorized administrator with an audit trail.
+- Any change requires reopening by an authorized administrator with an audit trail.
 
 ---
 
@@ -300,17 +304,17 @@ Once marks are approved:
 
 Can:
 
-* Register students
+- Register students
 
-* Edit student information before verification
+- Edit student information before verification
 
-* Enter class comments
+- Enter class comments
 
-* Enter co-curricular activities
+- Enter co-curricular activities
 
-* View class reports
+- View class reports
 
-* Manage attendance
+- Manage attendance
 
 Student Registration Workflow:
 
@@ -340,23 +344,23 @@ Only verified students may appear in attendance, assessments, and reports.
 
 Can:
 
-* Enter assessments
+- Enter assessments
 
-* Save drafts
+- Save drafts
 
-* Submit marks
+- Submit marks
 
-* Edit marks while pending approval
+- Edit marks while pending approval
 
-* View approval status
+- View approval status
 
 Cannot:
 
-* Approve marks
+- Approve marks
 
-* Edit approved marks
+- Edit approved marks
 
-* Delete approved marks
+- Delete approved marks
 
 ---
 
@@ -402,41 +406,41 @@ Reports Generated
 
 Student information includes:
 
-* Student Number
+- Student Number
 
-* LIN
+- LIN
 
-* Full Name
+- Full Name
 
-* Gender
+- Gender
 
-* Date of Birth
+- Date of Birth
 
-* Passport Photo
+- Passport Photo
 
-* Parent Information
+- Parent Information
 
-* Guardian Information
+- Guardian Information
 
-* Address
+- Address
 
-* Class
+- Class
 
-* Stream
+- Stream
 
-* House
+- House
 
-* Fees Balance
+- Fees Balance
 
-* Status
+- Status
 
 Student records can only be modified by:
 
-* School Administrator
+- School Administrator
 
-* Head Teacher
+- Head Teacher
 
-* Deputy Head Teacher (if granted equivalent rights)
+- Deputy Head Teacher (if granted equivalent rights)
 
 Every change must be recorded in an audit log.
 
@@ -448,15 +452,15 @@ Every school uploads its own logo.
 
 Logo automatically appears on:
 
-* Report Cards
+- Report Cards
 
-* Certificates
+- Certificates
 
-* Student IDs
+- Student IDs
 
-* PDFs
+- PDFs
 
-* Portal
+- Portal
 
 Logo Requirements:
 
@@ -496,25 +500,25 @@ JPEG
 
 Automatically:
 
-* Validate size
+- Validate size
 
-* Validate file type
+- Validate file type
 
-* Resize
+- Resize
 
-* Compress
+- Compress
 
-* Generate thumbnails
+- Generate thumbnails
 
 Display on:
 
-* Reports
+- Reports
 
-* Student Profile
+- Student Profile
 
-* Student ID
+- Student ID
 
-* Attendance
+- Attendance
 
 ---
 
@@ -524,45 +528,45 @@ The School Administrator can enable or disable modules without changing code.
 
 Modules include:
 
-* Fees
+- Fees
 
-* Attendance
+- Attendance
 
-* Library
+- Library
 
-* Transport
+- Transport
 
-* Hostel
+- Hostel
 
-* Inventory
+- Inventory
 
-* SMS
+- SMS
 
-* Parent Portal
+- Parent Portal
 
-* Discipline
+- Discipline
 
-* Report Cards
+- Report Cards
 
-* Co-Curricular Activities
+- Co-Curricular Activities
 
 If a module is disabled:
 
-* Hide its menus
+- Hide its menus
 
-* Disable its APIs
+- Disable its APIs
 
-* Remove it from reports
+- Remove it from reports
 
 Example:
 
 If Fees is disabled:
 
-* No Fees menu
+- No Fees menu
 
-* No Fees reports
+- No Fees reports
 
-* No Fees balance on report cards
+- No Fees balance on report cards
 
 ---
 
@@ -574,43 +578,43 @@ Nothing should be hardcoded.
 
 Load from the database:
 
-* School Information
+- School Information
 
-* School Logo
+- School Logo
 
-* Student Information
+- Student Information
 
-* Passport Photo
+- Passport Photo
 
-* Attendance
+- Attendance
 
-* Subjects
+- Subjects
 
-* Formative Scores
+- Formative Scores
 
-* Summative Scores
+- Summative Scores
 
-* Total Scores
+- Total Scores
 
-* Grades
+- Grades
 
-* Grade Descriptors
+- Grade Descriptors
 
-* Teacher Initials
+- Teacher Initials
 
-* Average
+- Average
 
-* Identifier
+- Identifier
 
-* Descriptor
+- Descriptor
 
-* Co-curricular Activities
+- Co-curricular Activities
 
-* Teacher Comment
+- Teacher Comment
 
-* Head Teacher Comment
+- Head Teacher Comment
 
-* Signatures
+- Signatures
 
 Backend performs all calculations.
 
@@ -622,23 +626,23 @@ Frontend only renders data.
 
 Allow printing:
 
-* Single Student
+- Single Student
 
-* Entire Class
+- Entire Class
 
-* Entire Stream
+- Entire Stream
 
-* Entire School
+- Entire School
 
-* Selected Students
+- Selected Students
 
 Allow export to:
 
-* PDF
+- PDF
 
-* Print
+- Print
 
-* HTML
+- HTML
 
 Reports should be A4 optimized.
 
@@ -652,81 +656,81 @@ Head Teacher / Deputy Dashboard
 
 Include:
 
-* Student Performance Trend
+- Student Performance Trend
 
-* Subject Performance
+- Subject Performance
 
-* Grade Distribution (Pie Chart)
+- Grade Distribution (Pie Chart)
 
-* Attendance Trend
+- Attendance Trend
 
-* Teacher Performance
+- Teacher Performance
 
-* Class Comparison
+- Class Comparison
 
-* Stream Comparison
+- Stream Comparison
 
-* Gender Distribution
+- Gender Distribution
 
-* Assessment Completion
+- Assessment Completion
 
-* Average Performance
+- Average Performance
 
-* Top Performing Subjects
+- Top Performing Subjects
 
-* Lowest Performing Subjects
+- Lowest Performing Subjects
 
 DOS Dashboard
 
 Show:
 
-* Pending Approvals
+- Pending Approvals
 
-* Approved Assessments
+- Approved Assessments
 
-* Rejected Assessments
+- Rejected Assessments
 
-* Teachers Pending Submission
+- Teachers Pending Submission
 
-* Assessment Completion
+- Assessment Completion
 
-* Average Scores
+- Average Scores
 
 School Administrator Dashboard
 
 Show:
 
-* Students
+- Students
 
-* Teachers
+- Teachers
 
-* Users
+- Users
 
-* Active Modules
+- Active Modules
 
-* Storage Usage
+- Storage Usage
 
-* Recent Activity
+- Recent Activity
 
 Super Admin Dashboard
 
 Show:
 
-* Total Schools
+- Total Schools
 
-* Total Students
+- Total Students
 
-* Total Teachers
+- Total Teachers
 
-* Platform Usage
+- Platform Usage
 
-* Active Schools
+- Active Schools
 
-* Suspended Schools
+- Suspended Schools
 
-* Storage Statistics
+- Storage Statistics
 
-* Subscription Statistics
+- Subscription Statistics
 
 ---
 
@@ -734,21 +738,21 @@ Show:
 
 Generate notifications for:
 
-* New user created
+- New user created
 
-* OTP generated
+- OTP generated
 
-* Password reset
+- Password reset
 
-* Student awaiting verification
+- Student awaiting verification
 
-* Marks submitted
+- Marks submitted
 
-* Marks approved
+- Marks approved
 
-* Marks rejected
+- Marks rejected
 
-* Report generated
+- Report generated
 
 ---
 
@@ -756,29 +760,29 @@ Generate notifications for:
 
 Implement:
 
-* JWT Authentication
+- JWT Authentication
 
-* Refresh Tokens
+- Refresh Tokens
 
-* RBAC
+- RBAC
 
-* Password hashing
+- Password hashing
 
-* OTP first login
+- OTP first login
 
-* Session timeout
+- Session timeout
 
-* Audit logs
+- Audit logs
 
-* Soft deletes
+- Soft deletes
 
-* Login history
+- Login history
 
-* School data isolation
+- School data isolation
 
-* File validation
+- File validation
 
-* API authorization
+- API authorization
 
 ---
 
@@ -786,39 +790,39 @@ Implement:
 
 Record:
 
-* Login
+- Login
 
-* Logout
+- Logout
 
-* Password changes
+- Password changes
 
-* Student edits
+- Student edits
 
-* Assessment edits
+- Assessment edits
 
-* Assessment approvals
+- Assessment approvals
 
-* Report generation
+- Report generation
 
-* Bulk printing
+- Bulk printing
 
-* User creation
+- User creation
 
-* Role changes
+- Role changes
 
 Each log stores:
 
-* User
+- User
 
-* School
+- School
 
-* Action
+- Action
 
-* Date
+- Date
 
-* Time
+- Time
 
-* IP Address
+- IP Address
 
 ---
 
@@ -828,47 +832,47 @@ Design a normalized PostgreSQL database using Prisma with relationships, indexes
 
 Include entities such as:
 
-* Schools
+- Schools
 
-* Users
+- Users
 
-* Roles
+- Roles
 
-* Permissions
+- Permissions
 
-* Students
+- Students
 
-* Guardians
+- Guardians
 
-* Classes
+- Classes
 
-* Streams
+- Streams
 
-* Subjects
+- Subjects
 
-* Teacher Allocations
+- Teacher Allocations
 
-* Assessments
+- Assessments
 
-* Assessment Approvals
+- Assessment Approvals
 
-* Attendance
+- Attendance
 
-* Academic Years
+- Academic Years
 
-* Terms
+- Terms
 
-* Grading Systems
+- Grading Systems
 
-* Report Templates
+- Report Templates
 
-* Feature Toggles
+- Feature Toggles
 
-* Notifications
+- Notifications
 
-* Audit Logs
+- Audit Logs
 
-* File Uploads
+- File Uploads
 
 ---
 
@@ -876,33 +880,33 @@ Include entities such as:
 
 Generate:
 
-* Clean architecture
+- Clean architecture
 
-* Modular folder structure
+- Modular folder structure
 
-* Reusable React components
+- Reusable React components
 
-* Reusable API services
+- Reusable API services
 
-* Custom hooks
+- Custom hooks
 
-* Responsive UI
+- Responsive UI
 
-* Type-safe code
+- Type-safe code
 
-* Error handling
+- Error handling
 
-* Loading states
+- Loading states
 
-* Validation
+- Validation
 
-* Pagination
+- Pagination
 
-* Search
+- Search
 
-* Filtering
+- Filtering
 
-* Sorting
+- Sorting
 
 ---
 
@@ -910,47 +914,47 @@ Generate:
 
 Generate the complete application including:
 
-* Database schema
+- Database schema
 
-* Prisma models
+- Prisma models
 
-* Backend APIs
+- Backend APIs
 
-* Authentication
+- Authentication
 
-* Role & Permission System
+- Role & Permission System
 
-* React frontend
+- React frontend
 
-* Dashboards
+- Dashboards
 
-* Dynamic Report Card
+- Dynamic Report Card
 
-* Bulk Printing
+- Bulk Printing
 
-* PDF Generation
+- PDF Generation
 
-* File Upload System
+- File Upload System
 
-* Feature Toggle System
+- Feature Toggle System
 
-* Charts
+- Charts
 
-* Audit Logs
+- Audit Logs
 
-* Notifications
+- Notifications
 
-* Responsive UI
+- Responsive UI
 
-* Docker configuration
+- Docker configuration
 
-* Seed data
+- Seed data
 
-* README
+- README
 
-* API documentation
+- API documentation
 
-* Deployment instructions
+- Deployment instructions
 
 The system should be enterprise-grade, maintainable, secure, scalable, and optimized for managing multiple schools from a single platform while ensuring complete data isolation between schools.
 
@@ -972,65 +976,65 @@ Use the following technologies:
 
 Frontend
 
-* React
+- React
 
-* TypeScript
+- TypeScript
 
-* Vite
+- Vite
 
-* Tailwind CSS
+- Tailwind CSS
 
-* React Router
+- React Router
 
-* React Hook Form
+- React Hook Form
 
-* TanStack Query
+- TanStack Query
 
-* Zod Validation
+- Zod Validation
 
-* Recharts (for charts)
+- Recharts (for charts)
 
-* React PDF (optional)
+- React PDF (optional)
 
-* Axios
+- Axios
 
 Backend
 
-* Node.js
+- Node.js
 
-* Express.js
+- Express.js
 
-* TypeScript
+- TypeScript
 
 Database
 
-* PostgreSQL
+- PostgreSQL
 
 ORM
 
-* Prisma ORM
+- Prisma ORM
 
 Authentication
 
-* JWT
+- JWT
 
-* Refresh Tokens
+- Refresh Tokens
 
-* bcrypt/Argon2 Password Hashing
+- bcrypt/Argon2 Password Hashing
 
 Storage
 
-* Local Storage or Supabase Storage
+- Local Storage or Supabase Storage
 
-* Images stored separately per school
+- Images stored separately per school
 
 Deployment Ready
 
-* Docker support
+- Docker support
 
-* Environment variables
+- Environment variables
 
-* REST API
+- REST API
 
 ---
 
@@ -1114,31 +1118,31 @@ Every route, API, menu, and action must be permission-based.
 
 Can:
 
-* Create schools
+- Create schools
 
-* Edit schools
+- Edit schools
 
-* Suspend schools
+- Suspend schools
 
-* Activate schools
+- Activate schools
 
-* Delete schools
+- Delete schools
 
-* View platform analytics
+- View platform analytics
 
-* Create School Administrators
+- Create School Administrators
 
-* Generate one-time passwords
+- Generate one-time passwords
 
-* Reset School Administrator passwords
+- Reset School Administrator passwords
 
-* Manage subscription plans
+- Manage subscription plans
 
-* View audit logs
+- View audit logs
 
-* Manage global grading templates
+- Manage global grading templates
 
-* Manage report templates
+- Manage report templates
 
 ---
 
@@ -1146,37 +1150,37 @@ Can:
 
 Can:
 
-* Configure school information
+- Configure school information
 
-* Upload school logo
+- Upload school logo
 
-* Create users
+- Create users
 
-* Assign roles
+- Assign roles
 
-* Reset passwords
+- Reset passwords
 
-* Enable or disable system modules
+- Enable or disable system modules
 
-* Manage academic years
+- Manage academic years
 
-* Manage terms
+- Manage terms
 
-* Manage classes
+- Manage classes
 
-* Manage streams
+- Manage streams
 
-* Manage subjects
+- Manage subjects
 
-* Manage grading systems
+- Manage grading systems
 
-* Allocate teachers
+- Allocate teachers
 
-* Verify students
+- Verify students
 
-* Create and edit student records
+- Create and edit student records
 
-* Configure reports
+- Configure reports
 
 ---
 
@@ -1184,25 +1188,25 @@ Can:
 
 Can:
 
-* View all dashboards
+- View all dashboards
 
-* View reports
+- View reports
 
-* Print reports
+- Print reports
 
-* Verify students
+- Verify students
 
-* Update student records
+- Update student records
 
-* View analytics
+- View analytics
 
-* View teacher performance
+- View teacher performance
 
-* View attendance
+- View attendance
 
-* View academic performance
+- View academic performance
 
-* Sign reports
+- Sign reports
 
 ---
 
@@ -1216,35 +1220,35 @@ Must have the SAME permissions as the Head Teacher.
 
 Can:
 
-* View all submitted assessments
+- View all submitted assessments
 
-* Approve assessments
+- Approve assessments
 
-* Reject assessments
+- Reject assessments
 
-* Return assessments for correction
+- Return assessments for correction
 
-* Lock approved assessments
+- Lock approved assessments
 
-* Print report cards
+- Print report cards
 
-* Print class reports
+- Print class reports
 
-* Print stream reports
+- Print stream reports
 
-* Print whole-school reports
+- Print whole-school reports
 
-* Monitor assessment completion
+- Monitor assessment completion
 
 Important Rule:
 
 Once marks are approved:
 
-* Teachers CANNOT edit them.
+- Teachers CANNOT edit them.
 
-* Marks become locked.
+- Marks become locked.
 
-* Any change requires reopening by an authorized administrator with an audit trail.
+- Any change requires reopening by an authorized administrator with an audit trail.
 
 ---
 
@@ -1252,17 +1256,17 @@ Once marks are approved:
 
 Can:
 
-* Register students
+- Register students
 
-* Edit student information before verification
+- Edit student information before verification
 
-* Enter class comments
+- Enter class comments
 
-* Enter co-curricular activities
+- Enter co-curricular activities
 
-* View class reports
+- View class reports
 
-* Manage attendance
+- Manage attendance
 
 Student Registration Workflow:
 
@@ -1292,23 +1296,23 @@ Only verified students may appear in attendance, assessments, and reports.
 
 Can:
 
-* Enter assessments
+- Enter assessments
 
-* Save drafts
+- Save drafts
 
-* Submit marks
+- Submit marks
 
-* Edit marks while pending approval
+- Edit marks while pending approval
 
-* View approval status
+- View approval status
 
 Cannot:
 
-* Approve marks
+- Approve marks
 
-* Edit approved marks
+- Edit approved marks
 
-* Delete approved marks
+- Delete approved marks
 
 ---
 
@@ -1354,41 +1358,41 @@ Reports Generated
 
 Student information includes:
 
-* Student Number
+- Student Number
 
-* LIN
+- LIN
 
-* Full Name
+- Full Name
 
-* Gender
+- Gender
 
-* Date of Birth
+- Date of Birth
 
-* Passport Photo
+- Passport Photo
 
-* Parent Information
+- Parent Information
 
-* Guardian Information
+- Guardian Information
 
-* Address
+- Address
 
-* Class
+- Class
 
-* Stream
+- Stream
 
-* House
+- House
 
-* Fees Balance
+- Fees Balance
 
-* Status
+- Status
 
 Student records can only be modified by:
 
-* School Administrator
+- School Administrator
 
-* Head Teacher
+- Head Teacher
 
-* Deputy Head Teacher (if granted equivalent rights)
+- Deputy Head Teacher (if granted equivalent rights)
 
 Every change must be recorded in an audit log.
 
@@ -1400,15 +1404,15 @@ Every school uploads its own logo.
 
 Logo automatically appears on:
 
-* Report Cards
+- Report Cards
 
-* Certificates
+- Certificates
 
-* Student IDs
+- Student IDs
 
-* PDFs
+- PDFs
 
-* Portal
+- Portal
 
 Logo Requirements:
 
@@ -1448,25 +1452,25 @@ JPEG
 
 Automatically:
 
-* Validate size
+- Validate size
 
-* Validate file type
+- Validate file type
 
-* Resize
+- Resize
 
-* Compress
+- Compress
 
-* Generate thumbnails
+- Generate thumbnails
 
 Display on:
 
-* Reports
+- Reports
 
-* Student Profile
+- Student Profile
 
-* Student ID
+- Student ID
 
-* Attendance
+- Attendance
 
 ---
 
@@ -1476,45 +1480,45 @@ The School Administrator can enable or disable modules without changing code.
 
 Modules include:
 
-* Fees
+- Fees
 
-* Attendance
+- Attendance
 
-* Library
+- Library
 
-* Transport
+- Transport
 
-* Hostel
+- Hostel
 
-* Inventory
+- Inventory
 
-* SMS
+- SMS
 
-* Parent Portal
+- Parent Portal
 
-* Discipline
+- Discipline
 
-* Report Cards
+- Report Cards
 
-* Co-Curricular Activities
+- Co-Curricular Activities
 
 If a module is disabled:
 
-* Hide its menus
+- Hide its menus
 
-* Disable its APIs
+- Disable its APIs
 
-* Remove it from reports
+- Remove it from reports
 
 Example:
 
 If Fees is disabled:
 
-* No Fees menu
+- No Fees menu
 
-* No Fees reports
+- No Fees reports
 
-* No Fees balance on report cards
+- No Fees balance on report cards
 
 ---
 
@@ -1526,43 +1530,43 @@ Nothing should be hardcoded.
 
 Load from the database:
 
-* School Information
+- School Information
 
-* School Logo
+- School Logo
 
-* Student Information
+- Student Information
 
-* Passport Photo
+- Passport Photo
 
-* Attendance
+- Attendance
 
-* Subjects
+- Subjects
 
-* Formative Scores
+- Formative Scores
 
-* Summative Scores
+- Summative Scores
 
-* Total Scores
+- Total Scores
 
-* Grades
+- Grades
 
-* Grade Descriptors
+- Grade Descriptors
 
-* Teacher Initials
+- Teacher Initials
 
-* Average
+- Average
 
-* Identifier
+- Identifier
 
-* Descriptor
+- Descriptor
 
-* Co-curricular Activities
+- Co-curricular Activities
 
-* Teacher Comment
+- Teacher Comment
 
-* Head Teacher Comment
+- Head Teacher Comment
 
-* Signatures
+- Signatures
 
 Backend performs all calculations.
 
@@ -1574,23 +1578,23 @@ Frontend only renders data.
 
 Allow printing:
 
-* Single Student
+- Single Student
 
-* Entire Class
+- Entire Class
 
-* Entire Stream
+- Entire Stream
 
-* Entire School
+- Entire School
 
-* Selected Students
+- Selected Students
 
 Allow export to:
 
-* PDF
+- PDF
 
-* Print
+- Print
 
-* HTML
+- HTML
 
 Reports should be A4 optimized.
 
@@ -1604,81 +1608,81 @@ Head Teacher / Deputy Dashboard
 
 Include:
 
-* Student Performance Trend
+- Student Performance Trend
 
-* Subject Performance
+- Subject Performance
 
-* Grade Distribution (Pie Chart)
+- Grade Distribution (Pie Chart)
 
-* Attendance Trend
+- Attendance Trend
 
-* Teacher Performance
+- Teacher Performance
 
-* Class Comparison
+- Class Comparison
 
-* Stream Comparison
+- Stream Comparison
 
-* Gender Distribution
+- Gender Distribution
 
-* Assessment Completion
+- Assessment Completion
 
-* Average Performance
+- Average Performance
 
-* Top Performing Subjects
+- Top Performing Subjects
 
-* Lowest Performing Subjects
+- Lowest Performing Subjects
 
 DOS Dashboard
 
 Show:
 
-* Pending Approvals
+- Pending Approvals
 
-* Approved Assessments
+- Approved Assessments
 
-* Rejected Assessments
+- Rejected Assessments
 
-* Teachers Pending Submission
+- Teachers Pending Submission
 
-* Assessment Completion
+- Assessment Completion
 
-* Average Scores
+- Average Scores
 
 School Administrator Dashboard
 
 Show:
 
-* Students
+- Students
 
-* Teachers
+- Teachers
 
-* Users
+- Users
 
-* Active Modules
+- Active Modules
 
-* Storage Usage
+- Storage Usage
 
-* Recent Activity
+- Recent Activity
 
 Super Admin Dashboard
 
 Show:
 
-* Total Schools
+- Total Schools
 
-* Total Students
+- Total Students
 
-* Total Teachers
+- Total Teachers
 
-* Platform Usage
+- Platform Usage
 
-* Active Schools
+- Active Schools
 
-* Suspended Schools
+- Suspended Schools
 
-* Storage Statistics
+- Storage Statistics
 
-* Subscription Statistics
+- Subscription Statistics
 
 ---
 
@@ -1686,21 +1690,21 @@ Show:
 
 Generate notifications for:
 
-* New user created
+- New user created
 
-* OTP generated
+- OTP generated
 
-* Password reset
+- Password reset
 
-* Student awaiting verification
+- Student awaiting verification
 
-* Marks submitted
+- Marks submitted
 
-* Marks approved
+- Marks approved
 
-* Marks rejected
+- Marks rejected
 
-* Report generated
+- Report generated
 
 ---
 
@@ -1708,29 +1712,29 @@ Generate notifications for:
 
 Implement:
 
-* JWT Authentication
+- JWT Authentication
 
-* Refresh Tokens
+- Refresh Tokens
 
-* RBAC
+- RBAC
 
-* Password hashing
+- Password hashing
 
-* OTP first login
+- OTP first login
 
-* Session timeout
+- Session timeout
 
-* Audit logs
+- Audit logs
 
-* Soft deletes
+- Soft deletes
 
-* Login history
+- Login history
 
-* School data isolation
+- School data isolation
 
-* File validation
+- File validation
 
-* API authorization
+- API authorization
 
 ---
 
@@ -1738,39 +1742,39 @@ Implement:
 
 Record:
 
-* Login
+- Login
 
-* Logout
+- Logout
 
-* Password changes
+- Password changes
 
-* Student edits
+- Student edits
 
-* Assessment edits
+- Assessment edits
 
-* Assessment approvals
+- Assessment approvals
 
-* Report generation
+- Report generation
 
-* Bulk printing
+- Bulk printing
 
-* User creation
+- User creation
 
-* Role changes
+- Role changes
 
 Each log stores:
 
-* User
+- User
 
-* School
+- School
 
-* Action
+- Action
 
-* Date
+- Date
 
-* Time
+- Time
 
-* IP Address
+- IP Address
 
 ---
 
@@ -1780,47 +1784,47 @@ Design a normalized PostgreSQL database using Prisma with relationships, indexes
 
 Include entities such as:
 
-* Schools
+- Schools
 
-* Users
+- Users
 
-* Roles
+- Roles
 
-* Permissions
+- Permissions
 
-* Students
+- Students
 
-* Guardians
+- Guardians
 
-* Classes
+- Classes
 
-* Streams
+- Streams
 
-* Subjects
+- Subjects
 
-* Teacher Allocations
+- Teacher Allocations
 
-* Assessments
+- Assessments
 
-* Assessment Approvals
+- Assessment Approvals
 
-* Attendance
+- Attendance
 
-* Academic Years
+- Academic Years
 
-* Terms
+- Terms
 
-* Grading Systems
+- Grading Systems
 
-* Report Templates
+- Report Templates
 
-* Feature Toggles
+- Feature Toggles
 
-* Notifications
+- Notifications
 
-* Audit Logs
+- Audit Logs
 
-* File Uploads
+- File Uploads
 
 ---
 
@@ -1828,33 +1832,33 @@ Include entities such as:
 
 Generate:
 
-* Clean architecture
+- Clean architecture
 
-* Modular folder structure
+- Modular folder structure
 
-* Reusable React components
+- Reusable React components
 
-* Reusable API services
+- Reusable API services
 
-* Custom hooks
+- Custom hooks
 
-* Responsive UI
+- Responsive UI
 
-* Type-safe code
+- Type-safe code
 
-* Error handling
+- Error handling
 
-* Loading states
+- Loading states
 
-* Validation
+- Validation
 
-* Pagination
+- Pagination
 
-* Search
+- Search
 
-* Filtering
+- Filtering
 
-* Sorting
+- Sorting
 
 ---
 
@@ -1862,47 +1866,47 @@ Generate:
 
 Generate the complete application including:
 
-* Database schema
+- Database schema
 
-* Prisma models
+- Prisma models
 
-* Backend APIs
+- Backend APIs
 
-* Authentication
+- Authentication
 
-* Role & Permission System
+- Role & Permission System
 
-* React frontend
+- React frontend
 
-* Dashboards
+- Dashboards
 
-* Dynamic Report Card
+- Dynamic Report Card
 
-* Bulk Printing
+- Bulk Printing
 
-* PDF Generation
+- PDF Generation
 
-* File Upload System
+- File Upload System
 
-* Feature Toggle System
+- Feature Toggle System
 
-* Charts
+- Charts
 
-* Audit Logs
+- Audit Logs
 
-* Notifications
+- Notifications
 
-* Responsive UI
+- Responsive UI
 
-* Docker configuration
+- Docker configuration
 
-* Seed data
+- Seed data
 
-* README
+- README
 
-* API documentation
+- API documentation
 
-* Deployment instructions
+- Deployment instructions
 
 The system should be enterprise-grade, maintainable, secure, scalable, and optimized for managing multiple schools from a single platform while ensuring complete data isolation between schools.
 

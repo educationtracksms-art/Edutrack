@@ -1,11 +1,26 @@
 /* Official report card template styles (scoped to .report-doc) */
 
-.report-doc, .report-doc * { margin: 0; padding: 0; box-sizing: border-box; }
-.report-doc { font-family: 'Segoe UI', Roboto, system-ui, sans-serif; color: #1a2634; }
+.report-doc,
+.report-doc * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+.report-doc {
+  font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+  color: #1a2634;
+}
 @media print {
-  @page { size: A4 portrait; margin: 0; }
-  .no-print { display: none !important; }
-  .no-print * { display: none !important; }
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .no-print * {
+    display: none !important;
+  }
   .min-h-screen,
   .min-h-dvh,
   .h-dvh,
@@ -25,7 +40,8 @@
     padding: 0 !important;
     margin: 0 !important;
   }
-  html, body {
+  html,
+  body {
     width: 210mm;
     height: 297mm;
     margin: 0 !important;
@@ -45,714 +61,730 @@
     page-break-after: always;
     overflow: hidden;
   }
-  .report-doc:last-child { page-break-after: auto; }
+  .report-doc:last-child {
+    page-break-after: auto;
+  }
 }
 .report-doc {
-            max-width: 1200px;
-            width: 100%;
-            background: white;
-            padding: 18px 24px 16px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-            border-radius: 14px;
-        }
+  max-width: 1200px;
+  width: 100%;
+  background: white;
+  padding: 18px 24px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+}
 .report-doc header {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding-bottom: 8px;
-            margin-bottom: 12px;
-        }
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
 .report-doc .header-top {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            width: 100%;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 4px;
-        }
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
 .report-doc .logo {
-            flex-shrink: 0;
-            width: 65px;
-            height: 65px;
-            max-width: 65px;
-            max-height: 65px;
-            background: #f0f2f5;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            color: #1e2b3a;
-            border: 2px solid #b0b8c5;
-            font-size: 11px;
-            text-transform: uppercase;
-            overflow: hidden;
-        }
+  flex-shrink: 0;
+  width: 65px;
+  height: 65px;
+  max-width: 65px;
+  max-height: 65px;
+  background: #f0f2f5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #1e2b3a;
+  border: 2px solid #b0b8c5;
+  font-size: 11px;
+  text-transform: uppercase;
+  overflow: hidden;
+}
 .report-doc .logo img {
-            max-width: 65px;
-            max-height: 65px;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-        }
+  max-width: 65px;
+  max-height: 65px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
 .report-doc .school-details {
-            flex: 1;
-            text-align: center;
-        }
+  flex: 1;
+  text-align: center;
+}
 .report-doc .school-details h1 {
-            font-size: 26px;
-            letter-spacing: 0.5px;
-            color: #1a2634;
-            margin-bottom: 2px;
-            font-weight: 700;
-        }
+  font-size: 26px;
+  letter-spacing: 0.5px;
+  color: #1a2634;
+  margin-bottom: 2px;
+  font-weight: 700;
+}
 .report-doc .school-details p {
-            font-size: 14px;
-            color: #2c3e50;
-            margin-bottom: 2px;
-        }
+  font-size: 14px;
+  color: #2c3e50;
+  margin-bottom: 2px;
+}
 .report-doc .school-details p.motto {
-            font-size: 13px;
-            color: #555;
-            font-style: italic;
-            margin-bottom: 4px;
-        }
+  font-size: 13px;
+  color: #555;
+  font-style: italic;
+  margin-bottom: 4px;
+}
 .report-doc .school-details h2 {
-            font-size: 16px;
-            color: #c9302c;
-            font-weight: 600;
-            margin-top: 2px;
-        }
+  font-size: 16px;
+  color: #c9302c;
+  font-weight: 600;
+  margin-top: 2px;
+}
 .report-doc .blue-line {
-            width: 100%;
-            height: 3px;
-            background: #1e3a8a;
-            margin-top: 2px;
-            margin-bottom: 4px;
-        }
+  width: 100%;
+  height: 3px;
+  background: #1e3a8a;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
 .report-doc .red-line {
-            width: 100%;
-            height: 3px;
-            background: #c9302c;
-            margin-top: 2px;
-            margin-bottom: 8px;
-        }
+  width: 100%;
+  height: 3px;
+  background: #c9302c;
+  margin-top: 2px;
+  margin-bottom: 8px;
+}
 .report-doc .student-info-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 10px;
-            border: 1px solid #dde2ec;
-            border-radius: 10px;
-            overflow: hidden;
-        }
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  border: 1px solid #dde2ec;
+  border-radius: 10px;
+  overflow: hidden;
+}
 .report-doc .student-info-table td {
-            padding: 8px 10px;
-            border: 1px solid #dde2ec;
-            vertical-align: middle;
-            font-size: 13px;
-        }
+  padding: 8px 10px;
+  border: 1px solid #dde2ec;
+  vertical-align: middle;
+  font-size: 13px;
+}
 .report-doc .student-info-table .label {
-            font-weight: 600;
-            color: #1f2a3f;
-            background: #f8faff;
-            white-space: nowrap;
-        }
+  font-weight: 600;
+  color: #1f2a3f;
+  background: #f8faff;
+  white-space: nowrap;
+}
 .report-doc .student-info-table .label-lin {
-            font-weight: 600;
-            color: #1f2a3f;
-            background: #f8faff;
-            white-space: nowrap;
-            width: 5%;
-            min-width: 40px;
-            text-align: center;
-            font-size: 12px;
-            padding: 8px 4px;
-        }
+  font-weight: 600;
+  color: #1f2a3f;
+  background: #f8faff;
+  white-space: nowrap;
+  width: 5%;
+  min-width: 40px;
+  text-align: center;
+  font-size: 12px;
+  padding: 8px 4px;
+}
 .report-doc .student-info-table .value-lin {
-            color: #0b1a2e;
-            font-weight: 500;
-            width: 8%;
-            min-width: 55px;
-            font-size: 12px;
-            padding: 8px 4px;
-        }
+  color: #0b1a2e;
+  font-weight: 500;
+  width: 8%;
+  min-width: 55px;
+  font-size: 12px;
+  padding: 8px 4px;
+}
 .report-doc .student-info-table .label-name {
-            font-weight: 600;
-            color: #1f2a3f;
-            background: #f8faff;
-            white-space: nowrap;
-            width: 8%;
-            min-width: 50px;
-            text-align: right;
-        }
+  font-weight: 600;
+  color: #1f2a3f;
+  background: #f8faff;
+  white-space: nowrap;
+  width: 8%;
+  min-width: 50px;
+  text-align: right;
+}
 .report-doc .student-info-table .value-name {
-            color: #0b1a2e;
-            font-weight: 500;
-            width: 20%;
-        }
+  color: #0b1a2e;
+  font-weight: 500;
+  width: 20%;
+}
 .report-doc .student-info-table .label-small {
-            font-weight: 600;
-            color: #1f2a3f;
-            background: #f8faff;
-            white-space: nowrap;
-            width: 10%;
-            min-width: 70px;
-        }
+  font-weight: 600;
+  color: #1f2a3f;
+  background: #f8faff;
+  white-space: nowrap;
+  width: 10%;
+  min-width: 70px;
+}
 .report-doc .student-info-table .value-small {
-            color: #0b1a2e;
-            font-weight: 500;
-            width: 18%;
-        }
+  color: #0b1a2e;
+  font-weight: 500;
+  width: 18%;
+}
 .report-doc .student-info-table .attendance-cell {
-            background: #f8faff;
-            text-align: center;
-            width: 20%;
-            padding: 10px 12px;
-        }
+  background: #f8faff;
+  text-align: center;
+  width: 20%;
+  padding: 10px 12px;
+}
 .report-doc .student-info-table .attendance-cell table {
-            margin: 0 auto;
-            border-collapse: collapse;
-            font-size: 15px;
-            width: 100%;
-            max-width: 210px;
-        }
+  margin: 0 auto;
+  border-collapse: collapse;
+  font-size: 15px;
+  width: 100%;
+  max-width: 210px;
+}
 .report-doc .student-info-table .attendance-cell th {
-            background: #1e2b3a;
-            color: white;
-            padding: 6px 14px;
-            font-weight: 600;
-            font-size: 13px;
-        }
+  background: #1e2b3a;
+  color: white;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 13px;
+}
 .report-doc .student-info-table .attendance-cell td {
-            border: 1px solid #3d4a5a;
-            padding: 5px 12px;
-            font-size: 13px;
-            background: white;
-        }
+  border: 1px solid #3d4a5a;
+  padding: 5px 12px;
+  font-size: 13px;
+  background: white;
+}
 .report-doc .student-info-table .attendance-cell tr:last-child td {
-            font-weight: 600;
-            background: #eef2f9;
-        }
+  font-weight: 600;
+  background: #eef2f9;
+}
 .report-doc .passport-cell {
-            text-align: center;
-            vertical-align: middle;
-            width: 16%;
-            padding: 10px 12px;
-        }
+  text-align: center;
+  vertical-align: middle;
+  width: 16%;
+  padding: 10px 12px;
+}
 .report-doc .passport {
-            width: 105px;
-            height: 125px;
-            max-width: 105px;
-            max-height: 125px;
-            background: #eef2f9;
-            border: 4px solid #c9302c;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            font-weight: 700;
-            color: #2a3a4e;
-            text-align: center;
-            padding: 6px;
-            letter-spacing: 0.5px;
-            margin: 0 auto;
-            box-shadow: 0 2px 8px rgba(201, 48, 44, 0.25);
-            line-height: 1.3;
-        }
+  width: 105px;
+  height: 125px;
+  max-width: 105px;
+  max-height: 125px;
+  background: #eef2f9;
+  border: 4px solid #c9302c;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2a3a4e;
+  text-align: center;
+  padding: 6px;
+  letter-spacing: 0.5px;
+  margin: 0 auto;
+  box-shadow: 0 2px 8px rgba(201, 48, 44, 0.25);
+  line-height: 1.3;
+}
 .report-doc .title-row td {
-            background: #f8faff;
-            font-weight: 600;
-            font-size: 14px;
-            color: #1f2a3f;
-            text-align: center;
-            padding: 6px 14px;
-        }
-.report-doc .title, .report-doc .section-title {
-            font-size: 15px;
-            font-weight: 600;
-            color: #1f2a3f;
-            margin: 8px 0 6px;
-            border-left: 5px solid #c9302c;
-            padding-left: 10px;
-        }
+  background: #f8faff;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2a3f;
+  text-align: center;
+  padding: 6px 14px;
+}
+.report-doc .title,
+.report-doc .section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2a3f;
+  margin: 8px 0 6px;
+  border-left: 5px solid #c9302c;
+  padding-left: 10px;
+}
 .report-doc .results {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10.5px;
-            margin-bottom: 4px;
-        }
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  margin-bottom: 4px;
+}
 .report-doc .results th {
-            background: #eef2f7;
-            border: 1px solid #3d4a5a;
-            padding: 4px 3px;
-            font-weight: 600;
-            color: #141f2d;
-            font-size: 10px;
-        }
+  background: #eef2f7;
+  border: 1px solid #3d4a5a;
+  padding: 4px 3px;
+  font-weight: 600;
+  color: #141f2d;
+  font-size: 10px;
+}
 .report-doc .results td {
-            border: 1px solid #3d4a5a;
-            padding: 3px 3px;
-            vertical-align: middle;
-            font-size: 10px;
-        }
+  border: 1px solid #3d4a5a;
+  padding: 3px 3px;
+  vertical-align: middle;
+  font-size: 10px;
+}
 .report-doc .results th:nth-child(1) {
-            width: 16%;
-        }
-.report-doc .results th:nth-child(2), .report-doc .results th:nth-child(3), .report-doc .results th:nth-child(4) {
-            width: 6%;
-        }
+  width: 16%;
+}
+.report-doc .results th:nth-child(2),
+.report-doc .results th:nth-child(3),
+.report-doc .results th:nth-child(4) {
+  width: 6%;
+}
 .report-doc .results th:nth-child(5) {
-            width: 5%;
-        }
+  width: 5%;
+}
 .report-doc .results th:nth-child(6) {
-            width: 46%;
-        }
+  width: 46%;
+}
 .report-doc .results th:nth-child(7) {
-            width: 7%;
-        }
+  width: 7%;
+}
 .report-doc .results tbody tr:nth-child(even) {
-            background: #fafcff;
-        }
+  background: #fafcff;
+}
 .report-doc .overall-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 6px 0 8px;
-        }
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 8px;
+}
 .report-doc .overall-table td {
-            border: 1px solid #3d4a5a;
-            padding: 6px 10px;
-            background: #f0f4fa;
-            font-size: 13px;
-        }
+  border: 1px solid #3d4a5a;
+  padding: 6px 10px;
+  background: #f0f4fa;
+  font-size: 13px;
+}
 .report-doc .overall-table .overall-cell {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 4px 10px;
-        }
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
 .report-doc .overall-table .overall-cell strong {
-            font-weight: 700;
-            color: #1a2634;
-        }
+  font-weight: 700;
+  color: #1a2634;
+}
 .report-doc .overall-table .avg-score {
-            font-size: 17px;
-            font-weight: 700;
-            color: #1a2634;
-            background: #dce3ed;
-            padding: 0 12px;
-            border-radius: 30px;
-            line-height: 1.6;
-        }
-.report-doc .overall-table .identifier-block, .report-doc .overall-table .descriptor-block {
-            font-weight: 500;
-            color: #1a2634;
-            font-size: 12.5px;
-        }
-.report-doc .overall-table .identifier-block strong, .report-doc .overall-table .descriptor-block strong {
-            font-weight: 700;
-        }
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a2634;
+  background: #dce3ed;
+  padding: 0 12px;
+  border-radius: 30px;
+  line-height: 1.6;
+}
+.report-doc .overall-table .identifier-block,
+.report-doc .overall-table .descriptor-block {
+  font-weight: 500;
+  color: #1a2634;
+  font-size: 12.5px;
+}
+.report-doc .overall-table .identifier-block strong,
+.report-doc .overall-table .descriptor-block strong {
+  font-weight: 700;
+}
 .report-doc .definitions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 8px 0 8px;
-            background: #f9fbfe;
-            padding: 8px 12px;
-            border-radius: 10px;
-            border: 1px solid #dde2ec;
-        }
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 8px;
+  background: #f9fbfe;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #dde2ec;
+}
 .report-doc .keywords {
-            flex: 1 1 35%;
-        }
+  flex: 1 1 35%;
+}
 .report-doc .meaning {
-            flex: 1 1 50%;
-        }
+  flex: 1 1 50%;
+}
 .report-doc .keywords h3 {
-            color: #c9302c;
-            text-align: center;
-            margin-bottom: 4px;
-            font-size: 13px;
-        }
+  color: #c9302c;
+  text-align: center;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
 .report-doc .keywords table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+  width: 100%;
+  border-collapse: collapse;
+}
 .report-doc .keywords th {
-            background: #e4e9f2;
-            border: 1px solid #3d4a5a;
-            padding: 3px 5px;
-            font-weight: 600;
-            font-size: 10.5px;
-        }
+  background: #e4e9f2;
+  border: 1px solid #3d4a5a;
+  padding: 3px 5px;
+  font-weight: 600;
+  font-size: 10.5px;
+}
 .report-doc .keywords td {
-            border: 1px solid #3d4a5a;
-            padding: 3px 5px;
-            font-size: 10.5px;
-        }
+  border: 1px solid #3d4a5a;
+  padding: 3px 5px;
+  font-size: 10.5px;
+}
 .report-doc .meaning p {
-            margin-bottom: 4px;
-            font-size: 11px;
-            line-height: 1.3;
-            border-bottom: 1px dashed #d0d7e3;
-            padding-bottom: 3px;
-        }
+  margin-bottom: 4px;
+  font-size: 11px;
+  line-height: 1.3;
+  border-bottom: 1px dashed #d0d7e3;
+  padding-bottom: 3px;
+}
 .report-doc .meaning p:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-        }
+  border-bottom: none;
+  margin-bottom: 0;
+}
 .report-doc .meaning strong {
-            color: #1f2a3f;
-        }
+  color: #1f2a3f;
+}
 .report-doc .activities {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 4px 0 8px;
-            font-size: 12px;
-        }
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 8px;
+  font-size: 12px;
+}
 .report-doc .activities td {
-            border: 1px solid #3d4a5a;
-            padding: 4px 10px;
-            width: 33%;
-        }
+  border: 1px solid #3d4a5a;
+  padding: 4px 10px;
+  width: 33%;
+}
 .report-doc .activities td:first-child {
-            font-weight: 600;
-            background: #f2f6fd;
-            width: 16%;
-        }
+  font-weight: 600;
+  background: #f2f6fd;
+  width: 16%;
+}
 .report-doc .comments {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 4px 0 8px;
-        }
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 8px;
+}
 .report-doc .comments td {
-            border: 1px solid #3d4a5a;
-            padding: 5px 10px;
-            vertical-align: top;
-            font-size: 12px;
-        }
+  border: 1px solid #3d4a5a;
+  padding: 5px 10px;
+  vertical-align: top;
+  font-size: 12px;
+}
 .report-doc .comments .label {
-            font-weight: 700;
-            background: #eef2f7;
-            width: 18%;
-            font-size: 12px;
-        }
+  font-weight: 700;
+  background: #eef2f7;
+  width: 18%;
+  font-size: 12px;
+}
 .report-doc .signature-area {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: 12px;
-            padding-top: 10px;
-            border-top: 2px solid #d0d7e3;
-        }
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 2px solid #d0d7e3;
+}
 .report-doc .signature-area div {
-            font-size: 12px;
-            min-width: 130px;
-        }
+  font-size: 12px;
+  min-width: 130px;
+}
 @media print {
-.report-doc {
-                max-width: 100%;
-                box-shadow: none;
-                border-radius: 0;
-                padding: 10px 14px 10px;
-                margin: 0 auto;
-                background: white;
-                width: 100%;
-            }
-.report-doc header {
-                padding-bottom: 5px;
-                margin-bottom: 6px;
-            }
-.report-doc .blue-line {
-                height: 2.5px;
-                margin-top: 2px;
-                margin-bottom: 3px;
-            }
-.report-doc .red-line {
-                height: 2.5px;
-                margin-top: 2px;
-                margin-bottom: 6px;
-            }
-.report-doc .logo {
-                width: 50px;
-                height: 50px;
-                max-width: 50px;
-                max-height: 50px;
-            }
-.report-doc .logo img {
-                max-width: 50px;
-                max-height: 50px;
-            }
-.report-doc .school-details h1 {
-                font-size: 22px;
-            }
-.report-doc .school-details p {
-                font-size: 12px;
-            }
-.report-doc .school-details h2 {
-                font-size: 14px;
-                margin-top: 2px;
-            }
-.report-doc .student-info-table td {
-                padding: 4px 6px;
-                font-size: 10px;
-            }
-.report-doc .student-info-table .label-lin {
-                font-size: 10px;
-                padding: 4px 3px;
-                min-width: 30px;
-                width: 4%;
-            }
-.report-doc .student-info-table .value-lin {
-                font-size: 10px;
-                padding: 4px 3px;
-                min-width: 40px;
-                width: 6%;
-            }
-.report-doc .student-info-table .label-name {
-                font-size: 10px;
-                min-width: 40px;
-            }
-.report-doc .student-info-table .value-name {
-                font-size: 10px;
-            }
-.report-doc .student-info-table .label-small {
-                font-size: 10px;
-                min-width: 55px;
-                width: 8%;
-            }
-.report-doc .student-info-table .value-small {
-                font-size: 10px;
-            }
-.report-doc .student-info-table .attendance-cell {
-                padding: 6px 8px;
-                width: 18%;
-            }
-.report-doc .student-info-table .attendance-cell table {
-                font-size: 13px;
-                max-width: 180px;
-            }
-.report-doc .student-info-table .attendance-cell th {
-                font-size: 11px;
-                padding: 4px 10px;
-            }
-.report-doc .student-info-table .attendance-cell td {
-                font-size: 11px;
-                padding: 4px 10px;
-            }
-.report-doc .passport-cell {
-                padding: 6px 8px;
-                width: 14%;
-            }
-.report-doc .passport {
-                width: 85px;
-                height: 102px;
-                max-width: 85px;
-                max-height: 102px;
-                font-size: 11px;
-                border-width: 3px;
-            }
-.report-doc .title-row td {
-                font-size: 12px;
-                padding: 4px 10px;
-            }
-.report-doc .title, .report-doc .section-title {
-                font-size: 12px;
-                margin: 4px 0 3px;
-                padding-left: 7px;
-                border-left-width: 4px;
-            }
-.report-doc .results {
-                font-size: 8.5px;
-            }
-.report-doc .results th, .report-doc .results td {
-                padding: 2px 2px;
-                font-size: 8px;
-            }
-.report-doc .results th:nth-child(6) {
-                width: 44%;
-            }
-.report-doc .overall-table td {
-                padding: 3px 6px;
-                font-size: 10px;
-            }
-.report-doc .overall-table .avg-score {
-                font-size: 13px;
-                padding: 0 8px;
-            }
-.report-doc .overall-table .identifier-block, .report-doc .overall-table .descriptor-block {
-                font-size: 9.5px;
-            }
-.report-doc .definitions {
-                padding: 4px 8px;
-                margin: 4px 0 4px;
-                gap: 4px;
-            }
-.report-doc .keywords h3 {
-                font-size: 10px;
-            }
-.report-doc .keywords th, .report-doc .keywords td {
-                font-size: 8.5px;
-                padding: 2px 4px;
-            }
-.report-doc .meaning p {
-                font-size: 9px;
-                margin-bottom: 2px;
-                padding-bottom: 2px;
-            }
-.report-doc .activities {
-                font-size: 9.5px;
-                margin: 2px 0 4px;
-            }
-.report-doc .activities td {
-                padding: 2px 6px;
-            }
-.report-doc .comments td {
-                padding: 3px 6px;
-                font-size: 9.5px;
-            }
-.report-doc .comments .label {
-                font-size: 9.5px;
-                width: 16%;
-            }
-.report-doc .signature-area {
-                margin-top: 6px;
-                padding-top: 6px;
-            }
-.report-doc .signature-area div {
-                font-size: 9.5px;
-                min-width: 90px;
-            }
-.report-doc, .report-doc header, .report-doc .student-info-table, .report-doc .definitions, .report-doc .signature-area {
-                page-break-inside: avoid;
-            }
+  .report-doc {
+    max-width: 100%;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 10px 14px 10px;
+    margin: 0 auto;
+    background: white;
+    width: 100%;
+  }
+  .report-doc header {
+    padding-bottom: 5px;
+    margin-bottom: 6px;
+  }
+  .report-doc .blue-line {
+    height: 2.5px;
+    margin-top: 2px;
+    margin-bottom: 3px;
+  }
+  .report-doc .red-line {
+    height: 2.5px;
+    margin-top: 2px;
+    margin-bottom: 6px;
+  }
+  .report-doc .logo {
+    width: 50px;
+    height: 50px;
+    max-width: 50px;
+    max-height: 50px;
+  }
+  .report-doc .logo img {
+    max-width: 50px;
+    max-height: 50px;
+  }
+  .report-doc .school-details h1 {
+    font-size: 22px;
+  }
+  .report-doc .school-details p {
+    font-size: 12px;
+  }
+  .report-doc .school-details h2 {
+    font-size: 14px;
+    margin-top: 2px;
+  }
+  .report-doc .student-info-table td {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  .report-doc .student-info-table .label-lin {
+    font-size: 10px;
+    padding: 4px 3px;
+    min-width: 30px;
+    width: 4%;
+  }
+  .report-doc .student-info-table .value-lin {
+    font-size: 10px;
+    padding: 4px 3px;
+    min-width: 40px;
+    width: 6%;
+  }
+  .report-doc .student-info-table .label-name {
+    font-size: 10px;
+    min-width: 40px;
+  }
+  .report-doc .student-info-table .value-name {
+    font-size: 10px;
+  }
+  .report-doc .student-info-table .label-small {
+    font-size: 10px;
+    min-width: 55px;
+    width: 8%;
+  }
+  .report-doc .student-info-table .value-small {
+    font-size: 10px;
+  }
+  .report-doc .student-info-table .attendance-cell {
+    padding: 6px 8px;
+    width: 18%;
+  }
+  .report-doc .student-info-table .attendance-cell table {
+    font-size: 13px;
+    max-width: 180px;
+  }
+  .report-doc .student-info-table .attendance-cell th {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  .report-doc .student-info-table .attendance-cell td {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  .report-doc .passport-cell {
+    padding: 6px 8px;
+    width: 14%;
+  }
+  .report-doc .passport {
+    width: 85px;
+    height: 102px;
+    max-width: 85px;
+    max-height: 102px;
+    font-size: 11px;
+    border-width: 3px;
+  }
+  .report-doc .title-row td {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .report-doc .title,
+  .report-doc .section-title {
+    font-size: 12px;
+    margin: 4px 0 3px;
+    padding-left: 7px;
+    border-left-width: 4px;
+  }
+  .report-doc .results {
+    font-size: 8.5px;
+  }
+  .report-doc .results th,
+  .report-doc .results td {
+    padding: 2px 2px;
+    font-size: 8px;
+  }
+  .report-doc .results th:nth-child(6) {
+    width: 44%;
+  }
+  .report-doc .overall-table td {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+  .report-doc .overall-table .avg-score {
+    font-size: 13px;
+    padding: 0 8px;
+  }
+  .report-doc .overall-table .identifier-block,
+  .report-doc .overall-table .descriptor-block {
+    font-size: 9.5px;
+  }
+  .report-doc .definitions {
+    padding: 4px 8px;
+    margin: 4px 0 4px;
+    gap: 4px;
+  }
+  .report-doc .keywords h3 {
+    font-size: 10px;
+  }
+  .report-doc .keywords th,
+  .report-doc .keywords td {
+    font-size: 8.5px;
+    padding: 2px 4px;
+  }
+  .report-doc .meaning p {
+    font-size: 9px;
+    margin-bottom: 2px;
+    padding-bottom: 2px;
+  }
+  .report-doc .activities {
+    font-size: 9.5px;
+    margin: 2px 0 4px;
+  }
+  .report-doc .activities td {
+    padding: 2px 6px;
+  }
+  .report-doc .comments td {
+    padding: 3px 6px;
+    font-size: 9.5px;
+  }
+  .report-doc .comments .label {
+    font-size: 9.5px;
+    width: 16%;
+  }
+  .report-doc .signature-area {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+  .report-doc .signature-area div {
+    font-size: 9.5px;
+    min-width: 90px;
+  }
+  .report-doc,
+  .report-doc header,
+  .report-doc .student-info-table,
+  .report-doc .definitions,
+  .report-doc .signature-area {
+    page-break-inside: avoid;
+  }
 }
 @media (max-width: 700px) {
-.report-doc {
-                padding: 12px;
-            }
-.report-doc .school-details h1 {
-                font-size: 20px;
-            }
-.report-doc .school-details p {
-                font-size: 11px;
-            }
-.report-doc .student-info-table td {
-                padding: 4px 6px;
-                font-size: 10px;
-            }
-.report-doc .student-info-table .label-lin {
-                font-size: 10px;
-                padding: 4px 3px;
-                min-width: 30px;
-                width: 6%;
-            }
-.report-doc .student-info-table .value-lin {
-                font-size: 10px;
-                padding: 4px 3px;
-                min-width: 40px;
-            }
-.report-doc .student-info-table .label-name {
-                font-size: 10px;
-                min-width: 40px;
-            }
-.report-doc .student-info-table .value-name {
-                font-size: 10px;
-            }
-.report-doc .student-info-table .label-small {
-                font-size: 10px;
-                min-width: 55px;
-            }
-.report-doc .student-info-table .value-small {
-                font-size: 10px;
-            }
-.report-doc .student-info-table .attendance-cell table {
-                font-size: 12px;
-                max-width: 160px;
-            }
-.report-doc .student-info-table .attendance-cell th {
-                font-size: 11px;
-                padding: 4px 8px;
-            }
-.report-doc .student-info-table .attendance-cell td {
-                font-size: 11px;
-                padding: 4px 8px;
-            }
-.report-doc .passport {
-                width: 70px;
-                height: 84px;
-                max-width: 70px;
-                max-height: 84px;
-                font-size: 10px;
-            }
-.report-doc .definitions {
-                flex-direction: column;
-            }
-.report-doc .overall-table td {
-                font-size: 12px;
-            }
-.report-doc .overall-table .avg-score {
-                font-size: 15px;
-            }
+  .report-doc {
+    padding: 12px;
+  }
+  .report-doc .school-details h1 {
+    font-size: 20px;
+  }
+  .report-doc .school-details p {
+    font-size: 11px;
+  }
+  .report-doc .student-info-table td {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  .report-doc .student-info-table .label-lin {
+    font-size: 10px;
+    padding: 4px 3px;
+    min-width: 30px;
+    width: 6%;
+  }
+  .report-doc .student-info-table .value-lin {
+    font-size: 10px;
+    padding: 4px 3px;
+    min-width: 40px;
+  }
+  .report-doc .student-info-table .label-name {
+    font-size: 10px;
+    min-width: 40px;
+  }
+  .report-doc .student-info-table .value-name {
+    font-size: 10px;
+  }
+  .report-doc .student-info-table .label-small {
+    font-size: 10px;
+    min-width: 55px;
+  }
+  .report-doc .student-info-table .value-small {
+    font-size: 10px;
+  }
+  .report-doc .student-info-table .attendance-cell table {
+    font-size: 12px;
+    max-width: 160px;
+  }
+  .report-doc .student-info-table .attendance-cell th {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .report-doc .student-info-table .attendance-cell td {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .report-doc .passport {
+    width: 70px;
+    height: 84px;
+    max-width: 70px;
+    max-height: 84px;
+    font-size: 10px;
+  }
+  .report-doc .definitions {
+    flex-direction: column;
+  }
+  .report-doc .overall-table td {
+    font-size: 12px;
+  }
+  .report-doc .overall-table .avg-score {
+    font-size: 15px;
+  }
 }
 @media (max-width: 480px) {
-.report-doc .passport {
-                width: 55px;
-                height: 66px;
-                max-width: 55px;
-                max-height: 66px;
-                font-size: 8px;
-                border-width: 3px;
-            }
-.report-doc .results th, .report-doc .results td {
-                font-size: 8px;
-            }
-.report-doc .student-info-table td {
-                padding: 3px 4px;
-                font-size: 9px;
-            }
-.report-doc .student-info-table .label-lin {
-                font-size: 9px;
-                padding: 3px 2px;
-                min-width: 25px;
-                width: 8%;
-            }
-.report-doc .student-info-table .value-lin {
-                font-size: 9px;
-                padding: 3px 2px;
-                min-width: 30px;
-            }
-.report-doc .student-info-table .label-name {
-                font-size: 9px;
-                min-width: 30px;
-            }
-.report-doc .student-info-table .value-name {
-                font-size: 9px;
-            }
-.report-doc .student-info-table .label-small {
-                font-size: 9px;
-                min-width: 40px;
-            }
-.report-doc .student-info-table .value-small {
-                font-size: 9px;
-            }
-.report-doc .student-info-table .attendance-cell table {
-                font-size: 10px;
-                max-width: 120px;
-            }
-.report-doc .student-info-table .attendance-cell th {
-                font-size: 9px;
-                padding: 2px 6px;
-            }
-.report-doc .student-info-table .attendance-cell td {
-                font-size: 9px;
-                padding: 2px 6px;
-            }
-.report-doc .title-row td {
-                font-size: 10px;
-                padding: 3px 8px;
-            }
+  .report-doc .passport {
+    width: 55px;
+    height: 66px;
+    max-width: 55px;
+    max-height: 66px;
+    font-size: 8px;
+    border-width: 3px;
+  }
+  .report-doc .results th,
+  .report-doc .results td {
+    font-size: 8px;
+  }
+  .report-doc .student-info-table td {
+    padding: 3px 4px;
+    font-size: 9px;
+  }
+  .report-doc .student-info-table .label-lin {
+    font-size: 9px;
+    padding: 3px 2px;
+    min-width: 25px;
+    width: 8%;
+  }
+  .report-doc .student-info-table .value-lin {
+    font-size: 9px;
+    padding: 3px 2px;
+    min-width: 30px;
+  }
+  .report-doc .student-info-table .label-name {
+    font-size: 9px;
+    min-width: 30px;
+  }
+  .report-doc .student-info-table .value-name {
+    font-size: 9px;
+  }
+  .report-doc .student-info-table .label-small {
+    font-size: 9px;
+    min-width: 40px;
+  }
+  .report-doc .student-info-table .value-small {
+    font-size: 9px;
+  }
+  .report-doc .student-info-table .attendance-cell table {
+    font-size: 10px;
+    max-width: 120px;
+  }
+  .report-doc .student-info-table .attendance-cell th {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+  .report-doc .student-info-table .attendance-cell td {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+  .report-doc .title-row td {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
 }

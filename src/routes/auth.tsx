@@ -10,9 +10,15 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Sign in | Education Track SMS" },
-      { name: "description", content: "Sign in to Education Track SMS to manage your school, learners and report cards." },
+      {
+        name: "description",
+        content: "Sign in to Education Track SMS to manage your school, learners and report cards.",
+      },
       { property: "og:title", content: "Sign in | Education Track SMS" },
-      { property: "og:description", content: "Secure access for school administrators, teachers and platform owners." },
+      {
+        property: "og:description",
+        content: "Secure access for school administrators, teachers and platform owners.",
+      },
     ],
   }),
   component: AuthPage,

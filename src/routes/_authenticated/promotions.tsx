@@ -11,9 +11,15 @@ export const Route = createFileRoute("/_authenticated/promotions")({
   head: () => ({
     meta: [
       { title: "Promotions · EduTrack" },
-      { name: "description", content: "Promote, repeat or transfer learners at the end of an academic year." },
+      {
+        name: "description",
+        content: "Promote, repeat or transfer learners at the end of an academic year.",
+      },
       { property: "og:title", content: "Promotions · EduTrack" },
-      { property: "og:description", content: "End-of-year learner progression with a permanent history trail." },
+      {
+        property: "og:description",
+        content: "End-of-year learner progression with a permanent history trail.",
+      },
     ],
   }),
   component: PromotionsPage,
@@ -37,11 +43,19 @@ function PromotionsPage() {
     enabled: !!schoolId,
     queryFn: async () => {
       const [students, classes, streams, years, history] = await Promise.all([
-        supabase.from("students").select("id, full_name, class_id, stream_id").is("deleted_at", null).order("full_name"),
+        supabase
+          .from("students")
+          .select("id, full_name, class_id, stream_id")
+          .is("deleted_at", null)
+          .order("full_name"),
         supabase.from("classes").select("id, name").order("level").order("name"),
         supabase.from("streams").select("id, name, class_id"),
         supabase.from("academic_years").select("id, name, is_current"),
-        supabase.from("student_promotions").select("*").order("created_at", { ascending: false }).limit(50),
+        supabase
+          .from("student_promotions")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50),
       ]);
       return {
         students: students.data ?? [],
@@ -58,7 +72,8 @@ function PromotionsPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!data?.year) throw new Error("Create an academic year first");
       if (selected.length === 0) throw new Error("Select at least one learner");
-      if (outcome === "promoted" && !toClass) throw new Error("Choose the class learners move into");
+      if (outcome === "promoted" && !toClass)
+        throw new Error("Choose the class learners move into");
 
       for (const studentId of selected) {
         const student = data.students.find((s) => s.id === studentId)!;
@@ -79,7 +94,10 @@ function PromotionsPage() {
         if (error) throw new Error(error.message);
 
         if (outcome === "promoted") {
-          await supabase.from("students").update({ class_id: target, stream_id: targetStream }).eq("id", studentId);
+          await supabase
+            .from("students")
+            .update({ class_id: target, stream_id: targetStream })
+            .eq("id", studentId);
         }
         if (outcome === "transferred" || outcome === "graduated") {
           await supabase.from("students").update({ status: "inactive" }).eq("id", studentId);
@@ -103,10 +121,16 @@ function PromotionsPage() {
   });
 
   if (!allowed) {
-    return <p className="text-sm text-muted-foreground">Only school leadership and the Director of Studies can run promotions.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        Only school leadership and the Director of Studies can run promotions.
+      </p>
+    );
   }
 
-  const roster = (data?.students ?? []).filter((s) => (fromClass ? s.class_id === fromClass : true));
+  const roster = (data?.students ?? []).filter((s) =>
+    fromClass ? s.class_id === fromClass : true,
+  );
   const className = (id: string | null) => data?.classes.find((c) => c.id === id)?.name ?? "—";
 
   return (
@@ -119,34 +143,68 @@ function PromotionsPage() {
       <Panel title="Run a progression" className="mb-4">
         <div className="grid gap-3 md:grid-cols-4">
           <Field label="From class">
-            <select className={inputClass} value={fromClass} onChange={(e) => { setFromClass(e.target.value); setSelected([]); }}>
+            <select
+              className={inputClass}
+              value={fromClass}
+              onChange={(e) => {
+                setFromClass(e.target.value);
+                setSelected([]);
+              }}
+            >
               <option value="">All classes</option>
               {(data?.classes ?? []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </Field>
           <Field label="Outcome">
-            <select className={inputClass} value={outcome} onChange={(e) => setOutcome(e.target.value as (typeof OUTCOMES)[number])}>
+            <select
+              className={inputClass}
+              value={outcome}
+              onChange={(e) => setOutcome(e.target.value as (typeof OUTCOMES)[number])}
+            >
               {OUTCOMES.map((o) => (
-                <option key={o} value={o} className="capitalize">{o}</option>
+                <option key={o} value={o} className="capitalize">
+                  {o}
+                </option>
               ))}
             </select>
           </Field>
           <Field label="To class">
-            <select className={inputClass} value={toClass} onChange={(e) => { setToClass(e.target.value); setToStream(""); }} disabled={outcome !== "promoted"}>
+            <select
+              className={inputClass}
+              value={toClass}
+              onChange={(e) => {
+                setToClass(e.target.value);
+                setToStream("");
+              }}
+              disabled={outcome !== "promoted"}
+            >
               <option value="">Select</option>
               {(data?.classes ?? []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </Field>
           <Field label="To stream">
-            <select className={inputClass} value={toStream} onChange={(e) => setToStream(e.target.value)} disabled={outcome !== "promoted"}>
+            <select
+              className={inputClass}
+              value={toStream}
+              onChange={(e) => setToStream(e.target.value)}
+              disabled={outcome !== "promoted"}
+            >
               <option value="">Keep unassigned</option>
-              {(data?.streams ?? []).filter((s) => !toClass || s.class_id === toClass).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
+              {(data?.streams ?? [])
+                .filter((s) => !toClass || s.class_id === toClass)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
             </select>
           </Field>
         </div>
@@ -161,13 +219,20 @@ function PromotionsPage() {
         <Panel title="Learners">
           <ul className="space-y-1 text-sm">
             {roster.map((student) => (
-              <li key={student.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <li
+                key={student.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={selected.includes(student.id)}
                     onChange={(e) =>
-                      setSelected(e.target.checked ? [...selected, student.id] : selected.filter((id) => id !== student.id))
+                      setSelected(
+                        e.target.checked
+                          ? [...selected, student.id]
+                          : selected.filter((id) => id !== student.id),
+                      )
                     }
                   />
                   {student.full_name}
@@ -194,7 +259,9 @@ function PromotionsPage() {
                 </p>
               </li>
             ))}
-            {(data?.history ?? []).length === 0 && <p className="text-muted-foreground">Nothing recorded yet.</p>}
+            {(data?.history ?? []).length === 0 && (
+              <p className="text-muted-foreground">Nothing recorded yet.</p>
+            )}
           </ul>
         </Panel>
       </div>

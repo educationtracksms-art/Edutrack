@@ -8,7 +8,11 @@ import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { descriptorFromAssessmentScore } from "@/lib/descriptor";
-import { reviewAssessments, upsertAssessmentEntry, upsertReportComment } from "@/lib/admin.functions";
+import {
+  reviewAssessments,
+  upsertAssessmentEntry,
+  upsertReportComment,
+} from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type TeacherAllocationView = {
@@ -41,13 +45,19 @@ type StudentRow = {
 
 type SubjectRow = { id: string; name: string };
 type TermRow = { id: string; name: string; is_current: boolean };
-type ClassRow = { id: string; name: string };
+type ClassRow = { id: string; name: string; class_teacher_id: string | null };
 type StreamRow = { id: string; name: string; class_id: string | null };
 type ProfileRow = { initials: string | null };
 type CommentRow = {
   student_id: string;
   class_teacher_comment: string | null;
   head_teacher_comment: string | null;
+};
+type CoCurricularRow = {
+  student_id: string;
+  games: string | null;
+  clubs: string | null;
+  projects: string | null;
 };
 
 type AssessmentsData = {
@@ -66,9 +76,15 @@ export const Route = createFileRoute("/_authenticated/assessments")({
   head: () => ({
     meta: [
       { title: "Assessments · EduTrack" },
-      { name: "description", content: "Capture formative and summative scores, submit for approval and lock results." },
+      {
+        name: "description",
+        content: "Capture formative and summative scores, submit for approval and lock results.",
+      },
       { property: "og:title", content: "Assessments · EduTrack" },
-      { property: "og:description", content: "Teacher score entry with Director of Studies approval workflow." },
+      {
+        property: "og:description",
+        content: "Teacher score entry with Director of Studies approval workflow.",
+      },
     ],
   }),
   component: AssessmentsPage,
@@ -79,8 +95,24 @@ function AssessmentsPage() {
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const isTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
-  const canReview = hasAny(me?.roles, ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin", "class_teacher"]);
-  const canEnter = !!schoolId && hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher"]);
+  const canReview = hasAny(me?.roles, [
+    "dos",
+    "school_admin",
+    "head_teacher",
+    "deputy_head_teacher",
+    "super_admin",
+    "class_teacher",
+  ]);
+  const canEnter =
+    !!schoolId &&
+    hasAny(me?.roles, [
+      "subject_teacher",
+      "class_teacher",
+      "dos",
+      "school_admin",
+      "head_teacher",
+      "deputy_head_teacher",
+    ]);
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const isHeadTeacher = hasAny(me?.roles, ["head_teacher", "deputy_head_teacher"]);
   const canEditComments = isClassTeacher || isHeadTeacher;
@@ -91,7 +123,19 @@ function AssessmentsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [termFilter, setTermFilter] = useState("");
   const [allocationKey, setAllocationKey] = useState("");
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, { classTeacherComment: string; headTeacherComment: string }>>({});
+  const [activeCommentStudentId, setActiveCommentStudentId] = useState("");
+  const [commentDrafts, setCommentDrafts] = useState<
+    Record<
+      string,
+      {
+        classTeacherComment: string;
+        headTeacherComment: string;
+        games: string;
+        clubs: string;
+        projects: string;
+      }
+    >
+  >({});
   const [entryForm, setEntryForm] = useState({
     studentId: "",
     subjectId: "",
@@ -101,7 +145,9 @@ function AssessmentsPage() {
     summative: "",
     teacherInitials: "",
   });
-  const [edits, setEdits] = useState<Record<string, { formative?: string; summative?: string; gradeDescriptor?: string }>>({});
+  const [edits, setEdits] = useState<
+    Record<string, { formative?: string; summative?: string; gradeDescriptor?: string }>
+  >({});
 
   const { data } = useQuery<AssessmentsData>({
     queryKey: ["assessments", schoolId, me?.userId],
@@ -118,10 +164,21 @@ function AssessmentsPage() {
         profileResult,
       ] = (await Promise.all([
         schoolQuery(supabase.from("assessments").select("*").order("created_at")),
-        schoolQuery(supabase.from("students").select("id, full_name, class_id, stream_id, status").eq("status", "active").order("full_name")),
+        schoolQuery(
+          supabase
+            .from("students")
+            .select("id, full_name, class_id, stream_id, status")
+            .eq("status", "active")
+            .order("full_name"),
+        ),
         schoolQuery(supabase.from("subjects").select("id, name").order("position")),
-        schoolQuery(supabase.from("terms").select("id, name, is_current").order("start_date", { ascending: false })),
-        schoolQuery(supabase.from("classes").select("id, name").order("name")),
+        schoolQuery(
+          supabase
+            .from("terms")
+            .select("id, name, is_current")
+            .order("start_date", { ascending: false }),
+        ),
+        schoolQuery(supabase.from("classes").select("id, name, class_teacher_id").order("name")),
         schoolQuery(supabase.from("streams").select("id, name, class_id").order("name")),
         schoolId && me?.userId
           ? supabase
@@ -130,7 +187,9 @@ function AssessmentsPage() {
               .eq("school_id", schoolId)
               .eq("teacher_id", me.userId)
           : Promise.resolve({ data: [] as any[] }),
-        me?.userId ? supabase.from("profiles").select("initials").eq("id", me.userId).maybeSingle() : Promise.resolve({ data: null as ProfileRow | null }),
+        me?.userId
+          ? supabase.from("profiles").select("initials").eq("id", me.userId).maybeSingle()
+          : Promise.resolve({ data: null as ProfileRow | null }),
       ])) as any[];
 
       const assessmentRows = (assessmentsResult.data ?? []) as AssessmentRow[];
@@ -145,12 +204,28 @@ function AssessmentsPage() {
         stream_id: string | null;
       }>;
       const teacherInitials = (profileResult.data?.initials ?? "") as string;
+      const currentTermId = termRows.find((term) => term.is_current)?.id ?? termRows[0]?.id ?? "";
+      const { data: coCurricularData } = currentTermId
+        ? await supabase
+            .from("co_curricular")
+            .select("student_id, games, clubs, projects")
+            .eq("term_id", currentTermId)
+            .in(
+              "student_id",
+              studentRows.map((student) => student.id),
+            )
+        : { data: [] as CoCurricularRow[] };
+      const coCurricularRows = (coCurricularData ?? []) as CoCurricularRow[];
 
       const allocationOptions: TeacherAllocationView[] = isTeacher
         ? allocationRows.map((allocation) => {
-            const subjectName = subjectRows.find((subject) => subject.id === allocation.subject_id)?.name ?? "Subject";
-            const className = classRows.find((item) => item.id === allocation.class_id)?.name ?? "Any class";
-            const streamName = streamRows.find((item) => item.id === allocation.stream_id)?.name ?? "Any stream";
+            const subjectName =
+              subjectRows.find((subject) => subject.id === allocation.subject_id)?.name ??
+              "Subject";
+            const className =
+              classRows.find((item) => item.id === allocation.class_id)?.name ?? "Any class";
+            const streamName =
+              streamRows.find((item) => item.id === allocation.stream_id)?.name ?? "Any stream";
             return {
               key: `${allocation.subject_id}:${allocation.class_id ?? ""}:${allocation.stream_id ?? ""}`,
               subject_id: allocation.subject_id,
@@ -168,17 +243,25 @@ function AssessmentsPage() {
         terms: termRows,
         classes: classRows,
         streams: streamRows,
+        coCurricular: coCurricularRows,
         allocations: allocationOptions,
-        currentTermId: termRows.find((term) => term.is_current)?.id ?? termRows[0]?.id ?? "",
+        currentTermId,
         teacherInitials,
       };
     },
   });
 
   const selectedAllocation = useMemo(
-    () => data?.allocations.find((allocation) => allocation.key === allocationKey) ?? data?.allocations[0] ?? null,
+    () =>
+      data?.allocations.find((allocation) => allocation.key === allocationKey) ??
+      data?.allocations[0] ??
+      null,
     [allocationKey, data?.allocations],
   );
+  const assignedClass = useMemo(() => {
+    if (!isClassTeacher || !data || !me?.userId) return null;
+    return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
+  }, [data, isClassTeacher, me?.userId]);
 
   const autoDescriptor = useMemo(
     () => descriptorFromAssessmentScore(entryForm.formative, entryForm.summative),
@@ -203,7 +286,7 @@ function AssessmentsPage() {
     if (!termFilter && data.currentTermId) {
       setTermFilter(data.currentTermId);
     }
-  }, [allocationKey, data, isTeacher, termFilter]);
+  }, [allocationKey, data, isTeacher, termFilter, selectedAllocation]);
 
   useEffect(() => {
     if (!isTeacher || !selectedAllocation) return;
@@ -229,22 +312,47 @@ function AssessmentsPage() {
     if (!data) return [];
     if (!isTeacher) return data.subjects;
     if (!selectedAllocation) return [];
-    return data.subjects.filter((subject: SubjectRow) => subject.id === selectedAllocation.subject_id);
+    return data.subjects.filter(
+      (subject: SubjectRow) => subject.id === selectedAllocation.subject_id,
+    );
   }, [data, isTeacher, selectedAllocation]);
 
   const commentStudents = useMemo(() => {
     if (!data) return [];
     if (!isTeacher) return data.students;
+    if (isClassTeacher) {
+      if (!assignedClass) return [];
+      return data.students.filter((student: StudentRow) => student.class_id === assignedClass.id);
+    }
     if (!selectedAllocation) return [];
     return data.students.filter(
       (student: StudentRow) =>
         (!selectedAllocation.class_id || selectedAllocation.class_id === student.class_id) &&
         (!selectedAllocation.stream_id || selectedAllocation.stream_id === student.stream_id),
     );
-  }, [data, isTeacher, selectedAllocation]);
+  }, [assignedClass, data, isClassTeacher, isTeacher, selectedAllocation]);
+
+  const coCurricularByStudent = useMemo(
+    () =>
+      new Map(
+        (data?.coCurricular ?? []).map((item) => [
+          item.student_id,
+          {
+            games: item.games ?? "",
+            clubs: item.clubs ?? "",
+            projects: item.projects ?? "",
+          },
+        ]),
+      ),
+    [data?.coCurricular],
+  );
 
   const { data: comments } = useQuery<CommentRow[]>({
-    queryKey: ["assessment-comments", termFilter || data?.currentTermId || "", commentStudents.map((student) => student.id).join(",")],
+    queryKey: [
+      "assessment-comments",
+      termFilter || data?.currentTermId || "",
+      commentStudents.map((student) => student.id).join(","),
+    ],
     enabled: commentStudents.length > 0,
     queryFn: async () =>
       (
@@ -252,9 +360,26 @@ function AssessmentsPage() {
           .from("report_comments")
           .select("student_id, class_teacher_comment, head_teacher_comment")
           .eq("term_id", termFilter || data?.currentTermId || "")
-          .in("student_id", commentStudents.map((student) => student.id))
+          .in(
+            "student_id",
+            commentStudents.map((student) => student.id),
+          )
       ).data ?? [],
   });
+
+  const commentLookup = useMemo(
+    () =>
+      new Map(
+        (comments ?? []).map((comment) => [
+          comment.student_id,
+          {
+            classTeacherComment: comment.class_teacher_comment ?? "",
+            headTeacherComment: comment.head_teacher_comment ?? "",
+          },
+        ]),
+      ),
+    [comments],
+  );
 
   useEffect(() => {
     if (!comments) return;
@@ -262,13 +387,40 @@ function AssessmentsPage() {
       const next = { ...current };
       for (const comment of comments) {
         next[comment.student_id] = {
-          classTeacherComment: comment.class_teacher_comment ?? current[comment.student_id]?.classTeacherComment ?? "",
-          headTeacherComment: comment.head_teacher_comment ?? current[comment.student_id]?.headTeacherComment ?? "",
+          classTeacherComment:
+            comment.class_teacher_comment ?? current[comment.student_id]?.classTeacherComment ?? "",
+          headTeacherComment:
+            comment.head_teacher_comment ?? current[comment.student_id]?.headTeacherComment ?? "",
         };
       }
       return next;
     });
   }, [comments]);
+
+  useEffect(() => {
+    if (!data) return;
+    setCommentDrafts((current) => {
+      const next = { ...current };
+      for (const student of commentStudents) {
+        const stored = coCurricularByStudent.get(student.id);
+        if (!stored) continue;
+        next[student.id] = {
+          classTeacherComment: current[student.id]?.classTeacherComment ?? "",
+          headTeacherComment: current[student.id]?.headTeacherComment ?? "",
+          games: stored.games,
+          clubs: stored.clubs,
+          projects: stored.projects,
+        };
+      }
+      return next;
+    });
+  }, [commentStudents, coCurricularByStudent, data]);
+
+  useEffect(() => {
+    if (!commentStudents.length) return;
+    if (activeCommentStudentId) return;
+    setActiveCommentStudentId(commentStudents[0].id);
+  }, [activeCommentStudentId, commentStudents]);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -289,8 +441,12 @@ function AssessmentsPage() {
       .filter((assessment) => (termFilter ? assessment.term_id === termFilter : true))
       .map((assessment) => ({
         ...assessment,
-        studentName: data.students.find((student: StudentRow) => student.id === assessment.student_id)?.full_name ?? "—",
-        subjectName: data.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ?? "—",
+        studentName:
+          data.students.find((student: StudentRow) => student.id === assessment.student_id)
+            ?.full_name ?? "—",
+        subjectName:
+          data.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
+          "—",
         termName: data.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
         gradeDescriptor: assessment.grade_descriptor ?? "",
       }));
@@ -300,15 +456,22 @@ function AssessmentsPage() {
     mutationFn: async (id: string) => {
       const edit = edits[id] ?? {};
       const existing = assessmentLookup.get(id);
-      const effectiveFormative = edit.formative !== undefined ? edit.formative : existing?.formative?.toString() ?? "";
-      const effectiveSummative = edit.summative !== undefined ? edit.summative : existing?.summative?.toString() ?? "";
+      const effectiveFormative =
+        edit.formative !== undefined ? edit.formative : (existing?.formative?.toString() ?? "");
+      const effectiveSummative =
+        edit.summative !== undefined ? edit.summative : (existing?.summative?.toString() ?? "");
       const patch = {
         status: "submitted" as const,
         submitted_by: me?.userId,
         submitted_at: new Date().toISOString(),
-        ...(edit.formative !== undefined ? { formative: edit.formative === "" ? null : Number(edit.formative) } : {}),
-        ...(edit.summative !== undefined ? { summative: edit.summative === "" ? null : Number(edit.summative) } : {}),
-        grade_descriptor: descriptorFromAssessmentScore(effectiveFormative, effectiveSummative) || null,
+        ...(edit.formative !== undefined
+          ? { formative: edit.formative === "" ? null : Number(edit.formative) }
+          : {}),
+        ...(edit.summative !== undefined
+          ? { summative: edit.summative === "" ? null : Number(edit.summative) }
+          : {}),
+        grade_descriptor:
+          descriptorFromAssessmentScore(effectiveFormative, effectiveSummative) || null,
       };
       const { error } = await supabase.from("assessments").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
@@ -325,18 +488,37 @@ function AssessmentsPage() {
       const termId = termFilter || data?.currentTermId;
       if (!termId) throw new Error("Choose a term first");
       const draft = commentDrafts[studentId] ?? { classTeacherComment: "", headTeacherComment: "" };
+      const coCurricularDraft = commentDrafts[studentId] ?? {
+        classTeacherComment: "",
+        headTeacherComment: "",
+        games: "",
+        clubs: "",
+        projects: "",
+      };
       await saveComment({
-        data: {
-          studentId,
-          termId,
-          classTeacherComment: draft.classTeacherComment,
-          headTeacherComment: draft.headTeacherComment,
-        },
+        data:
+          isClassTeacher && !isHeadTeacher
+            ? {
+                studentId,
+                termId,
+                classTeacherComment: coCurricularDraft.classTeacherComment,
+                games: coCurricularDraft.games,
+                clubs: coCurricularDraft.clubs,
+                projects: coCurricularDraft.projects,
+              }
+            : {
+                studentId,
+                termId,
+                classTeacherComment: draft.classTeacherComment,
+                headTeacherComment: draft.headTeacherComment,
+              },
       });
     },
     onSuccess: () => {
       toast.success("Comment saved");
       queryClient.invalidateQueries({ queryKey: ["assessment-comments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-report-comments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-co-curricular"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -346,7 +528,8 @@ function AssessmentsPage() {
       if (!entryForm.termId && !data?.currentTermId) throw new Error("Choose a term");
       if (!entryForm.studentId) throw new Error("Choose a learner");
       if (!entryForm.subjectId) throw new Error("Choose a subject");
-      if (isTeacher && !selectedAllocation) throw new Error("Choose an assigned class / stream / subject");
+      if (isTeacher && !selectedAllocation)
+        throw new Error("Choose an assigned class / stream / subject");
 
       await upsertEntry({
         data: {
@@ -385,7 +568,18 @@ function AssessmentsPage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
-  const pendingIds = rows.filter((row: AssessmentRow & { studentName: string; subjectName: string; termName: string; gradeDescriptor: string }) => row.status === "submitted").map((row) => row.id);
+  const pendingIds = rows
+    .filter(
+      (
+        row: AssessmentRow & {
+          studentName: string;
+          subjectName: string;
+          termName: string;
+          gradeDescriptor: string;
+        },
+      ) => row.status === "submitted",
+    )
+    .map((row) => row.id);
 
   return (
     <div>
@@ -395,10 +589,16 @@ function AssessmentsPage() {
         actions={
           canReview && pendingIds.length > 0 ? (
             <>
-              <Btn variant="accent" onClick={() => reviewMutation.mutate({ ids: pendingIds, action: "approve" })}>
+              <Btn
+                variant="accent"
+                onClick={() => reviewMutation.mutate({ ids: pendingIds, action: "approve" })}
+              >
                 Approve {pendingIds.length} submitted
               </Btn>
-              <Btn variant="ghost" onClick={() => reviewMutation.mutate({ ids: pendingIds, action: "reject" })}>
+              <Btn
+                variant="ghost"
+                onClick={() => reviewMutation.mutate({ ids: pendingIds, action: "reject" })}
+              >
                 Return for correction
               </Btn>
             </>
@@ -420,22 +620,22 @@ function AssessmentsPage() {
                 {(() => {
                   const allocationCount = data?.allocations.length ?? 0;
                   return (
-                <select
-                  className={inputClass}
-                  value={allocationKey}
-                  onChange={(event) => setAllocationKey(event.target.value)}
-                  disabled={allocationCount === 0}
-                >
-                  {allocationCount === 0 ? (
-                    <option value="">No allocations found</option>
-                  ) : (
-            data?.allocations.map((allocation: TeacherAllocationView) => (
-                      <option key={allocation.key} value={allocation.key}>
-                        {allocation.label}
-                      </option>
-                    ))
-                  )}
-                </select>
+                    <select
+                      className={inputClass}
+                      value={allocationKey}
+                      onChange={(event) => setAllocationKey(event.target.value)}
+                      disabled={allocationCount === 0}
+                    >
+                      {allocationCount === 0 ? (
+                        <option value="">No allocations found</option>
+                      ) : (
+                        data?.allocations.map((allocation: TeacherAllocationView) => (
+                          <option key={allocation.key} value={allocation.key}>
+                            {allocation.label}
+                          </option>
+                        ))
+                      )}
+                    </select>
                   );
                 })()}
               </Field>
@@ -471,7 +671,11 @@ function AssessmentsPage() {
               </select>
             </Field>
             <Field label="Term">
-              <select className={inputClass} value={entryForm.termId} onChange={(event) => setEntryForm({ ...entryForm, termId: event.target.value })}>
+              <select
+                className={inputClass}
+                value={entryForm.termId}
+                onChange={(event) => setEntryForm({ ...entryForm, termId: event.target.value })}
+              >
                 <option value="">Select term</option>
                 {(data?.terms ?? []).map((term: TermRow) => (
                   <option key={term.id} value={term.id}>
@@ -482,7 +686,11 @@ function AssessmentsPage() {
               </select>
             </Field>
             <Field label="Exam type">
-              <select className={inputClass} value={entryForm.examType} onChange={(event) => setEntryForm({ ...entryForm, examType: event.target.value })}>
+              <select
+                className={inputClass}
+                value={entryForm.examType}
+                onChange={(event) => setEntryForm({ ...entryForm, examType: event.target.value })}
+              >
                 <option value="end_of_term">End of term</option>
                 <option value="mid_term">Mid term</option>
                 <option value="class_test">Class test</option>
@@ -521,12 +729,18 @@ function AssessmentsPage() {
               <input
                 className={inputClass}
                 value={entryForm.teacherInitials}
-                onChange={(event) => setEntryForm({ ...entryForm, teacherInitials: event.target.value })}
+                onChange={(event) =>
+                  setEntryForm({ ...entryForm, teacherInitials: event.target.value })
+                }
                 placeholder="e.g. JK"
               />
             </Field>
             <div className="flex items-end">
-              <Btn type="submit" variant="accent" disabled={createMutation.isPending || (isTeacher && !selectedAllocation)}>
+              <Btn
+                type="submit"
+                variant="accent"
+                disabled={createMutation.isPending || (isTeacher && !selectedAllocation)}
+              >
                 {createMutation.isPending ? "Saving…" : "Save draft"}
               </Btn>
             </div>
@@ -536,36 +750,282 @@ function AssessmentsPage() {
 
       {canEditComments && (
         <Panel title="Learner comments" className="mb-4">
-          {commentStudents.length === 0 ? (
+          {isClassTeacher ? (
+            assignedClass ? (
+              commentStudents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No learners were found in your assigned class.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <form
+                    className="grid gap-4 lg:grid-cols-2 xl:grid-cols-5"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (activeCommentStudentId) commentMutation.mutate(activeCommentStudentId);
+                    }}
+                  >
+                    <Field label="Learner">
+                      <select
+                        className={inputClass}
+                        value={activeCommentStudentId}
+                        onChange={(event) => setActiveCommentStudentId(event.target.value)}
+                      >
+                        {commentStudents.map((student) => (
+                          <option key={student.id} value={student.id}>
+                            {student.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Games">
+                      <textarea
+                        className={`${inputClass} min-h-24`}
+                        value={commentDrafts[activeCommentStudentId]?.games ?? ""}
+                        onChange={(event) =>
+                          setCommentDrafts((current) => ({
+                            ...current,
+                            [activeCommentStudentId]: {
+                              classTeacherComment:
+                                current[activeCommentStudentId]?.classTeacherComment ?? "",
+                              headTeacherComment:
+                                current[activeCommentStudentId]?.headTeacherComment ?? "",
+                              games: event.target.value,
+                              clubs: current[activeCommentStudentId]?.clubs ?? "",
+                              projects: current[activeCommentStudentId]?.projects ?? "",
+                            },
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field label="Clubs">
+                      <textarea
+                        className={`${inputClass} min-h-24`}
+                        value={commentDrafts[activeCommentStudentId]?.clubs ?? ""}
+                        onChange={(event) =>
+                          setCommentDrafts((current) => ({
+                            ...current,
+                            [activeCommentStudentId]: {
+                              classTeacherComment:
+                                current[activeCommentStudentId]?.classTeacherComment ?? "",
+                              headTeacherComment:
+                                current[activeCommentStudentId]?.headTeacherComment ?? "",
+                              games: current[activeCommentStudentId]?.games ?? "",
+                              clubs: event.target.value,
+                              projects: current[activeCommentStudentId]?.projects ?? "",
+                            },
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field label="Projects">
+                      <textarea
+                        className={`${inputClass} min-h-24`}
+                        value={commentDrafts[activeCommentStudentId]?.projects ?? ""}
+                        onChange={(event) =>
+                          setCommentDrafts((current) => ({
+                            ...current,
+                            [activeCommentStudentId]: {
+                              classTeacherComment:
+                                current[activeCommentStudentId]?.classTeacherComment ?? "",
+                              headTeacherComment:
+                                current[activeCommentStudentId]?.headTeacherComment ?? "",
+                              games: current[activeCommentStudentId]?.games ?? "",
+                              clubs: current[activeCommentStudentId]?.clubs ?? "",
+                              projects: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field label="Comment">
+                      <textarea
+                        className={`${inputClass} min-h-24`}
+                        value={commentDrafts[activeCommentStudentId]?.classTeacherComment ?? ""}
+                        onChange={(event) =>
+                          setCommentDrafts((current) => ({
+                            ...current,
+                            [activeCommentStudentId]: {
+                              classTeacherComment: event.target.value,
+                              headTeacherComment:
+                                current[activeCommentStudentId]?.headTeacherComment ?? "",
+                              games: current[activeCommentStudentId]?.games ?? "",
+                              clubs: current[activeCommentStudentId]?.clubs ?? "",
+                              projects: current[activeCommentStudentId]?.projects ?? "",
+                            },
+                          }))
+                        }
+                      />
+                    </Field>
+                    <div className="flex items-end">
+                      <Btn type="submit" variant="accent" disabled={commentMutation.isPending}>
+                        Save learner
+                      </Btn>
+                    </div>
+                  </form>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <tr>
+                          <th className="pb-2">Learner</th>
+                          <th className="pb-2">Games</th>
+                          <th className="pb-2">Clubs</th>
+                          <th className="pb-2">Projects</th>
+                          <th className="pb-2">Comment</th>
+                          <th className="pb-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {commentStudents.map((student) => {
+                          const savedComment = commentLookup.get(student.id) ?? {
+                            classTeacherComment: "",
+                            headTeacherComment: "",
+                          };
+                          const savedCoCurricular = coCurricularByStudent.get(student.id) ?? {
+                            games: "",
+                            clubs: "",
+                            projects: "",
+                          };
+                          return (
+                            <tr key={student.id} className="border-t border-border align-top">
+                              <td className="py-3 pr-4 font-medium">{student.full_name}</td>
+                              <td className="py-3 pr-4">{savedCoCurricular.games || "—"}</td>
+                              <td className="py-3 pr-4">{savedCoCurricular.clubs || "—"}</td>
+                              <td className="py-3 pr-4">{savedCoCurricular.projects || "—"}</td>
+                              <td className="py-3 pr-4">
+                                {savedComment.classTeacherComment || "—"}
+                              </td>
+                              <td className="py-3 text-right">
+                                <Btn
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setActiveCommentStudentId(student.id);
+                                    setCommentDrafts((current) => {
+                                      const next = { ...current };
+                                      const currentDraft = next[student.id] ?? {
+                                        classTeacherComment: "",
+                                        headTeacherComment: "",
+                                        games: "",
+                                        clubs: "",
+                                        projects: "",
+                                      };
+                                      next[student.id] = {
+                                        ...currentDraft,
+                                        classTeacherComment: savedComment.classTeacherComment,
+                                        games: savedCoCurricular.games,
+                                        clubs: savedCoCurricular.clubs,
+                                        projects: savedCoCurricular.projects,
+                                      };
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  Edit
+                                </Btn>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No class is assigned to your account yet.
+              </p>
+            )
+          ) : commentStudents.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Choose an allocation and term first, then add each learner&apos;s {isClassTeacher ? "class teacher" : "head teacher"} comment.
+              Choose an allocation and term first, then add each learner&apos;s{" "}
+              {isClassTeacher ? "class teacher" : "head teacher"} comment.
             </p>
           ) : (
             <div className="space-y-4">
               {commentStudents.map((student) => {
-                const draft = commentDrafts[student.id] ?? { classTeacherComment: "", headTeacherComment: "" };
+                const storedCoCurricular = coCurricularByStudent.get(student.id) ?? {
+                  games: "",
+                  clubs: "",
+                  projects: "",
+                };
+                const draft = commentDrafts[student.id] ?? {
+                  classTeacherComment: "",
+                  headTeacherComment: "",
+                  games: storedCoCurricular.games,
+                  clubs: storedCoCurricular.clubs,
+                  projects: storedCoCurricular.projects,
+                };
                 return (
                   <div key={student.id} className="rounded-lg border border-border p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <h3 className="text-sm font-semibold">{student.full_name}</h3>
-                      <Btn variant="accent" onClick={() => commentMutation.mutate(student.id)} disabled={commentMutation.isPending}>
+                      <Btn
+                        variant="accent"
+                        onClick={() => commentMutation.mutate(student.id)}
+                        disabled={commentMutation.isPending}
+                      >
                         Save comment
                       </Btn>
                     </div>
-                    <div>
+                    <div className="grid gap-4 lg:grid-cols-2">
                       {isClassTeacher && (
-                        <Field label="Class Teacher's Comment">
-                          <textarea
-                            className={`${inputClass} min-h-28`}
-                            value={draft.classTeacherComment}
-                            onChange={(event) =>
-                              setCommentDrafts((current) => ({
-                                ...current,
-                                [student.id]: { ...draft, classTeacherComment: event.target.value },
-                              }))
-                            }
-                          />
-                        </Field>
+                        <>
+                          <Field label="Class Teacher's Comment">
+                            <textarea
+                              className={`${inputClass} min-h-28`}
+                              value={draft.classTeacherComment}
+                              onChange={(event) =>
+                                setCommentDrafts((current) => ({
+                                  ...current,
+                                  [student.id]: {
+                                    ...draft,
+                                    classTeacherComment: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </Field>
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <Field label="Games">
+                              <textarea
+                                className={`${inputClass} min-h-24`}
+                                value={draft.games}
+                                onChange={(event) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [student.id]: { ...draft, games: event.target.value },
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <Field label="Clubs">
+                              <textarea
+                                className={`${inputClass} min-h-24`}
+                                value={draft.clubs}
+                                onChange={(event) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [student.id]: { ...draft, clubs: event.target.value },
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <Field label="Projects">
+                              <textarea
+                                className={`${inputClass} min-h-24`}
+                                value={draft.projects}
+                                onChange={(event) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [student.id]: { ...draft, projects: event.target.value },
+                                  }))
+                                }
+                              />
+                            </Field>
+                          </div>
+                        </>
                       )}
                       {isHeadTeacher && (
                         <Field label="Head Teacher's Comment">
@@ -592,7 +1052,11 @@ function AssessmentsPage() {
 
       <Panel>
         <div className="mb-3 flex flex-wrap gap-2">
-          <select className={`${inputClass} max-w-xs`} value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}>
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={subjectFilter}
+            onChange={(event) => setSubjectFilter(event.target.value)}
+          >
             <option value="">All subjects</option>
             {(data?.subjects ?? []).map((subject: SubjectRow) => (
               <option key={subject.id} value={subject.id}>
@@ -600,7 +1064,11 @@ function AssessmentsPage() {
               </option>
             ))}
           </select>
-          <select className={`${inputClass} max-w-xs`} value={termFilter} onChange={(event) => setTermFilter(event.target.value)}>
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={termFilter}
+            onChange={(event) => setTermFilter(event.target.value)}
+          >
             <option value="">All terms</option>
             {(data?.terms ?? []).map((term: TermRow) => (
               <option key={term.id} value={term.id}>
@@ -608,7 +1076,11 @@ function AssessmentsPage() {
               </option>
             ))}
           </select>
-          <select className={`${inputClass} max-w-xs`} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
             <option value="">All statuses</option>
             <option value="draft">Draft</option>
             <option value="submitted">Submitted</option>
@@ -633,70 +1105,92 @@ function AssessmentsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row: AssessmentRow & { studentName: string; subjectName: string; termName: string; gradeDescriptor: string }) => {
-                const edit = edits[row.id] ?? {};
-                const formative = edit.formative ?? (row.formative ?? "").toString();
-                const summative = edit.summative ?? (row.summative ?? "").toString();
-                const gradeDescriptor = descriptorFromAssessmentScore(formative, summative) || row.gradeDescriptor || "";
-                const total = (Number(formative || 0) + Number(summative || 0)).toFixed(1);
-                return (
-                  <tr key={row.id} className="border-t border-border">
-                    <td className="py-2 font-medium">{row.studentName}</td>
-                    <td>{row.subjectName}</td>
-                    <td>{row.termName}</td>
-                    <td>
-                      <Pill tone="muted">{gradeDescriptor || "—"}</Pill>
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.1"
-                        max={20}
-                        min={0}
-                        disabled={row.locked}
-                        className={`${inputClass} w-24`}
-                        value={formative}
-                        onChange={(event) => setEdits({ ...edits, [row.id]: { ...edit, formative: event.target.value } })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.1"
-                        max={80}
-                        min={0}
-                        disabled={row.locked}
-                        className={`${inputClass} w-24`}
-                        value={summative}
-                        onChange={(event) => setEdits({ ...edits, [row.id]: { ...edit, summative: event.target.value } })}
-                      />
-                    </td>
-                    <td className="font-semibold">{total}</td>
-                    <td>
-                      <Pill
-                        tone={
-                          row.status === "approved"
-                            ? "success"
-                            : row.status === "rejected"
-                              ? "danger"
-                              : row.status === "submitted"
-                                ? "warning"
-                                : "muted"
-                        }
-                      >
-                        {row.status}
-                      </Pill>
-                    </td>
-                    <td className="text-right">
-                      {!row.locked && (
-                        <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
-                          Submit
-                        </Btn>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map(
+                (
+                  row: AssessmentRow & {
+                    studentName: string;
+                    subjectName: string;
+                    termName: string;
+                    gradeDescriptor: string;
+                  },
+                ) => {
+                  const edit = edits[row.id] ?? {};
+                  const formative = edit.formative ?? (row.formative ?? "").toString();
+                  const summative = edit.summative ?? (row.summative ?? "").toString();
+                  const gradeDescriptor =
+                    descriptorFromAssessmentScore(formative, summative) ||
+                    row.gradeDescriptor ||
+                    "";
+                  const total = (Number(formative || 0) + Number(summative || 0)).toFixed(1);
+                  return (
+                    <tr key={row.id} className="border-t border-border">
+                      <td className="py-2 font-medium">{row.studentName}</td>
+                      <td>{row.subjectName}</td>
+                      <td>{row.termName}</td>
+                      <td>
+                        <Pill tone="muted">{gradeDescriptor || "—"}</Pill>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.1"
+                          max={20}
+                          min={0}
+                          disabled={row.locked}
+                          className={`${inputClass} w-24`}
+                          value={formative}
+                          onChange={(event) =>
+                            setEdits({
+                              ...edits,
+                              [row.id]: { ...edit, formative: event.target.value },
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.1"
+                          max={80}
+                          min={0}
+                          disabled={row.locked}
+                          className={`${inputClass} w-24`}
+                          value={summative}
+                          onChange={(event) =>
+                            setEdits({
+                              ...edits,
+                              [row.id]: { ...edit, summative: event.target.value },
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="font-semibold">{total}</td>
+                      <td>
+                        <Pill
+                          tone={
+                            row.status === "approved"
+                              ? "success"
+                              : row.status === "rejected"
+                                ? "danger"
+                                : row.status === "submitted"
+                                  ? "warning"
+                                  : "muted"
+                          }
+                        >
+                          {row.status}
+                        </Pill>
+                      </td>
+                      <td className="text-right">
+                        {!row.locked && (
+                          <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
+                            Submit
+                          </Btn>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                },
+              )}
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-6 text-center text-muted-foreground">
