@@ -211,11 +211,11 @@ export async function buildReportCards(
         identifier: identifierAvg.toFixed(2),
         descriptor: descriptorFromIdentifier(identifierAvg),
       },
-      gradeKeys: [
-        { identifier: "3", range: "2.5 - 3.0", descriptor: "Outstanding" },
-        { identifier: "2", range: "1.5 - 2.49", descriptor: "Moderate" },
-        { identifier: "1", range: "0.9 - 1.49", descriptor: "Basic" },
-      ],
+      gradeKeys: (scales ?? []).map((scale: any) => ({
+        identifier: String(scale.identifier),
+        range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,
+        descriptor: scale.descriptor as string,
+      })),
       coCurricular: {
         games: coCurricularEnabled ? (activity?.games ?? "") : "",
         clubs: coCurricularEnabled ? (activity?.clubs ?? "") : "",

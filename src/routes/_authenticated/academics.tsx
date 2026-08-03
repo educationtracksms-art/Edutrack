@@ -7,7 +7,12 @@ import { toast } from "sonner";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { ACADEMIC_MANAGERS, hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
-import { deleteClass, deleteStream } from "@/lib/admin.functions";
+import {
+  deleteClass,
+  deleteGradingScale,
+  deleteStream,
+  upsertGradingScale,
+} from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/academics")({
   head: () => ({
@@ -34,6 +39,8 @@ function AcademicsPage() {
   const allowed = hasAny(me?.roles, ACADEMIC_MANAGERS);
   const deleteClassFn = useServerFn(deleteClass);
   const deleteStreamFn = useServerFn(deleteStream);
+  const saveGradingScaleFn = useServerFn(upsertGradingScale);
+  const deleteGradingScaleFn = useServerFn(deleteGradingScale);
 
   const [classForm, setClassForm] = useState({ name: "", level: "", class_teacher_id: "" });
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "" });
@@ -64,22 +71,36 @@ function AcademicsPage() {
     queryKey: ["academics", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
-      const [classes, streams, subjects, allocations, teachers, roles, academicYears, terms] =
-        await Promise.all([
-          supabase.from("classes").select("*").order("level", { ascending: true }).order("name"),
-          supabase.from("streams").select("*").order("name"),
-          supabase.from("subjects").select("*").order("position"),
-          supabase.from("teacher_allocations").select("*"),
-          supabase.from("profiles").select("id, full_name, initials").order("full_name"),
-          supabase.from("user_roles").select("user_id, role"),
-          supabase.from("academic_years").select("*").eq("school_id", schoolId!).order("name"),
-          supabase
-            .from("terms")
-            .select("*")
-            .eq("school_id", schoolId!)
-            .order("start_date", { ascending: true })
-            .order("name"),
-        ]);
+      const [
+        classes,
+        streams,
+        subjects,
+        allocations,
+        teachers,
+        roles,
+        academicYears,
+        terms,
+        scales,
+      ] = await Promise.all([
+        supabase.from("classes").select("*").order("level", { ascending: true }).order("name"),
+        supabase.from("streams").select("*").order("name"),
+        supabase.from("subjects").select("*").order("position"),
+        supabase.from("teacher_allocations").select("*"),
+        supabase.from("profiles").select("id, full_name, initials").order("full_name"),
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("academic_years").select("*").eq("school_id", schoolId!).order("name"),
+        supabase
+          .from("terms")
+          .select("*")
+          .eq("school_id", schoolId!)
+          .order("start_date", { ascending: true })
+          .order("name"),
+        supabase
+          .from("grading_scales")
+          .select("*")
+          .eq("school_id", schoolId!)
+          .order("min_score", { ascending: false }),
+      ]);
       const teachingRoles = new Set(
         (roles.data ?? [])
           .filter((r) =>
@@ -101,6 +122,7 @@ function AcademicsPage() {
         teachers: (teachers.data ?? []).filter((t) => teachingRoles.has(t.id)),
         academicYears: academicYears.data ?? [],
         terms: terms.data ?? [],
+        gradingScales: scales.data ?? [],
       };
     },
   });
@@ -439,6 +461,62 @@ function AcademicsPage() {
     },
     onSuccess: () => {
       toast.success("Allocation removed");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const [gradingForm, setGradingForm] = useState({
+    id: "",
+    grade: "",
+    min_score: "",
+    max_score: "",
+    descriptor: "",
+    identifier: "1",
+  });
+
+  const saveGradingScale = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      const minScore = Number(gradingForm.min_score);
+      const maxScore = Number(gradingForm.max_score);
+      const identifier = Number(gradingForm.identifier);
+      if (!gradingForm.grade.trim()) throw new Error("Enter a grade label");
+      if (!gradingForm.descriptor.trim()) throw new Error("Enter a descriptor");
+      if (Number.isNaN(minScore) || Number.isNaN(maxScore))
+        throw new Error("Enter valid score boundaries");
+      if (maxScore < minScore) throw new Error("Maximum score must be greater than minimum score");
+      await saveGradingScaleFn({
+        data: {
+          id: gradingForm.id || null,
+          schoolId,
+          grade: gradingForm.grade,
+          minScore,
+          maxScore,
+          descriptor: gradingForm.descriptor,
+          identifier,
+        },
+      });
+    },
+    onSuccess: () => {
+      setGradingForm({
+        id: "",
+        grade: "",
+        min_score: "",
+        max_score: "",
+        descriptor: "",
+        identifier: "1",
+      });
+      toast.success("Grading criteria saved");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeScale = useMutation({
+    mutationFn: (id: string) => deleteGradingScaleFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Grading criteria deleted");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -860,6 +938,144 @@ function AcademicsPage() {
           </ul>
         </Panel>
       </div>
+
+      <Panel title="Grading criteria" className="mt-4">
+        <form
+          className="mb-4 grid gap-3 lg:grid-cols-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveGradingScale.mutate();
+          }}
+        >
+          <Field label="Grade">
+            <input
+              required
+              className={inputClass}
+              value={gradingForm.grade}
+              onChange={(e) => setGradingForm({ ...gradingForm, grade: e.target.value })}
+              placeholder="A"
+            />
+          </Field>
+          <Field label="Min score">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={gradingForm.min_score}
+              onChange={(e) => setGradingForm({ ...gradingForm, min_score: e.target.value })}
+              placeholder="80"
+            />
+          </Field>
+          <Field label="Max score">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={gradingForm.max_score}
+              onChange={(e) => setGradingForm({ ...gradingForm, max_score: e.target.value })}
+              placeholder="100"
+            />
+          </Field>
+          <Field label="Identifier">
+            <select
+              className={inputClass}
+              value={gradingForm.identifier}
+              onChange={(e) => setGradingForm({ ...gradingForm, identifier: e.target.value })}
+            >
+              <option value="3">3 - Outstanding</option>
+              <option value="2">2 - Moderate</option>
+              <option value="1">1 - Basic</option>
+            </select>
+          </Field>
+          <div className="lg:col-span-2">
+            <Field label="Descriptor">
+              <input
+                required
+                className={inputClass}
+                value={gradingForm.descriptor}
+                onChange={(e) => setGradingForm({ ...gradingForm, descriptor: e.target.value })}
+                placeholder="Achieved MOST or ALL competencies exceedingly well."
+              />
+            </Field>
+          </div>
+          <div className="flex items-end gap-2 lg:col-span-6">
+            <Btn type="submit" variant="accent" disabled={saveGradingScale.isPending}>
+              {gradingForm.id ? "Save changes" : "Add grade"}
+            </Btn>
+            {gradingForm.id && (
+              <Btn
+                variant="ghost"
+                onClick={() =>
+                  setGradingForm({
+                    id: "",
+                    grade: "",
+                    min_score: "",
+                    max_score: "",
+                    descriptor: "",
+                    identifier: "1",
+                  })
+                }
+              >
+                Cancel
+              </Btn>
+            )}
+          </div>
+        </form>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="pb-2">Grade</th>
+                <th className="pb-2">Score range</th>
+                <th className="pb-2">Identifier</th>
+                <th className="pb-2">Descriptor</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.gradingScales ?? []).map((item) => (
+                <tr key={item.id} className="border-t border-border align-top">
+                  <td className="py-2 font-medium">{item.grade}</td>
+                  <td>
+                    {item.min_score} - {item.max_score}
+                  </td>
+                  <td>{item.identifier}</td>
+                  <td>{item.descriptor}</td>
+                  <td className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Btn
+                        variant="ghost"
+                        onClick={() =>
+                          setGradingForm({
+                            id: item.id,
+                            grade: item.grade,
+                            min_score: String(item.min_score),
+                            max_score: String(item.max_score),
+                            descriptor: item.descriptor,
+                            identifier: String(item.identifier),
+                          })
+                        }
+                      >
+                        Edit
+                      </Btn>
+                      <Btn variant="ghost" onClick={() => removeScale.mutate(item.id)}>
+                        Delete
+                      </Btn>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {(data?.gradingScales ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                    No grading criteria set yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
 
       <Panel title="Teacher allocations" className="mt-4">
         <form

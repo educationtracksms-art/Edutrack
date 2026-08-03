@@ -988,3 +988,99 @@ export const logReportPrint = createServerFn({ method: "POST" })
     );
     return { ok: true };
   });
+
+export const upsertGradingScale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      id?: string | null;
+      schoolId?: string;
+      grade: string;
+      minScore: number;
+      maxScore: number;
+      descriptor: string;
+      identifier: number;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to manage grading scales");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const payload = {
+      school_id: schoolId,
+      grade: data.grade.trim().toUpperCase(),
+      min_score: data.minScore,
+      max_score: data.maxScore,
+      descriptor: data.descriptor.trim(),
+      identifier: data.identifier,
+    };
+
+    const query = data.id
+      ? context.supabase
+          .from("grading_scales")
+          .update(payload)
+          .eq("id", data.id)
+          .eq("school_id", schoolId)
+      : context.supabase.from("grading_scales").insert(payload);
+    const { error } = await query;
+    if (error) throw new Error(error.message);
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "GRADING_SCALE_SAVED",
+      "grading_scales",
+      {
+        grade: payload.grade,
+        min_score: payload.min_score,
+        max_score: payload.max_score,
+      },
+    );
+    return { ok: true };
+  });
+
+export const deleteGradingScale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to manage grading scales");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { error } = await context.supabase
+      .from("grading_scales")
+      .delete()
+      .eq("id", data.id)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "GRADING_SCALE_DELETED",
+      "grading_scales",
+      {
+        grading_scale_id: data.id,
+      },
+    );
+    return { ok: true };
+  });
