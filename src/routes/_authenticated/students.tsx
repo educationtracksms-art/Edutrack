@@ -19,12 +19,12 @@ import { uploadImage } from "@/lib/storage";
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({
     meta: [
-      { title: "Students ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· EduTrack" },
+      { title: "Students · EduTrack" },
       {
         name: "description",
         content: "Register learners, verify admissions and manage class placement.",
       },
-      { property: "og:title", content: "Students ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· EduTrack" },
+      { property: "og:title", content: "Students · EduTrack" },
       {
         property: "og:description",
         content: "Learner records with verification workflow and soft delete.",
@@ -138,7 +138,7 @@ function StudentsPage() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      toast.success("Learner registered ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â awaiting verification");
+      toast.success("Learner registered - awaiting verification");
       resetForm();
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
@@ -217,6 +217,7 @@ function StudentsPage() {
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
+
   function resetForm() {
     setForm({
       full_name: "",
@@ -252,8 +253,9 @@ function StudentsPage() {
     });
     setPhotoFile(null);
   }
-  const className = (id: string | null) =>
-    classes?.find((c) => c.id === id)?.name ?? "â€”";
+
+  const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "—";
+  const streamName = (id: string | null) => streams?.find((stream) => stream.id === id)?.name ?? "";
 
   if (!canAccessStudents) {
     return (
@@ -416,14 +418,14 @@ function StudentsPage() {
                 >
                   {editingStudentId
                     ? updateMutation.isPending
-                      ? "SavingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦"
+                      ? "Saving..."
                       : "Save changes"
                     : addMutation.isPending
-                      ? "SavingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦"
+                      ? "Saving..."
                       : "Save learner"}
                 </Btn>
                 {editingStudentId && (
-                  <Btn variant="ghost" onClick={resetForm}>
+                  <Btn type="button" variant="ghost" onClick={resetForm}>
                     Cancel
                   </Btn>
                 )}
@@ -432,6 +434,7 @@ function StudentsPage() {
           </form>
         </Panel>
       )}
+
       <Panel>
         <input
           placeholder="Search by name, LIN or SCHPAY code"
@@ -465,16 +468,17 @@ function StudentsPage() {
                       />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
-                        ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
+                        ...
                       </div>
                     )}
                   </td>
                   <td className="py-2.5 font-medium">{student.full_name}</td>
-                  <td>{student.lin ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}</td>
+                  <td>{student.lin ?? "—"}</td>
                   <td>
-                    {className(student.class_id)} {streamName(student.stream_id)}
+                    {className(student.class_id)}
+                    {streamName(student.stream_id) ? ` ${streamName(student.stream_id)}` : ""}
                   </td>
-                  <td>{student.house ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}</td>
+                  <td>{student.house ?? "—"}</td>
                   <td>
                     {canManageStudents ||
                     (isClassTeacher && student.class_id === assignedClass?.id) ? (
@@ -541,15 +545,17 @@ function StudentsPage() {
                   </td>
                   <td className="py-2.5 text-right">
                     <div className="flex justify-end gap-2">
-                      <Btn variant="ghost" onClick={() => startEditing(student)}>
-                        Edit
-                      </Btn>
+                      {canManageStudents && (
+                        <Btn variant="ghost" onClick={() => startEditing(student)}>
+                          Edit
+                        </Btn>
+                      )}
                       {canVerify && student.status === "pending" && (
                         <Btn variant="accent" onClick={() => verifyMutation.mutate(student.id)}>
                           Approve
                         </Btn>
                       )}
-                      {canVerify && (
+                      {canManageStudents && (
                         <Btn
                           variant="ghost"
                           onClick={() => {
