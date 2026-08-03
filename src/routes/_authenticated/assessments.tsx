@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
-import { descriptorFromAssessmentScore } from "@/lib/descriptor";
 import {
   reviewAssessments,
   upsertAssessmentEntry,
@@ -44,6 +43,7 @@ type StudentRow = {
 };
 
 type SubjectRow = { id: string; name: string };
+type GradingScaleRow = { grade: string; min_score: number; max_score: number; descriptor: string };
 type TermRow = { id: string; name: string; is_current: boolean };
 type ClassRow = { id: string; name: string; class_teacher_id: string | null };
 type StreamRow = { id: string; name: string; class_id: string | null };
@@ -68,6 +68,7 @@ type AssessmentsData = {
   classes: ClassRow[];
   streams: StreamRow[];
   allocations: TeacherAllocationView[];
+  gradingScales: GradingScaleRow[];
   currentTermId: string;
   teacherInitials: string;
 };
@@ -161,6 +162,7 @@ function AssessmentsPage() {
         classesResult,
         streamsResult,
         allocationsResult,
+        gradingScalesResult,
         profileResult,
       ] = (await Promise.all([
         schoolQuery(supabase.from("assessments").select("*").order("created_at")),
@@ -187,6 +189,12 @@ function AssessmentsPage() {
               .eq("school_id", schoolId)
               .eq("teacher_id", me.userId)
           : Promise.resolve({ data: [] as any[] }),
+        schoolQuery(
+          supabase
+            .from("grading_scales")
+            .select("grade, min_score, max_score, descriptor")
+            .order("min_score", { ascending: false }),
+        ),
         me?.userId
           ? supabase.from("profiles").select("initials").eq("id", me.userId).maybeSingle()
           : Promise.resolve({ data: null as ProfileRow | null }),
@@ -203,6 +211,7 @@ function AssessmentsPage() {
         class_id: string | null;
         stream_id: string | null;
       }>;
+      const gradingScaleRows = (gradingScalesResult.data ?? []) as GradingScaleRow[];
       const teacherInitials = (profileResult.data?.initials ?? "") as string;
       const currentTermId = termRows.find((term) => term.is_current)?.id ?? termRows[0]?.id ?? "";
       const { data: coCurricularData } = currentTermId
@@ -245,6 +254,7 @@ function AssessmentsPage() {
         streams: streamRows,
         coCurricular: coCurricularRows,
         allocations: allocationOptions,
+        gradingScales: gradingScaleRows,
         currentTermId,
         teacherInitials,
       };
@@ -263,10 +273,14 @@ function AssessmentsPage() {
     return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
   }, [data, isClassTeacher, me?.userId]);
 
-  const autoDescriptor = useMemo(
-    () => descriptorFromAssessmentScore(entryForm.formative, entryForm.summative),
-    [entryForm.formative, entryForm.summative],
-  );
+  const autoDescriptor = useMemo(() => {
+    const total = Number(entryForm.formative || 0) + Number(entryForm.summative || 0);
+    return (
+      data?.gradingScales.find(
+        (scale) => total >= Number(scale.min_score) && total <= Number(scale.max_score),
+      )?.descriptor ?? ""
+    );
+  }, [data?.gradingScales, entryForm.formative, entryForm.summative]);
 
   const assessmentLookup = useMemo(
     () => new Map(data?.assessments.map((assessment) => [assessment.id, assessment]) ?? []),
@@ -1118,7 +1132,10 @@ function AssessmentsPage() {
                   const formative = edit.formative ?? (row.formative ?? "").toString();
                   const summative = edit.summative ?? (row.summative ?? "").toString();
                   const gradeDescriptor =
-                    descriptorFromAssessmentScore(formative, summative) ||
+                    data?.gradingScales.find((scale) => {
+                      const total = Number(formative || 0) + Number(summative || 0);
+                      return total >= Number(scale.min_score) && total <= Number(scale.max_score);
+                    })?.descriptor ||
                     row.gradeDescriptor ||
                     "";
                   const total = (Number(formative || 0) + Number(summative || 0)).toFixed(1);

@@ -644,6 +644,25 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
 
     const teacherInitials =
       data.teacherInitials?.trim() || profileResult.data?.initials?.trim() || null;
+    const { data: gradingScales } = await context.supabase
+      .from("grading_scales")
+      .select("grade, min_score, max_score, grade_descriptor")
+      .eq("school_id", schoolId);
+    const gradeFor = (total: number) => {
+      const hit = (gradingScales ?? []).find(
+        (scale: any) => total >= Number(scale.min_score) && total <= Number(scale.max_score),
+      );
+      return hit
+        ? {
+            grade: hit.grade as string,
+            descriptor: hit.grade_descriptor as string,
+          }
+        : { grade: "", descriptor: "" };
+    };
+    const formativeScore = Number(data.formative ?? 0);
+    const summativeScore = Number(data.summative ?? 0);
+    const totalScore = formativeScore + summativeScore;
+    const gradeMatch = gradeFor(totalScore);
     const { error } = await context.supabase.from("assessments").upsert(
       {
         school_id: schoolId,
@@ -651,7 +670,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
         subject_id: data.subjectId,
         term_id: data.termId,
         exam_type: data.examType?.trim() || "end_of_term",
-        grade_descriptor: data.gradeDescriptor?.trim() || null,
+        grade_descriptor: gradeMatch.descriptor || null,
         formative: data.formative ?? null,
         summative: data.summative ?? null,
         teacher_initials: teacherInitials,
@@ -998,8 +1017,7 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
       grade: string;
       minScore: number;
       maxScore: number;
-      descriptor: string;
-      identifier: number;
+      gradeDescriptor: string;
     }) => data,
   )
   .handler(async ({ data, context }) => {
@@ -1020,8 +1038,7 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
       grade: data.grade.trim().toUpperCase(),
       min_score: data.minScore,
       max_score: data.maxScore,
-      descriptor: data.descriptor.trim(),
-      identifier: data.identifier,
+      grade_descriptor: data.gradeDescriptor.trim(),
     };
 
     const query = data.id
@@ -1082,5 +1099,73 @@ export const deleteGradingScale = createServerFn({ method: "POST" })
         grading_scale_id: data.id,
       },
     );
+    return { ok: true };
+  });
+
+export const upsertIdentifierScale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      id?: string | null;
+      schoolId?: string;
+      identifier: number;
+      minScore: number;
+      maxScore: number;
+      descriptor: string;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to manage identifier scales");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const payload = {
+      school_id: schoolId,
+      identifier: data.identifier,
+      min_score: data.minScore,
+      max_score: data.maxScore,
+      descriptor: data.descriptor.trim(),
+    };
+
+    const query = data.id
+      ? context.supabase
+          .from("grading_identifier_scales")
+          .update(payload)
+          .eq("id", data.id)
+          .eq("school_id", schoolId)
+      : context.supabase.from("grading_identifier_scales").insert(payload);
+    const { error } = await query;
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const deleteIdentifierScale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to manage identifier scales");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const { error } = await context.supabase
+      .from("grading_identifier_scales")
+      .delete()
+      .eq("id", data.id)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });

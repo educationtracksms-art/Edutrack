@@ -128,7 +128,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
               <td>{row.summative}</td>
               <td>{row.total}</td>
               <td>{row.grade}</td>
-              <td>{row.descriptor}</td>
+              <td>{row.gradeDescriptor}</td>
               <td>{row.teacher}</td>
             </tr>
           ))}

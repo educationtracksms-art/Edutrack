@@ -149,7 +149,6 @@ CREATE TABLE public.grading_scales (
   min_score numeric NOT NULL,
   max_score numeric NOT NULL,
   descriptor text NOT NULL,
-  identifier numeric NOT NULL DEFAULT 1,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -335,13 +334,13 @@ VALUES ('44444444-4444-4444-4444-444444444444','11111111-1111-1111-1111-11111111
 INSERT INTO public.streams (id, school_id, class_id, name)
 VALUES ('55555555-5555-5555-5555-555555555555','11111111-1111-1111-1111-111111111111','44444444-4444-4444-4444-444444444444','NORTH');
 
-INSERT INTO public.grading_scales (school_id, grade, min_score, max_score, descriptor, identifier) VALUES
-('11111111-1111-1111-1111-111111111111','A+',90,100,'Outstanding performance.',3),
-('11111111-1111-1111-1111-111111111111','A',80,89.99,'Achieved MOST or ALL competencies exceedingly well.',3),
-('11111111-1111-1111-1111-111111111111','B',70,79.99,'Very Good performance.',2),
-('11111111-1111-1111-1111-111111111111','C',60,69.99,'Achieved a good number of competencies.',2),
-('11111111-1111-1111-1111-111111111111','D',45,59.99,'Achieved basic competencies in the subject.',1),
-('11111111-1111-1111-1111-111111111111','E',0,44.99,'Below basic competency.',1);
+INSERT INTO public.grading_scales (school_id, grade, min_score, max_score, descriptor) VALUES
+('11111111-1111-1111-1111-111111111111','A+',90,100,'Outstanding performance.'),
+('11111111-1111-1111-1111-111111111111','A',80,89.99,'Achieved MOST or ALL competencies exceedingly well.'),
+('11111111-1111-1111-1111-111111111111','B',70,79.99,'Very Good performance.'),
+('11111111-1111-1111-1111-111111111111','C',60,69.99,'Achieved a good number of competencies.'),
+('11111111-1111-1111-1111-111111111111','D',45,59.99,'Achieved basic competencies in the subject.'),
+('11111111-1111-1111-1111-111111111111','E',0,44.99,'Below basic competency.');
 
 INSERT INTO public.subjects (id, school_id, name, code, position) VALUES
 ('a0000000-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','MATHEMATICS','MTC',1),

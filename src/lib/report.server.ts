@@ -31,6 +31,7 @@ export async function buildReportCards(
     { data: streams },
     { data: subjects },
     { data: scales },
+    { data: identifierScales },
     { data: toggles },
     { data: terms },
   ] = await Promise.all([
@@ -49,6 +50,11 @@ export async function buildReportCards(
       .select("*")
       .eq("school_id", schoolId)
       .order("min_score", { ascending: false }),
+    supabase
+      .from("grading_identifier_scales")
+      .select("*")
+      .eq("school_id", schoolId)
+      .order("identifier", { ascending: false }),
     supabase.from("feature_toggles").select("module, enabled").eq("school_id", schoolId),
     supabase
       .from("terms")
@@ -108,7 +114,7 @@ export async function buildReportCards(
     return hit
       ? {
           grade: hit.grade as string,
-          descriptor: hit.descriptor as string,
+          descriptor: hit.grade_descriptor as string,
           identifier: Number(hit.identifier),
         }
       : { grade: "", descriptor: "", identifier: 0 };
@@ -158,15 +164,18 @@ export async function buildReportCards(
         summative: fmt(summative),
         total: fmt(total),
         grade: g.grade,
-        descriptor: (mark.grade_descriptor as string | null) ?? g.descriptor,
+        gradeDescriptor: g.descriptor,
         teacher: mark.teacher_initials ?? "",
       };
     });
 
     const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
-    const identifierAvg = identifiers.length
-      ? identifiers.reduce((a, b) => a + b, 0) / identifiers.length
-      : 0;
+    const identifierAvg = (average / 100) * 3;
+    const identifierDescriptor =
+      (identifierScales ?? []).find(
+        (scale: any) =>
+          identifierAvg >= Number(scale.min_score) && identifierAvg <= Number(scale.max_score),
+      )?.descriptor ?? descriptorFromIdentifier(identifierAvg);
 
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const comment = comments?.find((c: any) => c.student_id === student.id);
@@ -209,9 +218,9 @@ export async function buildReportCards(
       overall: {
         average: `${average.toFixed(1)}%`,
         identifier: identifierAvg.toFixed(2),
-        descriptor: descriptorFromIdentifier(identifierAvg),
+        descriptor: identifierDescriptor,
       },
-      gradeKeys: (scales ?? []).map((scale: any) => ({
+      gradeKeys: (identifierScales ?? []).map((scale: any) => ({
         identifier: String(scale.identifier),
         range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,
         descriptor: scale.descriptor as string,

@@ -19,12 +19,12 @@ import { uploadImage } from "@/lib/storage";
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({
     meta: [
-      { title: "Students Â· EduTrack" },
+      { title: "Students ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· EduTrack" },
       {
         name: "description",
         content: "Register learners, verify admissions and manage class placement.",
       },
-      { property: "og:title", content: "Students Â· EduTrack" },
+      { property: "og:title", content: "Students ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· EduTrack" },
       {
         property: "og:description",
         content: "Learner records with verification workflow and soft delete.",
@@ -60,6 +60,7 @@ function StudentsPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+  const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [feesDrafts, setFeesDrafts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
@@ -137,7 +138,7 @@ function StudentsPage() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      toast.success("Learner registered — awaiting verification");
+      toast.success("Learner registered ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â awaiting verification");
       resetForm();
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
@@ -149,7 +150,9 @@ function StudentsPage() {
       if (!me?.profile?.school_id || !editingStudentId) throw new Error("Select a learner to edit");
       const photoUrl = photoFile
         ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`)
-        : undefined;
+        : currentPhotoUrl === null
+          ? null
+          : undefined;
       const payload: Record<string, unknown> = {
         full_name: form.full_name.trim(),
         lin: form.lin || null,
@@ -161,7 +164,7 @@ function StudentsPage() {
         parent_name: form.parent_name || null,
         parent_phone: form.parent_phone || null,
       };
-      if (photoUrl) payload.photo_url = photoUrl;
+      if (photoUrl !== undefined) payload.photo_url = photoUrl;
       const { error } = await supabase
         .from("students")
         .update(payload)
@@ -227,6 +230,7 @@ function StudentsPage() {
       parent_phone: "",
     });
     setPhotoFile(null);
+    setCurrentPhotoUrl(null);
     setEditingStudentId(null);
     setShowForm(false);
   }
@@ -234,6 +238,7 @@ function StudentsPage() {
   function startEditing(student: any) {
     setEditingStudentId(student.id);
     setShowForm(true);
+    setCurrentPhotoUrl(student.photo_url ?? null);
     setForm({
       full_name: student.full_name ?? "",
       lin: student.lin ?? "",
@@ -247,8 +252,8 @@ function StudentsPage() {
     });
     setPhotoFile(null);
   }
-  const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "â€”";
-  const streamName = (id: string | null) => streams?.find((s) => s.id === id)?.name ?? "";
+  const className = (id: string | null) =>
+    classes?.find((c) => c.id === id)?.name ?? "â€”";
 
   if (!canAccessStudents) {
     return (
@@ -368,14 +373,38 @@ function StudentsPage() {
               />
             </Field>
             <Field label="Learner image">
+              {editingStudentId && currentPhotoUrl && !photoFile && (
+                <div className="mb-2 flex items-center gap-3">
+                  <img
+                    src={currentPhotoUrl}
+                    alt="Current learner"
+                    className="h-16 w-16 rounded-full border border-border object-cover"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    This is the current photo. Choose a new file to replace it.
+                  </div>
+                </div>
+              )}
               <input
                 type="file"
                 accept="image/*"
                 className={inputClass}
                 onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
               />
+              {editingStudentId && (
+                <button
+                  type="button"
+                  className="mt-2 text-xs font-medium text-muted-foreground underline underline-offset-4"
+                  onClick={() => {
+                    setPhotoFile(null);
+                    setCurrentPhotoUrl(null);
+                  }}
+                >
+                  Remove current photo
+                </button>
+              )}
               <p className="mt-1 text-xs text-muted-foreground">
-                Upload an image up to 1 MB. The file will be stored in the images bucket.
+                Upload an image up to 1 MB. New uploads replace the current learner photo.
               </p>
             </Field>
             <div className="md:col-span-3">
@@ -387,10 +416,10 @@ function StudentsPage() {
                 >
                   {editingStudentId
                     ? updateMutation.isPending
-                      ? "Saving…"
+                      ? "SavingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦"
                       : "Save changes"
                     : addMutation.isPending
-                      ? "Saving…"
+                      ? "SavingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦"
                       : "Save learner"}
                 </Btn>
                 {editingStudentId && (
@@ -436,18 +465,19 @@ function StudentsPage() {
                       />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
-                        �
+                        ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
                       </div>
                     )}
                   </td>
                   <td className="py-2.5 font-medium">{student.full_name}</td>
-                  <td>{student.lin ?? "�"}</td>
+                  <td>{student.lin ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}</td>
                   <td>
                     {className(student.class_id)} {streamName(student.stream_id)}
                   </td>
-                  <td>{student.house ?? "�"}</td>
+                  <td>{student.house ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}</td>
                   <td>
-                    {canManageStudents || (isClassTeacher && student.class_id === assignedClass?.id) ? (
+                    {canManageStudents ||
+                    (isClassTeacher && student.class_id === assignedClass?.id) ? (
                       <div className="flex items-center gap-2">
                         <input
                           type="number"

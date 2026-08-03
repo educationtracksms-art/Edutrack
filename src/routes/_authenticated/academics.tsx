@@ -9,8 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { ACADEMIC_MANAGERS, hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   deleteClass,
+  deleteIdentifierScale,
   deleteGradingScale,
   deleteStream,
+  upsertIdentifierScale,
   upsertGradingScale,
 } from "@/lib/admin.functions";
 
@@ -41,6 +43,8 @@ function AcademicsPage() {
   const deleteStreamFn = useServerFn(deleteStream);
   const saveGradingScaleFn = useServerFn(upsertGradingScale);
   const deleteGradingScaleFn = useServerFn(deleteGradingScale);
+  const saveIdentifierScaleFn = useServerFn(upsertIdentifierScale);
+  const deleteIdentifierScaleFn = useServerFn(deleteIdentifierScale);
 
   const [classForm, setClassForm] = useState({ name: "", level: "", class_teacher_id: "" });
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "" });
@@ -81,6 +85,7 @@ function AcademicsPage() {
         academicYears,
         terms,
         scales,
+        identifierScales,
       ] = await Promise.all([
         supabase.from("classes").select("*").order("level", { ascending: true }).order("name"),
         supabase.from("streams").select("*").order("name"),
@@ -100,6 +105,11 @@ function AcademicsPage() {
           .select("*")
           .eq("school_id", schoolId!)
           .order("min_score", { ascending: false }),
+        supabase
+          .from("grading_identifier_scales")
+          .select("*")
+          .eq("school_id", schoolId!)
+          .order("identifier", { ascending: false }),
       ]);
       const teachingRoles = new Set(
         (roles.data ?? [])
@@ -123,6 +133,7 @@ function AcademicsPage() {
         academicYears: academicYears.data ?? [],
         terms: terms.data ?? [],
         gradingScales: scales.data ?? [],
+        identifierScales: identifierScales.data ?? [],
       };
     },
   });
@@ -471,8 +482,14 @@ function AcademicsPage() {
     grade: "",
     min_score: "",
     max_score: "",
+    grade_descriptor: "",
+  });
+  const [identifierForm, setIdentifierForm] = useState({
+    id: "",
+    identifier: "3",
+    min_score: "",
+    max_score: "",
     descriptor: "",
-    identifier: "1",
   });
 
   const saveGradingScale = useMutation({
@@ -480,9 +497,8 @@ function AcademicsPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       const minScore = Number(gradingForm.min_score);
       const maxScore = Number(gradingForm.max_score);
-      const identifier = Number(gradingForm.identifier);
       if (!gradingForm.grade.trim()) throw new Error("Enter a grade label");
-      if (!gradingForm.descriptor.trim()) throw new Error("Enter a descriptor");
+      if (!gradingForm.grade_descriptor.trim()) throw new Error("Enter a grade descriptor");
       if (Number.isNaN(minScore) || Number.isNaN(maxScore))
         throw new Error("Enter valid score boundaries");
       if (maxScore < minScore) throw new Error("Maximum score must be greater than minimum score");
@@ -493,8 +509,7 @@ function AcademicsPage() {
           grade: gradingForm.grade,
           minScore,
           maxScore,
-          descriptor: gradingForm.descriptor,
-          identifier,
+          gradeDescriptor: gradingForm.grade_descriptor ?? "",
         },
       });
     },
@@ -504,8 +519,7 @@ function AcademicsPage() {
         grade: "",
         min_score: "",
         max_score: "",
-        descriptor: "",
-        identifier: "1",
+        grade_descriptor: "",
       });
       toast.success("Grading criteria saved");
       refresh();
@@ -517,6 +531,37 @@ function AcademicsPage() {
     mutationFn: (id: string) => deleteGradingScaleFn({ data: { id } }),
     onSuccess: () => {
       toast.success("Grading criteria deleted");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const saveIdentifierScale = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      await saveIdentifierScaleFn({
+        data: {
+          id: identifierForm.id || null,
+          schoolId,
+          identifier: Number(identifierForm.identifier),
+          minScore: Number(identifierForm.min_score),
+          maxScore: Number(identifierForm.max_score),
+          descriptor: (identifierForm.descriptor ?? "").trim(),
+        },
+      });
+    },
+    onSuccess: () => {
+      setIdentifierForm({ id: "", identifier: "3", min_score: "", max_score: "", descriptor: "" });
+      toast.success("Identifier criteria saved");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeIdentifierScale = useMutation({
+    mutationFn: (id: string) => deleteIdentifierScaleFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Identifier criteria deleted");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -941,7 +986,7 @@ function AcademicsPage() {
 
       <Panel title="Grading criteria" className="mt-4">
         <form
-          className="mb-4 grid gap-3 lg:grid-cols-6"
+          className="mb-4 grid gap-3 lg:grid-cols-4"
           onSubmit={(e) => {
             e.preventDefault();
             saveGradingScale.mutate();
@@ -976,29 +1021,20 @@ function AcademicsPage() {
               placeholder="100"
             />
           </Field>
-          <Field label="Identifier">
-            <select
-              className={inputClass}
-              value={gradingForm.identifier}
-              onChange={(e) => setGradingForm({ ...gradingForm, identifier: e.target.value })}
-            >
-              <option value="3">3 - Outstanding</option>
-              <option value="2">2 - Moderate</option>
-              <option value="1">1 - Basic</option>
-            </select>
-          </Field>
           <div className="lg:col-span-2">
-            <Field label="Descriptor">
+            <Field label="Grade descriptor">
               <input
                 required
                 className={inputClass}
-                value={gradingForm.descriptor}
-                onChange={(e) => setGradingForm({ ...gradingForm, descriptor: e.target.value })}
+                value={gradingForm.grade_descriptor}
+                onChange={(e) =>
+                  setGradingForm({ ...gradingForm, grade_descriptor: e.target.value })
+                }
                 placeholder="Achieved MOST or ALL competencies exceedingly well."
               />
             </Field>
           </div>
-          <div className="flex items-end gap-2 lg:col-span-6">
+          <div className="flex items-end gap-2 lg:col-span-4">
             <Btn type="submit" variant="accent" disabled={saveGradingScale.isPending}>
               {gradingForm.id ? "Save changes" : "Add grade"}
             </Btn>
@@ -1011,8 +1047,7 @@ function AcademicsPage() {
                     grade: "",
                     min_score: "",
                     max_score: "",
-                    descriptor: "",
-                    identifier: "1",
+                    grade_descriptor: "",
                   })
                 }
               >
@@ -1027,8 +1062,7 @@ function AcademicsPage() {
               <tr>
                 <th className="pb-2">Grade</th>
                 <th className="pb-2">Score range</th>
-                <th className="pb-2">Identifier</th>
-                <th className="pb-2">Descriptor</th>
+                <th className="pb-2">Grade descriptor</th>
                 <th className="pb-2" />
               </tr>
             </thead>
@@ -1039,8 +1073,7 @@ function AcademicsPage() {
                   <td>
                     {item.min_score} - {item.max_score}
                   </td>
-                  <td>{item.identifier}</td>
-                  <td>{item.descriptor}</td>
+                  <td>{item.grade_descriptor}</td>
                   <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Btn
@@ -1051,8 +1084,7 @@ function AcademicsPage() {
                             grade: item.grade,
                             min_score: String(item.min_score),
                             max_score: String(item.max_score),
-                            descriptor: item.descriptor,
-                            identifier: String(item.identifier),
+                            grade_descriptor: item.grade_descriptor,
                           })
                         }
                       >
@@ -1069,6 +1101,132 @@ function AcademicsPage() {
                 <tr>
                   <td colSpan={5} className="py-6 text-center text-muted-foreground">
                     No grading criteria set yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <Panel title="Identifier descriptor" className="mt-4">
+        <form
+          className="mb-4 grid gap-3 lg:grid-cols-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveIdentifierScale.mutate();
+          }}
+        >
+          <Field label="Identifier">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={identifierForm.identifier}
+              onChange={(e) => setIdentifierForm({ ...identifierForm, identifier: e.target.value })}
+              placeholder="3"
+            />
+          </Field>
+          <Field label="Min score">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={identifierForm.min_score}
+              onChange={(e) => setIdentifierForm({ ...identifierForm, min_score: e.target.value })}
+              placeholder="2.5"
+            />
+          </Field>
+          <Field label="Max score">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={identifierForm.max_score}
+              onChange={(e) => setIdentifierForm({ ...identifierForm, max_score: e.target.value })}
+              placeholder="3.0"
+            />
+          </Field>
+          <div className="lg:col-span-2">
+            <Field label="Descriptor">
+              <input
+                required
+                className={inputClass}
+                value={identifierForm.descriptor}
+                onChange={(e) =>
+                  setIdentifierForm({ ...identifierForm, descriptor: e.target.value })
+                }
+                placeholder="Outstanding"
+              />
+            </Field>
+          </div>
+          <div className="flex items-end gap-2 lg:col-span-4">
+            <Btn type="submit" variant="accent" disabled={saveIdentifierScale.isPending}>
+              {identifierForm.id ? "Save changes" : "Add identifier"}
+            </Btn>
+            {identifierForm.id && (
+              <Btn
+                variant="ghost"
+                onClick={() =>
+                  setIdentifierForm({
+                    id: "",
+                    identifier: "3",
+                    min_score: "",
+                    max_score: "",
+                    descriptor: "",
+                  })
+                }
+              >
+                Cancel
+              </Btn>
+            )}
+          </div>
+        </form>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="pb-2">Identifier</th>
+                <th className="pb-2">Score range</th>
+                <th className="pb-2">Descriptor</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.identifierScales ?? []).map((item) => (
+                <tr key={item.id} className="border-t border-border">
+                  <td className="py-2 font-medium">{item.identifier}</td>
+                  <td>
+                    {item.min_score} - {item.max_score}
+                  </td>
+                  <td>{item.descriptor}</td>
+                  <td className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Btn
+                        variant="ghost"
+                        onClick={() =>
+                          setIdentifierForm({
+                            id: item.id,
+                            identifier: String(item.identifier),
+                            min_score: String(item.min_score),
+                            max_score: String(item.max_score),
+                            descriptor: item.descriptor,
+                          })
+                        }
+                      >
+                        Edit
+                      </Btn>
+                      <Btn variant="ghost" onClick={() => removeIdentifierScale.mutate(item.id)}>
+                        Delete
+                      </Btn>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {(data?.identifierScales ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                    No identifier descriptor rows yet.
                   </td>
                 </tr>
               )}

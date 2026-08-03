@@ -4,7 +4,7 @@ export type SubjectRow = {
   summative: string;
   total: string;
   grade: string;
-  descriptor: string;
+  gradeDescriptor: string;
   teacher: string;
 };
 
