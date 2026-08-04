@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isModuleEnabled } from "./modules";
 
 function otp() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -453,6 +454,9 @@ export const upsertReportComment = createServerFn({ method: "POST" })
 
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
+    if (!(await isModuleEnabled(context.supabase, schoolId, "report_cards"))) {
+      throw new Error("Report comments module is disabled");
+    }
 
     const [{ data: student }, { data: term }, { data: existing }] = await Promise.all([
       context.supabase
@@ -540,10 +544,15 @@ export const upsertReportComment = createServerFn({ method: "POST" })
       clubs: data.clubs ?? null,
       projects: data.projects ?? null,
     };
-    const { error: coCurricularError } = await context.supabase
-      .from("co_curricular")
-      .upsert(coCurricularPayload, { onConflict: "student_id,term_id" });
-    if (coCurricularError) throw new Error(coCurricularError.message);
+    if (data.games != null || data.clubs != null || data.projects != null) {
+      if (!(await isModuleEnabled(context.supabase, schoolId, "co_curricular"))) {
+        throw new Error("Co-curricular module is disabled");
+      }
+      const { error: coCurricularError } = await context.supabase
+        .from("co_curricular")
+        .upsert(coCurricularPayload, { onConflict: "student_id,term_id" });
+      if (coCurricularError) throw new Error(coCurricularError.message);
+    }
 
     await logAudit(
       context.supabase,
@@ -827,6 +836,9 @@ export const updateStudentFeesBalance = createServerFn({ method: "POST" })
 
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
+    if (!(await isModuleEnabled(context.supabase, schoolId, "fees"))) {
+      throw new Error("Fees module is disabled");
+    }
 
     const { data: student } = await context.supabase
       .from("students")

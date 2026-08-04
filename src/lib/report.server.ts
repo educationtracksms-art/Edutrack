@@ -104,8 +104,13 @@ export async function buildReportCards(
 
   const feesEnabled = toggles?.find((t: any) => t.module === "fees")?.enabled ?? true;
   const attendanceEnabled = toggles?.find((t: any) => t.module === "attendance")?.enabled ?? true;
+  const reportCardsEnabled = toggles?.find((t: any) => t.module === "report_cards")?.enabled ?? true;
   const coCurricularEnabled =
     toggles?.find((t: any) => t.module === "co_curricular")?.enabled ?? true;
+
+  if (!reportCardsEnabled) {
+    throw new Error("Report cards module is disabled");
+  }
 
   const gradeFor = (total: number) => {
     const hit = (scales ?? []).find(

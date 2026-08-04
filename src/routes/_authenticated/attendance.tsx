@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -6,8 +6,18 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, ResponsiveTable, inputClass } from "@/components/ui-kit";
+import { isModuleEnabled } from "@/lib/modules";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
+  beforeLoad: async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (!userId) throw redirect({ to: "/auth" });
+    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "attendance"))) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Attendance Â· EduTrack" },

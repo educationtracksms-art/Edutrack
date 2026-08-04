@@ -33,6 +33,8 @@ import {
   type AppRole,
   useCurrentUser,
 } from "@/hooks/useCurrentUser";
+import { useQuery } from "@tanstack/react-query";
+import { getEnabledModuleMap } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -47,6 +49,7 @@ type NavItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   roles: AppRole[];
+  module?: string;
 };
 
 const ALL: AppRole[] = [
@@ -68,7 +71,13 @@ const NAV: NavItem[] = [
     icon: GraduationCap,
     roles: ["super_admin", ...SCHOOL_ROLES],
   },
-  { to: "/academics", label: "Academic setup", icon: Library, roles: ACADEMIC_MANAGERS },
+  {
+    to: "/academics",
+    label: "Academic setup",
+    icon: Library,
+    roles: ACADEMIC_MANAGERS,
+    module: "academics",
+  },
   {
     to: "/library",
     label: "Library",
@@ -81,8 +90,15 @@ const NAV: NavItem[] = [
       "dos",
       "librarian",
     ],
+    module: "library",
   },
-  { to: "/timetable", label: "Timetable", icon: CalendarClock, roles: SCHOOL_ROLES },
+  {
+    to: "/timetable",
+    label: "Timetable",
+    icon: CalendarClock,
+    roles: SCHOOL_ROLES,
+    module: "timetable",
+  },
   {
     to: "/assessments",
     label: "Assessments",
@@ -95,20 +111,29 @@ const NAV: NavItem[] = [
       "subject_teacher",
       "class_teacher",
     ],
+    module: "academics",
   },
   {
     to: "/attendance",
     label: "Attendance",
     icon: CalendarCheck,
     roles: ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher"],
+    module: "attendance",
   },
   {
     to: "/reports",
     label: "Report Cards",
     icon: FileBadge,
     roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "class_teacher"],
+    module: "report_cards",
   },
-  { to: "/promotions", label: "Promotions", icon: MoveUpRight, roles: ACADEMIC_MANAGERS },
+  {
+    to: "/promotions",
+    label: "Promotions",
+    icon: MoveUpRight,
+    roles: ACADEMIC_MANAGERS,
+    module: "students",
+  },
   { to: "/users", label: "Users & Roles", icon: Users, roles: ["super_admin", "school_admin"] },
   {
     to: "/settings",
@@ -130,6 +155,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isMobile = useIsMobile();
+  const { data: moduleMap } = useQuery({
+    queryKey: ["enabled-modules", me?.profile?.school_id ?? null],
+    enabled: !!me?.profile?.school_id,
+    queryFn: async () => getEnabledModuleMap(supabase, me?.profile?.school_id ?? null),
+  });
   const [labelsVisible, setLabelsVisible] = React.useState(() => !isMobile);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
@@ -176,7 +206,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [isMobile, pathname]);
 
-  const items = NAV.filter((item) => hasAny(me?.roles, item.roles));
+  const items = NAV.filter((item) => hasAny(me?.roles, item.roles)).filter(
+    (item) => (item.module ? moduleMap?.get(item.module) ?? true : true),
+  );
   const primaryRole = me?.roles?.[0];
   const sidebarWidth = labelsVisible ? "w-72" : "w-20";
   const contentOffset = labelsVisible ? "pl-72" : "pl-20";

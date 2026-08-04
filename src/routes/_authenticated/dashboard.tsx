@@ -24,6 +24,7 @@ import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { PageHeader, Panel, Stat } from "@/components/ui-kit";
 import { upsertReportComment, verifyStudent } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
+import { getEnabledModuleMap } from "@/lib/modules";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -713,6 +714,7 @@ function CommentEditorPanel({
 function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const queryClient = useQueryClient();
   const isSuper = false;
+  const schoolId = me?.profile?.school_id ?? null;
   const canSeeActivity = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher"]);
   const canApprove = hasAny(me?.roles, [
     "dos",
@@ -728,9 +730,16 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     "school_admin",
     "super_admin",
   ]);
+  const { data: moduleMap } = useQuery({
+    queryKey: ["enabled-modules", schoolId],
+    enabled: !!schoolId,
+    queryFn: async () => getEnabledModuleMap(supabase, schoolId),
+  });
+  const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
+  const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const approveStudent = useServerFn(verifyStudent);
   const { data, isLoading } = useDashboardData(
-    me?.profile?.school_id,
+    schoolId,
     isSuper,
     isTeacher,
     me?.userId,
@@ -901,7 +910,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         </Panel>
       )}
 
-      {canEditHeadComments && (
+      {canEditHeadComments && reportCardsEnabled && (
         <CommentEditorPanel
           mode="head_teacher"
           students={(data.students as DashboardStudentRow[]).filter(
@@ -977,7 +986,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         </Panel>
       </div>
 
-      {canSeeActivity && (
+      {canSeeActivity && coCurricularEnabled && (
         <Panel title="Recent activity" className="mt-4">
           {data.activity.length === 0 ? (
             <p className="text-sm text-muted-foreground">No activity recorded yet.</p>

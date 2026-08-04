@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { BookOpen, BookPlus, CheckCircle2, Clock3, RotateCcw } from "lucide-react";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { hasAny, useCurrentUser, type AppRole } from "@/hooks/useCurrentUser";
+import { isModuleEnabled } from "@/lib/modules";
 import {
   Btn,
   Field,
@@ -18,6 +19,15 @@ import {
 } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/library")({
+  beforeLoad: async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (!userId) throw redirect({ to: "/auth" });
+    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "library"))) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Library · EduTrack" },

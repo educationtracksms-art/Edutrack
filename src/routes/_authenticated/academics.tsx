@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { ACADEMIC_MANAGERS, hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
+import { isModuleEnabled } from "@/lib/modules";
 import {
   deleteClass,
   deleteIdentifierScale,
@@ -17,6 +18,15 @@ import {
 } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/academics")({
+  beforeLoad: async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (!userId) throw redirect({ to: "/auth" });
+    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "academics"))) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Academic setup · EduTrack" },

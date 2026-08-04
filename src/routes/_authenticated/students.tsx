@@ -15,6 +15,7 @@ import { friendlyAdminError } from "@/lib/admin-errors";
 import { hasAny, SCHOOL_ROLES, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { uploadImage } from "@/lib/storage";
+import { getEnabledModuleMap } from "@/lib/modules";
 
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({
@@ -37,6 +38,7 @@ export const Route = createFileRoute("/_authenticated/students")({
 function StudentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
+  const schoolId = me?.profile?.school_id ?? null;
   const canAccessStudents = hasAny(me?.roles, ["super_admin", ...SCHOOL_ROLES]);
   const canManageStudents = hasAny(me?.roles, [
     "school_admin",
@@ -85,6 +87,12 @@ function StudentsPage() {
     queryKey: ["streams"],
     queryFn: async () => (await supabase.from("streams").select("id, name, class_id")).data ?? [],
   });
+  const { data: modules } = useQuery({
+    queryKey: ["enabled-modules", schoolId],
+    enabled: !!schoolId,
+    queryFn: async () => getEnabledModuleMap(supabase, schoolId),
+  });
+  const feesEnabled = modules?.get("fees") ?? true;
   const { data: students } = useQuery({
     queryKey: ["students"],
     queryFn: async () =>
@@ -451,7 +459,7 @@ function StudentsPage() {
                 <th className="pb-2">LIN</th>
                 <th className="pb-2">Class</th>
                 <th className="pb-2">House</th>
-                <th className="pb-2">Fees balance</th>
+                {feesEnabled && <th className="pb-2">Fees balance</th>}
                 <th className="pb-2">Status</th>
                 <th className="pb-2" />
               </tr>
@@ -479,40 +487,42 @@ function StudentsPage() {
                     {streamName(student.stream_id) ? ` ${streamName(student.stream_id)}` : ""}
                   </td>
                   <td>{student.house ?? "—"}</td>
-                  <td>
-                    {canManageStudents ||
-                    (isClassTeacher && student.class_id === assignedClass?.id) ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          className={`${inputClass} w-28`}
-                          value={feesDrafts[student.id] ?? String(student.fees_balance ?? 0)}
-                          onChange={(event) =>
-                            setFeesDrafts((current) => ({
-                              ...current,
-                              [student.id]: event.target.value,
-                            }))
-                          }
-                        />
-                        <Btn
-                          variant="ghost"
-                          onClick={() =>
-                            feesMutation.mutate({
-                              studentId: student.id,
-                              feesBalance: Number(
-                                feesDrafts[student.id] ?? student.fees_balance ?? 0,
-                              ),
-                            })
-                          }
-                          disabled={feesMutation.isPending}
-                        >
-                          Save
-                        </Btn>
-                      </div>
-                    ) : (
-                      String(student.fees_balance ?? 0)
-                    )}
-                  </td>
+                  {feesEnabled && (
+                    <td>
+                      {canManageStudents ||
+                      (isClassTeacher && student.class_id === assignedClass?.id) ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            className={`${inputClass} w-28`}
+                            value={feesDrafts[student.id] ?? String(student.fees_balance ?? 0)}
+                            onChange={(event) =>
+                              setFeesDrafts((current) => ({
+                                ...current,
+                                [student.id]: event.target.value,
+                              }))
+                            }
+                          />
+                          <Btn
+                            variant="ghost"
+                            onClick={() =>
+                              feesMutation.mutate({
+                                studentId: student.id,
+                                feesBalance: Number(
+                                  feesDrafts[student.id] ?? student.fees_balance ?? 0,
+                                ),
+                              })
+                            }
+                            disabled={feesMutation.isPending}
+                          >
+                            Save
+                          </Btn>
+                        </div>
+                      ) : (
+                        String(student.fees_balance ?? 0)
+                      )}
+                    </td>
+                  )}
                   <td>
                     {canChangeStatus ? (
                       <select
@@ -573,7 +583,7 @@ function StudentsPage() {
               ))}
               {visibleStudents.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={feesEnabled ? 8 : 7} className="py-6 text-center text-muted-foreground">
                     No learners found.
                   </td>
                 </tr>
