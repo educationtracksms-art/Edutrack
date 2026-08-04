@@ -12,6 +12,7 @@ import {
   upsertAssessmentEntry,
   upsertReportComment,
 } from "@/lib/admin.functions";
+import { descriptorFromAssessmentScore } from "@/lib/descriptor";
 import { supabase } from "@/integrations/supabase/client";
 import { isModuleEnabled } from "@/lib/modules";
 
@@ -105,7 +106,7 @@ function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const isTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
+  const isTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos"]);
   const canReview = hasAny(me?.roles, [
     "dos",
     "school_admin",
@@ -554,6 +555,10 @@ function AssessmentsPage() {
       if (!entryForm.subjectId) throw new Error("Choose a subject");
       if (isTeacher && !selectedAllocation)
         throw new Error("Choose an assigned class / stream / subject");
+      if (isTeacher && selectedAllocation) {
+        const allowed = teacherStudents.some((student) => student.id === entryForm.studentId);
+        if (!allowed) throw new Error("This learner is not assigned to you for this subject");
+      }
 
       await upsertEntry({
         data: {

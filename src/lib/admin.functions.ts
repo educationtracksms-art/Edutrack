@@ -632,7 +632,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       throw new Error("Only verified students can receive assessments");
     }
 
-    const teacherRoles = new Set(["subject_teacher", "class_teacher"]);
+    const teacherRoles = new Set(["subject_teacher", "class_teacher", "dos"]);
     if (roles.some((role) => teacherRoles.has(role))) {
       const { data: allocations, error: allocationError } = await context.supabase
         .from("teacher_allocations")
