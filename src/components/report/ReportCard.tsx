@@ -231,7 +231,6 @@ export function ReportCard({ data }: { data: ReportCardData }) {
                 </>
               )}
             </td>
-            <td>{comments.classTeacher}</td>
           </tr>
           <tr>
             <td className="label">Head Teacher's Comment</td>
