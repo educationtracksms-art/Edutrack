@@ -1,7 +1,7 @@
 import type { ReportCardData } from "@/lib/report-types";
 
 export function ReportCard({ data }: { data: ReportCardData }) {
-  const { school, student, attendance, rows, overall, gradeKeys, coCurricular, comments, staff } =
+  const { school, student, attendance, rows, overall, approval, gradeKeys, coCurricular, comments, staff } =
     data;
 
   return (
@@ -155,6 +155,8 @@ export function ReportCard({ data }: { data: ReportCardData }) {
           </tr>
         </tbody>
       </table>
+
+      
 
       <section className="definitions">
         <div className="keywords">

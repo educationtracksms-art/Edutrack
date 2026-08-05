@@ -296,6 +296,12 @@
   border-left: 5px solid #c9302c;
   padding-left: 10px;
 }
+.report-doc .approved-note {
+  margin: -2px 0 6px 15px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e3a8a;
+}
 .report-doc .results {
   width: 100%;
   border-collapse: collapse;
@@ -376,6 +382,26 @@
 .report-doc .overall-table .identifier-block strong,
 .report-doc .overall-table .descriptor-block strong {
   font-weight: 700;
+}
+.report-doc .approval-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 8px;
+}
+.report-doc .approval-table td {
+  border: 1px solid #3d4a5a;
+  padding: 5px 10px;
+  background: #f7fafc;
+  font-size: 12px;
+}
+.report-doc .approval-table .approval-label {
+  width: 18%;
+  font-weight: 700;
+  background: #eef2f7;
+  white-space: nowrap;
+}
+.report-doc .approval-table .approval-value {
+  color: #1a2634;
 }
 .report-doc .definitions {
   display: flex;
@@ -589,6 +615,10 @@
     padding-left: 7px;
     border-left-width: 4px;
   }
+  .report-doc .approved-note {
+    font-size: 9px;
+    margin: -1px 0 3px 11px;
+  }
   .report-doc .results {
     font-size: 8.5px;
   }
@@ -610,6 +640,10 @@
   }
   .report-doc .overall-table .identifier-block,
   .report-doc .overall-table .descriptor-block {
+    font-size: 9.5px;
+  }
+  .report-doc .approval-table td {
+    padding: 3px 6px;
     font-size: 9.5px;
   }
   .report-doc .definitions {
@@ -728,6 +762,9 @@
   .report-doc .overall-table .avg-score {
     font-size: 15px;
   }
+  .report-doc .approval-table td {
+    font-size: 10px;
+  }
 }
 @media (max-width: 480px) {
   .report-doc .passport {
@@ -786,5 +823,8 @@
   .report-doc .title-row td {
     font-size: 10px;
     padding: 3px 8px;
+  }
+  .report-doc .approved-note {
+    font-size: 8px;
   }
 }

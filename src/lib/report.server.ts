@@ -90,7 +90,7 @@ export async function buildReportCards(
       supabase
         .from("assessments")
         .select(
-          "student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status",
+          "student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
         )
         .in("student_id", ids)
         .eq("term_id", termFilterId)
@@ -107,6 +107,8 @@ export async function buildReportCards(
         .eq("term_id", termFilterId),
       supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
     ]);
+
+  const approvedAssessments = (assessments ?? []).filter((assessment: any) => assessment.status === "approved");
 
   const feesEnabled = toggles?.find((t: any) => t.module === "fees")?.enabled ?? true;
   const attendanceEnabled = toggles?.find((t: any) => t.module === "attendance")?.enabled ?? true;
@@ -145,17 +147,19 @@ export async function buildReportCards(
     const classTeacherName =
       (profiles ?? []).find((p: any) => p.id === cls?.class_teacher_id)?.full_name ?? "";
     const streamName = streams?.find((s: any) => s.id === student.stream_id)?.name ?? "";
-    const marks = (assessments ?? []).filter((a: any) => a.student_id === student.id);
+    const marks = approvedAssessments.filter((assessment: any) => assessment.student_id === student.id);
     const assignedSubjectIds = new Set(
       (studentSubjects ?? [])
         .filter((assignment: any) => assignment.student_id === student.id)
         .map((assignment: any) => assignment.subject_id),
     );
+    const subjectIdsWithMarks = new Set(marks.map((mark: any) => mark.subject_id));
+    const subjectIdsToRender = new Set([...assignedSubjectIds, ...subjectIdsWithMarks]);
 
     const totals: number[] = [];
 
     const rows: SubjectRow[] = (subjects ?? [])
-      .filter((subject: any) => assignedSubjectIds.has(subject.id))
+      .filter((subject: any) => subjectIdsToRender.has(subject.id))
       .map((subject: any) => {
         const mark = marks.find((m: any) => m.subject_id === subject.id);
         if (!mark || (mark.formative == null && mark.summative == null)) {
@@ -196,6 +200,11 @@ export async function buildReportCards(
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const comment = comments?.find((c: any) => c.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
+    const approvedAssessment = marks.find((mark: any) => mark.approved_by || mark.approved_at);
+    const approvedByName =
+      approvedAssessment?.approved_by
+        ? (profiles ?? []).find((p: any) => p.id === approvedAssessment.approved_by)?.full_name ?? ""
+        : "";
 
     return {
       studentId: student.id,
@@ -236,6 +245,19 @@ export async function buildReportCards(
         identifier: identifierAvg.toFixed(2),
         descriptor: identifierDescriptor,
       },
+      approval: approvedAssessment
+        ? {
+            name: approvedByName || "Director of Studies",
+            role: "Director of Studies",
+            approvedAt: approvedAssessment.approved_at
+              ? new Date(approvedAssessment.approved_at).toLocaleDateString("en-UG", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "",
+          }
+        : null,
       gradeKeys: (identifierScales ?? []).map((scale: any) => ({
         identifier: String(scale.identifier),
         range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,

@@ -140,6 +140,8 @@ function AssessmentsPage() {
   const [subjectFilter, setSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [termFilter, setTermFilter] = useState("");
+  const [reviewClassId, setReviewClassId] = useState("");
+  const [reviewStreamId, setReviewStreamId] = useState("");
   const [allocationKey, setAllocationKey] = useState("");
   const [learnerSearch, setLearnerSearch] = useState("");
   const [learnerSortKey, setLearnerSortKey] = useState<LearnerSortKey>("class");
@@ -665,7 +667,13 @@ function AssessmentsPage() {
   });
 
   const reviewMutation = useMutation({
-    mutationFn: (vars: { ids: string[]; action: "approve" | "reject" }) => review({ data: vars }),
+    mutationFn: (vars: {
+      ids: string[];
+      action: "approve" | "reject";
+      reason?: string;
+      classId?: string | null;
+      streamId?: string | null;
+    }) => review({ data: vars }),
     onSuccess: () => {
       toast.success("Review recorded");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
@@ -685,6 +693,28 @@ function AssessmentsPage() {
       ) => row.status === "submitted",
     )
     .map((row) => row.id);
+
+  const reviewClassOptions = data?.classes ?? [];
+  const reviewStreamOptions = useMemo(
+    () =>
+      (data?.streams ?? []).filter(
+        (stream) => !reviewClassId || stream.class_id === reviewClassId,
+      ),
+    [data?.streams, reviewClassId],
+  );
+  const scopedPendingIds = useMemo(() => {
+    if (!reviewClassId && !reviewStreamId) return pendingIds;
+    return rows
+      .filter((row) => row.status === "submitted")
+      .filter((row) => {
+        const student = data?.students.find((item) => item.id === row.student_id);
+        if (!student) return false;
+        if (reviewClassId && student.class_id !== reviewClassId) return false;
+        if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
+        return true;
+      })
+      .map((row) => row.id);
+  }, [data?.students, pendingIds, reviewClassId, reviewStreamId, rows]);
 
   return (
     <div>
@@ -710,6 +740,64 @@ function AssessmentsPage() {
           ) : undefined
         }
       />
+
+      {hasAny(me?.roles, ["dos"]) && (
+        <Panel title="DOS approval" className="mb-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Class">
+              <select
+                className={inputClass}
+                value={reviewClassId}
+                onChange={(event) => {
+                  setReviewClassId(event.target.value);
+                  setReviewStreamId("");
+                }}
+              >
+                <option value="">All classes</option>
+                {reviewClassOptions.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Stream">
+              <select
+                className={inputClass}
+                value={reviewStreamId}
+                onChange={(event) => setReviewStreamId(event.target.value)}
+              >
+                <option value="">All streams</option>
+                {reviewStreamOptions.map((stream) => (
+                  <option key={stream.id} value={stream.id}>
+                    {stream.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="flex items-end gap-2">
+              <Btn
+                variant="accent"
+                disabled={scopedPendingIds.length === 0 || reviewMutation.isPending}
+                onClick={() =>
+                  reviewMutation.mutate({
+                    ids: scopedPendingIds,
+                    action: "approve",
+                    classId: reviewClassId || null,
+                    streamId: reviewStreamId || null,
+                  })
+                }
+              >
+                Approve class + stream
+              </Btn>
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            This approves every submitted assessment in the selected class and stream for the
+            current filters.
+          </p>
+        </Panel>
+      )}
 
       {canEnter && (
         <Panel title="Enter assessment" className="mb-4">

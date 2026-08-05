@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,19 +15,25 @@ export const Route = createFileRoute("/_authenticated/attendance")({
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) throw redirect({ to: "/auth" });
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id")
+      .eq("id", userId)
+      .maybeSingle();
+
     if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "attendance"))) {
       throw redirect({ to: "/dashboard" });
     }
   },
   head: () => ({
     meta: [
-      { title: "Attendance Â· EduTrack" },
+      { title: "Attendance - EduTrack" },
       {
         name: "description",
         content: "Edit learner attendance totals and feed report card attendance summaries.",
       },
-      { property: "og:title", content: "Attendance Â· EduTrack" },
+      { property: "og:title", content: "Attendance - EduTrack" },
       {
         property: "og:description",
         content: "Attendance summary editor with class-based access controls.",
@@ -55,11 +62,11 @@ function AttendancePage() {
   const [summaryDrafts, setSummaryDrafts] = useState<Record<string, SummaryDraft>>({});
   const deleteSummaryFn = useServerFn(deleteAttendanceSummary);
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["attendance", schoolId, date],
     enabled: !!schoolId,
     queryFn: async () => {
-      const [students, classes, terms] = await Promise.all([
+      const [students, classes, streams, terms] = await Promise.all([
         supabase
           .from("students")
           .select("id, full_name, class_id, stream_id")
@@ -69,6 +76,7 @@ function AttendancePage() {
         supabase.from("streams").select("id, name, class_id, stream_teacher_id").order("name"),
         supabase.from("terms").select("id, is_current"),
       ]);
+
       return {
         students: students.data ?? [],
         classes: classes.data ?? [],
@@ -122,6 +130,7 @@ function AttendancePage() {
     if (!isClassTeacher || canSeeAllStudents || !data || !me?.userId) return null;
     return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
   }, [canSeeAllStudents, data, isClassTeacher, me?.userId]);
+
   const assignedStreamIds = useMemo(
     () =>
       new Set(
@@ -148,9 +157,11 @@ function AttendancePage() {
       if (isClassTeacher && !canSeeAllStudents && !assignedClass) {
         throw new Error("No class is assigned to your account");
       }
+
       const draft = summaryDrafts[studentId] ?? { daysPresent: "0", daysAbsent: "0" };
       const daysPresent = Number(draft.daysPresent || 0);
       const daysAbsent = Number(draft.daysAbsent || 0);
+
       const { error } = await supabase.from("attendance_summaries").upsert(
         [
           {
@@ -163,6 +174,7 @@ function AttendancePage() {
         ],
         { onConflict: "student_id,term_id" },
       );
+
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
@@ -224,69 +236,133 @@ function AttendancePage() {
           </Field>
         </div>
 
-        <div className="mb-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">Learner</th>
-                <th className="pb-2">Days Present</th>
-                <th className="pb-2">Days Absent</th>
-                <th className="pb-2">Total</th>
-                <th className="pb-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((student) => {
-                const summary = attendanceSummaryByStudent.get(student.id) ?? {
-                  daysPresent: 0,
-                  daysAbsent: 0,
-                  total: 0,
-                };
-                const draft = summaryDrafts[student.id] ?? {
-                  daysPresent: summary.daysPresent.toString(),
-                  daysAbsent: summary.daysAbsent.toString(),
-                };
-                const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
-                return (
-                  <tr key={student.id} className="border-t border-border">
-                    <td className="py-2 font-medium">{student.full_name}</td>
-                    <td className="py-2">
-                      <input
-                        type="number"
-                        min={0}
-                        className={`${inputClass} w-24`}
-                        value={draft.daysPresent}
-                        onChange={(event) =>
-                          setSummaryDrafts((current) => ({
-                            ...current,
-                            [student.id]: {
-                              ...draft,
-                              daysPresent: event.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="py-2">
-                      <input
-                        type="number"
-                        min={0}
-                        className={`${inputClass} w-24`}
-                        value={draft.daysAbsent}
-                        onChange={(event) =>
-                          setSummaryDrafts((current) => ({
-                            ...current,
-                            [student.id]: {
-                              ...draft,
-                              daysAbsent: event.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="py-2">{total}</td>
-                    <td className="py-2 text-right">
-                      <div className="flex justify-end gap-2">
+        {isLoading && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Loading attendance data...
+          </div>
+        )}
+
+        {!isLoading && (
+          <ResponsiveTable
+            desktop={
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="pb-2">Learner</th>
+                      <th className="pb-2">Days Present</th>
+                      <th className="pb-2">Days Absent</th>
+                      <th className="pb-2">Total</th>
+                      <th className="pb-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((student) => {
+                      const summary = attendanceSummaryByStudent.get(student.id) ?? {
+                        daysPresent: 0,
+                        daysAbsent: 0,
+                        total: 0,
+                      };
+                      const draft = summaryDrafts[student.id] ?? {
+                        daysPresent: summary.daysPresent.toString(),
+                        daysAbsent: summary.daysAbsent.toString(),
+                      };
+                      const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
+                      return (
+                        <tr key={student.id} className="border-t border-border">
+                          <td className="py-2 font-medium">{student.full_name}</td>
+                          <td className="py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className={`${inputClass} w-24`}
+                              value={draft.daysPresent}
+                              onChange={(event) =>
+                                setSummaryDrafts((current) => ({
+                                  ...current,
+                                  [student.id]: {
+                                    ...draft,
+                                    daysPresent: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </td>
+                          <td className="py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className={`${inputClass} w-24`}
+                              value={draft.daysAbsent}
+                              onChange={(event) =>
+                                setSummaryDrafts((current) => ({
+                                  ...current,
+                                  [student.id]: {
+                                    ...draft,
+                                    daysAbsent: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </td>
+                          <td className="py-2">{total}</td>
+                          <td className="py-2 text-right">
+                            <div className="flex justify-end gap-2">
+                              <Btn
+                                variant="accent"
+                                onClick={() => saveSummary.mutate(student.id)}
+                                disabled={saveSummary.isPending}
+                              >
+                                Save
+                              </Btn>
+                              <Btn
+                                variant="ghost"
+                                onClick={() => removeSummary.mutate(student.id)}
+                                disabled={removeSummary.isPending}
+                              >
+                                Delete
+                              </Btn>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {students.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                          No learners in this class.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            }
+            mobile={
+              <>
+                {students.map((student) => {
+                  const summary = attendanceSummaryByStudent.get(student.id) ?? {
+                    daysPresent: 0,
+                    daysAbsent: 0,
+                    total: 0,
+                  };
+                  const draft = summaryDrafts[student.id] ?? {
+                    daysPresent: summary.daysPresent.toString(),
+                    daysAbsent: summary.daysAbsent.toString(),
+                  };
+                  const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
+                  return (
+                    <div
+                      key={student.id}
+                      className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium">{student.full_name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Edit the counts, then save.
+                          </p>
+                        </div>
                         <Btn
                           variant="accent"
                           onClick={() => saveSummary.mutate(student.id)}
@@ -294,6 +370,52 @@ function AttendancePage() {
                         >
                           Save
                         </Btn>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-muted/40 p-3 text-center text-xs">
+                        <div>
+                          <input
+                            type="number"
+                            min={0}
+                            className="w-full rounded-md border border-border bg-background px-2 py-1 text-center text-sm"
+                            value={draft.daysPresent}
+                            onChange={(event) =>
+                              setSummaryDrafts((current) => ({
+                                ...current,
+                                [student.id]: {
+                                  ...draft,
+                                  daysPresent: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                          <div className="text-muted-foreground">Present</div>
+                        </div>
+                        <div>
+                          <input
+                            type="number"
+                            min={0}
+                            className="w-full rounded-md border border-border bg-background px-2 py-1 text-center text-sm"
+                            value={draft.daysAbsent}
+                            onChange={(event) =>
+                              setSummaryDrafts((current) => ({
+                                ...current,
+                                [student.id]: {
+                                  ...draft,
+                                  daysAbsent: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                          <div className="text-muted-foreground">Absent</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold">{total}</div>
+                          <div className="text-muted-foreground">Total</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex justify-end">
                         <Btn
                           variant="ghost"
                           onClick={() => removeSummary.mutate(student.id)}
@@ -302,164 +424,18 @@ function AttendancePage() {
                           Delete
                         </Btn>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {students.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                    </div>
+                  );
+                })}
+                {students.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-border bg-card p-4 text-center text-sm text-muted-foreground">
                     No learners in this class.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <ResponsiveTable
-          desktop={
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="pb-2">Learner</th>
-                    <th className="pb-2">Days Present</th>
-                    <th className="pb-2">Days Absent</th>
-                    <th className="pb-2">Total</th>
-                    <th className="pb-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {students.map((student) => {
-                    const summary = attendanceSummaryByStudent.get(student.id) ?? {
-                      daysPresent: 0,
-                      daysAbsent: 0,
-                      total: 0,
-                    };
-                    const draft = summaryDrafts[student.id] ?? {
-                      daysPresent: summary.daysPresent.toString(),
-                      daysAbsent: summary.daysAbsent.toString(),
-                    };
-                    const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
-                    return (
-                      <tr key={student.id} className="border-t border-border">
-                        <td className="py-2 font-medium">{student.full_name}</td>
-                        <td className="py-2">{draft.daysPresent}</td>
-                        <td className="py-2">{draft.daysAbsent}</td>
-                        <td className="py-2">{total}</td>
-                        <td className="py-2 text-right">
-                          <div className="flex justify-end gap-2">
-                            <Btn
-                              variant="ghost"
-                              onClick={() => saveSummary.mutate(student.id)}
-                              disabled={saveSummary.isPending}
-                            >
-                              Edit
-                            </Btn>
-                            <Btn
-                              variant="ghost"
-                              onClick={() => removeSummary.mutate(student.id)}
-                              disabled={removeSummary.isPending}
-                            >
-                              Delete
-                            </Btn>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          }
-          mobile={
-            <>
-              {students.map((student) => {
-                const summary = attendanceSummaryByStudent.get(student.id) ?? {
-                  daysPresent: 0,
-                  daysAbsent: 0,
-                  total: 0,
-                };
-                const draft = summaryDrafts[student.id] ?? {
-                  daysPresent: summary.daysPresent.toString(),
-                  daysAbsent: summary.daysAbsent.toString(),
-                };
-                const total = Number(draft.daysPresent || 0) + Number(draft.daysAbsent || 0);
-                return (
-                  <div
-                    key={student.id}
-                    className="rounded-2xl border border-border bg-card p-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium">{student.full_name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Edit the counts, then save.
-                        </p>
-                      </div>
-                      <Btn
-                        variant="accent"
-                        onClick={() => saveSummary.mutate(student.id)}
-                        disabled={saveSummary.isPending}
-                      >
-                        Save
-                      </Btn>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-muted/40 p-3 text-center text-xs">
-                      <div>
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-center text-sm"
-                          value={draft.daysPresent}
-                          onChange={(event) =>
-                            setSummaryDrafts((current) => ({
-                              ...current,
-                              [student.id]: {
-                                ...draft,
-                                daysPresent: event.target.value,
-                              },
-                            }))
-                          }
-                        />
-                        <div className="text-muted-foreground">Present</div>
-                      </div>
-                      <div>
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-center text-sm"
-                          value={draft.daysAbsent}
-                          onChange={(event) =>
-                            setSummaryDrafts((current) => ({
-                              ...current,
-                              [student.id]: {
-                                ...draft,
-                                daysAbsent: event.target.value,
-                              },
-                            }))
-                          }
-                        />
-                        <div className="text-muted-foreground">Absent</div>
-                      </div>
-                      <div>
-                        <div className="font-semibold">{total}</div>
-                        <div className="text-muted-foreground">Total</div>
-                      </div>
-                    </div>
                   </div>
-                );
-              })}
-              {students.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-border bg-card p-4 text-center text-sm text-muted-foreground">
-                  No learners in this class.
-                </div>
-              )}
-            </>
-          }
-        />
+                )}
+              </>
+            }
+          />
+        )}
       </Panel>
     </div>
   );

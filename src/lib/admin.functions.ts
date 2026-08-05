@@ -333,7 +333,15 @@ export const setSchoolStatus = createServerFn({ method: "POST" })
 
 export const reviewAssessments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { ids: string[]; action: "approve" | "reject"; reason?: string }) => data)
+  .inputValidator(
+    (data: {
+      ids: string[];
+      action: "approve" | "reject";
+      reason?: string;
+      classId?: string | null;
+      streamId?: string | null;
+    }) => data,
+  )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     const canReviewAny = roles.some((r) =>
@@ -342,15 +350,10 @@ export const reviewAssessments = createServerFn({ method: "POST" })
     const isClassTeacher = roles.includes("class_teacher");
     if (!canReviewAny && !isClassTeacher) throw new Error("Not allowed to review assessments");
 
-    if (isClassTeacher && !canReviewAny) {
-      const { data: profile } = await context.supabase
-        .from("profiles")
-        .select("school_id")
-        .eq("id", context.userId)
-        .maybeSingle();
-      const schoolId = profile?.school_id ?? null;
-      if (!schoolId) throw new Error("Your account is not linked to a school");
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
 
+    if (isClassTeacher && !canReviewAny) {
       const { data: assessments } = await context.supabase
         .from("assessments")
         .select("id, student_id")
@@ -383,6 +386,59 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       );
       if (unauthorized) {
         throw new Error("Class teachers can only review assessments for their assigned class");
+      }
+    }
+
+    if (data.classId || data.streamId) {
+      if (!canReviewAny && !isClassTeacher) throw new Error("Not allowed to review assessments");
+      if (data.classId) {
+        const { data: classRow } = await context.supabase
+          .from("classes")
+          .select("id, school_id")
+          .eq("id", data.classId)
+          .maybeSingle();
+        if (!classRow || classRow.school_id !== schoolId) {
+          throw new Error("Class not found in your school");
+        }
+      }
+      if (data.streamId) {
+        const { data: streamRow } = await context.supabase
+          .from("streams")
+          .select("id, school_id, class_id")
+          .eq("id", data.streamId)
+          .maybeSingle();
+        if (!streamRow || streamRow.school_id !== schoolId) {
+          throw new Error("Stream not found in your school");
+        }
+        if (data.classId && streamRow.class_id !== data.classId) {
+          throw new Error("Selected stream does not belong to the selected class");
+        }
+      }
+
+      const { data: scopedAssessments } = await context.supabase
+        .from("assessments")
+        .select("id, student_id")
+        .eq("school_id", schoolId)
+        .in("id", data.ids);
+      const { data: scopedStudents } = await context.supabase
+        .from("students")
+        .select("id, class_id, stream_id")
+        .in(
+          "id",
+          (scopedAssessments ?? []).map((assessment: any) => assessment.student_id),
+        );
+      const studentById = new Map(
+        (scopedStudents ?? []).map((student: any) => [student.id, student]),
+      );
+      const scopedMismatch = (scopedAssessments ?? []).some((assessment: any) => {
+        const student = studentById.get(assessment.student_id);
+        if (!student) return true;
+        if (data.classId && student.class_id !== data.classId) return true;
+        if (data.streamId && student.stream_id !== data.streamId) return true;
+        return false;
+      });
+      if (scopedMismatch) {
+        throw new Error("One or more assessments are outside the selected class or stream");
       }
     }
 
