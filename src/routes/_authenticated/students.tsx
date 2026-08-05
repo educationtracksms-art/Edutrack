@@ -47,6 +47,7 @@ function StudentsPage() {
     "dos",
     "super_admin",
   ]);
+  const canRegisterOrEditStudents = canManageStudents || isClassTeacher;
   const canChangeStatus = hasAny(me?.roles, [
     "school_admin",
     "head_teacher",
@@ -85,7 +86,8 @@ function StudentsPage() {
   });
   const { data: streams } = useQuery({
     queryKey: ["streams"],
-    queryFn: async () => (await supabase.from("streams").select("id, name, class_id")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("streams").select("id, name, class_id, stream_teacher_id")).data ?? [],
   });
   const { data: modules } = useQuery({
     queryKey: ["enabled-modules", schoolId],
@@ -116,12 +118,26 @@ function StudentsPage() {
     return classes?.find((item) => item.class_teacher_id === me.userId) ?? null;
   }, [classes, isClassTeacher, me?.userId]);
 
+  const assignedStreamIds = useMemo(
+    () =>
+      new Set(
+        (streams ?? [])
+          .filter((item) => item.stream_teacher_id === me?.userId)
+          .map((item) => item.id),
+      ),
+    [me?.userId, streams],
+  );
+
   const visibleStudents = useMemo(() => {
     if (isClassTeacher) {
-      return filtered.filter((student) => student.class_id === assignedClass?.id);
+      return filtered.filter((student) => {
+        const inAssignedClass = assignedClass ? student.class_id === assignedClass.id : false;
+        const inAssignedStream = student.stream_id ? assignedStreamIds.has(student.stream_id) : false;
+        return inAssignedClass || inAssignedStream;
+      });
     }
     return filtered;
-  }, [assignedClass?.id, filtered, isClassTeacher]);
+  }, [assignedClass?.id, assignedStreamIds, filtered, isClassTeacher]);
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -281,7 +297,7 @@ function StudentsPage() {
         title="Students"
         description="Registered learners stay pending until an administrator verifies the admission."
         actions={
-          canManageStudents ? (
+          canRegisterOrEditStudents ? (
             <Btn variant="accent" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
               {showForm ? "Close" : "Register learner"}
             </Btn>
@@ -328,9 +344,14 @@ function StudentsPage() {
               <select
                 className={inputClass}
                 value={form.class_id}
+                disabled={isClassTeacher && !!assignedClass}
                 onChange={(e) => setForm({ ...form, class_id: e.target.value, stream_id: "" })}
               >
-                <option value="">Select class</option>
+                {isClassTeacher && assignedClass ? (
+                  <option value={assignedClass.id}>{assignedClass.name}</option>
+                ) : (
+                  <option value="">Select class</option>
+                )}
                 {(classes ?? []).map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
@@ -490,7 +511,9 @@ function StudentsPage() {
                   {feesEnabled && (
                     <td>
                       {canManageStudents ||
-                      (isClassTeacher && student.class_id === assignedClass?.id) ? (
+                      (isClassTeacher &&
+                        (student.class_id === assignedClass?.id ||
+                          (student.stream_id ? assignedStreamIds.has(student.stream_id) : false))) ? (
                         <div className="flex items-center gap-2">
                           <input
                             type="number"

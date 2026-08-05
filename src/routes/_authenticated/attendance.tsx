@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, ResponsiveTable, inputClass } from "@/components/ui-kit";
 import { isModuleEnabled } from "@/lib/modules";
+import { deleteAttendanceSummary } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   beforeLoad: async () => {
@@ -52,6 +53,7 @@ function AttendancePage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [classFilter, setClassFilter] = useState("");
   const [summaryDrafts, setSummaryDrafts] = useState<Record<string, SummaryDraft>>({});
+  const deleteSummaryFn = useServerFn(deleteAttendanceSummary);
 
   const { data } = useQuery({
     queryKey: ["attendance", schoolId, date],
@@ -64,11 +66,13 @@ function AttendancePage() {
           .is("deleted_at", null)
           .order("full_name"),
         supabase.from("classes").select("id, name, class_teacher_id").order("name"),
+        supabase.from("streams").select("id, name, class_id, stream_teacher_id").order("name"),
         supabase.from("terms").select("id, is_current"),
       ]);
       return {
         students: students.data ?? [],
         classes: classes.data ?? [],
+        streams: streams.data ?? [],
         term: (terms.data ?? []).find((t) => t.is_current) ?? (terms.data ?? [])[0] ?? null,
       };
     },
@@ -118,10 +122,21 @@ function AttendancePage() {
     if (!isClassTeacher || canSeeAllStudents || !data || !me?.userId) return null;
     return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
   }, [canSeeAllStudents, data, isClassTeacher, me?.userId]);
+  const assignedStreamIds = useMemo(
+    () =>
+      new Set(
+        (data?.streams ?? [])
+          .filter((item: any) => item.stream_teacher_id === me?.userId)
+          .map((item: any) => item.id),
+      ),
+    [data?.streams, me?.userId],
+  );
 
   const students = (data?.students ?? []).filter((student) => {
     if (isClassTeacher && !canSeeAllStudents) {
-      return assignedClass ? student.class_id === assignedClass.id : false;
+      return assignedClass
+        ? student.class_id === assignedClass.id || assignedStreamIds.has(student.stream_id)
+        : assignedStreamIds.has(student.stream_id);
     }
     return classFilter ? student.class_id === classFilter : true;
   });
@@ -155,6 +170,16 @@ function AttendancePage() {
       queryClient.invalidateQueries({
         queryKey: ["attendance-summaries", schoolId, data?.term?.id],
       });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeSummary = useMutation({
+    mutationFn: (studentId: string) =>
+      deleteSummaryFn({ data: { studentId, termId: data?.term?.id ?? "" } }),
+    onSuccess: () => {
+      toast.success("Attendance summary deleted");
+      queryClient.invalidateQueries({ queryKey: ["attendance-summaries", schoolId, data?.term?.id] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -261,13 +286,22 @@ function AttendancePage() {
                     </td>
                     <td className="py-2">{total}</td>
                     <td className="py-2 text-right">
-                      <Btn
-                        variant="accent"
-                        onClick={() => saveSummary.mutate(student.id)}
-                        disabled={saveSummary.isPending}
-                      >
-                        Save
-                      </Btn>
+                      <div className="flex justify-end gap-2">
+                        <Btn
+                          variant="accent"
+                          onClick={() => saveSummary.mutate(student.id)}
+                          disabled={saveSummary.isPending}
+                        >
+                          Save
+                        </Btn>
+                        <Btn
+                          variant="ghost"
+                          onClick={() => removeSummary.mutate(student.id)}
+                          disabled={removeSummary.isPending}
+                        >
+                          Delete
+                        </Btn>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -315,13 +349,22 @@ function AttendancePage() {
                         <td className="py-2">{draft.daysAbsent}</td>
                         <td className="py-2">{total}</td>
                         <td className="py-2 text-right">
-                          <Btn
-                            variant="ghost"
-                            onClick={() => saveSummary.mutate(student.id)}
-                            disabled={saveSummary.isPending}
-                          >
-                            Edit
-                          </Btn>
+                          <div className="flex justify-end gap-2">
+                            <Btn
+                              variant="ghost"
+                              onClick={() => saveSummary.mutate(student.id)}
+                              disabled={saveSummary.isPending}
+                            >
+                              Edit
+                            </Btn>
+                            <Btn
+                              variant="ghost"
+                              onClick={() => removeSummary.mutate(student.id)}
+                              disabled={removeSummary.isPending}
+                            >
+                              Delete
+                            </Btn>
+                          </div>
                         </td>
                       </tr>
                     );

@@ -569,6 +569,122 @@ export const upsertReportComment = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteReportComment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      studentId: string;
+      termId: string;
+      commentType: "class_teacher" | "head_teacher";
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        [
+          "class_teacher",
+          "head_teacher",
+          "deputy_head_teacher",
+          "dos",
+          "school_admin",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to edit report comments");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    if (!(await isModuleEnabled(context.supabase, schoolId, "report_cards"))) {
+      throw new Error("Report comments module is disabled");
+    }
+
+    const [{ data: student }, { data: term }, { data: existing }] = await Promise.all([
+      context.supabase
+        .from("students")
+        .select("id, school_id")
+        .eq("id", data.studentId)
+        .maybeSingle(),
+      context.supabase.from("terms").select("id, school_id").eq("id", data.termId).maybeSingle(),
+      context.supabase
+        .from("report_comments")
+        .select("id, class_teacher_comment, head_teacher_comment")
+        .eq("student_id", data.studentId)
+        .eq("term_id", data.termId)
+        .maybeSingle(),
+    ]);
+
+    if (!student || student.school_id !== schoolId)
+      throw new Error("Student not found in your school");
+    if (!term || term.school_id !== schoolId) throw new Error("Term not found in your school");
+    if (!existing) return { ok: true };
+
+    const canManageComment =
+      !roles.includes("class_teacher") ||
+      roles.some((r) =>
+        ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"].includes(r),
+      );
+    if (!canManageComment) {
+      const { data: assignedClasses } = await context.supabase
+        .from("classes")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("class_teacher_id", context.userId);
+      const assignedClassIds = new Set((assignedClasses ?? []).map((cls: any) => cls.id));
+      const { data: studentClass } = await context.supabase
+        .from("students")
+        .select("class_id")
+        .eq("id", data.studentId)
+        .maybeSingle();
+      if (!studentClass || !assignedClassIds.has(studentClass.class_id)) {
+        throw new Error("Class teachers can only edit learners in their assigned class");
+      }
+    }
+
+    if (data.commentType === "class_teacher") {
+      const nextClassComment = null;
+      if ((existing.head_teacher_comment ?? "").trim()) {
+        const { error } = await context.supabase
+          .from("report_comments")
+          .update({ class_teacher_comment: nextClassComment })
+          .eq("id", existing.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await context.supabase.from("report_comments").delete().eq("id", existing.id);
+        if (error) throw new Error(error.message);
+      }
+    } else {
+      const nextHeadComment = null;
+      if ((existing.class_teacher_comment ?? "").trim()) {
+        const { error } = await context.supabase
+          .from("report_comments")
+          .update({ head_teacher_comment: nextHeadComment })
+          .eq("id", existing.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await context.supabase.from("report_comments").delete().eq("id", existing.id);
+        if (error) throw new Error(error.message);
+      }
+    }
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "REPORT_COMMENT_DELETED",
+      "report_comments",
+      {
+        student_id: data.studentId,
+        term_id: data.termId,
+        comment_type: data.commentType,
+      },
+    );
+
+    return { ok: true };
+  });
+
 export const upsertAssessmentEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
@@ -707,6 +823,57 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
         term_id: data.termId,
       },
     );
+
+    return { ok: true };
+  });
+
+export const deleteAssessmentEntry = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: { assessmentId: string }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to delete assessments");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: existing } = await context.supabase
+      .from("assessments")
+      .select("id, school_id, student_id, subject_id, term_id")
+      .eq("id", data.assessmentId)
+      .maybeSingle();
+    if (!existing || existing.school_id !== schoolId)
+      throw new Error("Assessment not found in your school");
+
+    const { error } = await context.supabase
+      .from("assessments")
+      .delete()
+      .eq("id", data.assessmentId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_DELETED", "assessments", {
+      assessment_id: data.assessmentId,
+      student_id: existing.student_id,
+      subject_id: existing.subject_id,
+      term_id: existing.term_id,
+    });
 
     return { ok: true };
   });
@@ -870,6 +1037,46 @@ export const updateStudentFeesBalance = createServerFn({ method: "POST" })
     await logAudit(context.supabase, context.userId, schoolId, "STUDENT_FEES_UPDATED", "students", {
       student_id: data.studentId,
       fees_balance: data.feesBalance,
+    });
+    return { ok: true };
+  });
+
+export const deleteAttendanceSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { studentId: string; termId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to delete attendance summaries");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: existing } = await context.supabase
+      .from("attendance_summaries")
+      .select("id, school_id, student_id, term_id")
+      .eq("student_id", data.studentId)
+      .eq("term_id", data.termId)
+      .maybeSingle();
+    if (!existing || existing.school_id !== schoolId)
+      throw new Error("Attendance summary not found in your school");
+
+    const { error } = await context.supabase
+      .from("attendance_summaries")
+      .delete()
+      .eq("student_id", data.studentId)
+      .eq("term_id", data.termId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "ATTENDANCE_SUMMARY_DELETED", "attendance_summaries", {
+      student_id: data.studentId,
+      term_id: data.termId,
     });
     return { ok: true };
   });

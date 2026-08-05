@@ -809,6 +809,7 @@ export type Database = {
           id: string;
           name: string;
           school_id: string;
+          stream_teacher_id: string | null;
         };
         Insert: {
           class_id: string;
@@ -816,6 +817,7 @@ export type Database = {
           id?: string;
           name: string;
           school_id: string;
+          stream_teacher_id?: string | null;
         };
         Update: {
           class_id?: string;
@@ -823,6 +825,7 @@ export type Database = {
           id?: string;
           name?: string;
           school_id?: string;
+          stream_teacher_id?: string | null;
         };
         Relationships: [
           {
@@ -830,6 +833,13 @@ export type Database = {
             columns: ["class_id"];
             isOneToOne: false;
             referencedRelation: "classes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "streams_stream_teacher_id_fkey";
+            columns: ["stream_teacher_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
           {

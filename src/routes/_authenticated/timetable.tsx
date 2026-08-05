@@ -44,6 +44,7 @@ function TimetablePage() {
   const canEdit = hasAny(me?.roles, ACADEMIC_MANAGERS);
   const [classFilter, setClassFilter] = useState("");
   const [form, setForm] = useState({
+    id: "",
     class_id: "",
     stream_id: "",
     subject_id: "",
@@ -109,6 +110,40 @@ function TimetablePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const updateEntry = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!form.id) throw new Error("No lesson selected for update");
+      if (!currentTerm) throw new Error("Create an academic year and term first");
+      if (!form.class_id || !form.subject_id || !form.teacher_id)
+        throw new Error("Class, subject and teacher are required");
+      const { error } = await supabase
+        .from("timetable_entries")
+        .update({
+          academic_year_id: currentTerm.academic_year_id,
+          term_id: currentTerm.id,
+          class_id: form.class_id,
+          stream_id: form.stream_id || null,
+          subject_id: form.subject_id,
+          teacher_id: form.teacher_id,
+          day_of_week: Number(form.day_of_week),
+          period: Number(form.period),
+          start_time: form.start_time,
+          end_time: form.end_time,
+          classroom: form.classroom || null,
+        })
+        .eq("id", form.id)
+        .eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Lesson updated");
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ["timetable", schoolId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const removeEntry = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("timetable_entries").delete().eq("id", id);
@@ -148,6 +183,36 @@ function TimetablePage() {
 
   const periods = Array.from(new Set(visible.map((e) => e.period))).sort((a, b) => a - b);
 
+  function resetForm() {
+    setForm({
+      id: "",
+      class_id: "",
+      stream_id: "",
+      subject_id: "",
+      teacher_id: "",
+      day_of_week: "1",
+      period: "1",
+      start_time: "08:00",
+      end_time: "08:40",
+      classroom: "",
+    });
+  }
+
+  function startEditing(entry: (typeof visible)[number]) {
+    setForm({
+      id: entry.id,
+      class_id: entry.class_id,
+      stream_id: entry.stream_id ?? "",
+      subject_id: entry.subject_id,
+      teacher_id: entry.teacher_id,
+      day_of_week: String(entry.day_of_week),
+      period: String(entry.period),
+      start_time: entry.start_time,
+      end_time: entry.end_time,
+      classroom: entry.classroom ?? "",
+    });
+  }
+
   return (
     <div>
       <PageHeader
@@ -173,7 +238,8 @@ function TimetablePage() {
             className="grid gap-3 md:grid-cols-4"
             onSubmit={(e) => {
               e.preventDefault();
-              addEntry.mutate();
+              if (form.id) updateEntry.mutate();
+              else addEntry.mutate();
             }}
           >
             <Field label="Class">
@@ -280,9 +346,18 @@ function TimetablePage() {
               />
             </Field>
             <div className="flex items-end">
-              <Btn type="submit" variant="accent" disabled={addEntry.isPending}>
-                Add lesson
+              <Btn
+                type="submit"
+                variant="accent"
+                disabled={addEntry.isPending || updateEntry.isPending}
+              >
+                {form.id ? "Save changes" : "Add lesson"}
               </Btn>
+              {form.id && (
+                <Btn type="button" variant="ghost" onClick={resetForm}>
+                  Cancel
+                </Btn>
+              )}
             </div>
           </form>
         </Panel>
@@ -360,6 +435,68 @@ function TimetablePage() {
                 <tr>
                   <td colSpan={DAYS.length + 1} className="py-6 text-center text-muted-foreground">
                     No lessons scheduled yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="pb-2">Class</th>
+                <th className="pb-2">Subject</th>
+                <th className="pb-2">Teacher</th>
+                <th className="pb-2">Day</th>
+                <th className="pb-2">Period</th>
+                <th className="pb-2">Time</th>
+                <th className="pb-2">State</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((entry) => (
+                <tr key={entry.id} className="border-t border-border">
+                  <td className="py-2.5">{label(data?.classes, entry.class_id)}</td>
+                  <td>{label(data?.subjects, entry.subject_id)}</td>
+                  <td>{teacherName(entry.teacher_id)}</td>
+                  <td>{DAYS[entry.day_of_week - 1] ?? entry.day_of_week}</td>
+                  <td>{entry.period}</td>
+                  <td>
+                    {entry.start_time} - {entry.end_time}
+                  </td>
+                  <td>
+                    <Pill tone={entry.is_published ? "success" : "muted"}>
+                      {entry.is_published ? "published" : "draft"}
+                    </Pill>
+                  </td>
+                  <td className="text-right">
+                    {canEdit && (
+                      <div className="flex justify-end gap-2">
+                        <Btn variant="ghost" onClick={() => startEditing(entry)}>
+                          Edit
+                        </Btn>
+                        <Btn
+                          variant="ghost"
+                          onClick={() => {
+                            if (window.confirm("Delete this lesson?")) {
+                              removeEntry.mutate(entry.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </Btn>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-6 text-center text-muted-foreground">
+                    No timetable entries yet.
                   </td>
                 </tr>
               )}

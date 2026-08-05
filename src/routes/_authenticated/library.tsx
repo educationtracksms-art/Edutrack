@@ -82,6 +82,7 @@ function LibraryPage() {
     "librarian",
   ]);
   const [bookForm, setBookForm] = useState({
+    id: "",
     title: "",
     author: "",
     isbn: "",
@@ -90,6 +91,7 @@ function LibraryPage() {
     total_copies: "1",
   });
   const [loanForm, setLoanForm] = useState({
+    id: "",
     book_id: "",
     borrower_type: "student",
     student_id: "",
@@ -129,6 +131,30 @@ function LibraryPage() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["library", schoolId] });
 
+  function resetBookForm() {
+    setBookForm({
+      id: "",
+      title: "",
+      author: "",
+      isbn: "",
+      category: "",
+      shelf_location: "",
+      total_copies: "1",
+    });
+  }
+
+  function resetLoanForm() {
+    setLoanForm({
+      id: "",
+      book_id: "",
+      borrower_type: "student",
+      student_id: "",
+      user_id: "",
+      due_at: "",
+      notes: "",
+    });
+  }
+
   const addBook = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
@@ -149,14 +175,60 @@ function LibraryPage() {
     },
     onSuccess: () => {
       toast.success("Book added");
-      setBookForm({
-        title: "",
-        author: "",
-        isbn: "",
-        category: "",
-        shelf_location: "",
-        total_copies: "1",
-      });
+      resetBookForm();
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const updateBook = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!canManage) throw new Error("You do not have permission to manage library stock");
+      if (!bookForm.id) throw new Error("No book selected for update");
+      const copies = Math.max(1, Number(bookForm.total_copies) || 1);
+      const { data: book, error: lookupError } = await supabase
+        .from("library_books")
+        .select("available_copies, total_copies")
+        .eq("id", bookForm.id)
+        .eq("school_id", schoolId)
+        .maybeSingle();
+      if (lookupError) throw new Error(lookupError.message);
+      if (!book) throw new Error("Book not found");
+      const availableCopies = Math.min(copies, Number(book.available_copies));
+      const { error } = await supabase
+        .from("library_books")
+        .update({
+          title: bookForm.title.trim(),
+          author: bookForm.author.trim() || null,
+          isbn: bookForm.isbn.trim() || null,
+          category: bookForm.category.trim() || null,
+          shelf_location: bookForm.shelf_location.trim() || null,
+          total_copies: copies,
+          available_copies: availableCopies,
+          status: availableCopies > 0 ? "available" : "unavailable",
+        })
+        .eq("id", bookForm.id)
+        .eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Book updated");
+      resetBookForm();
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const deleteBook = useMutation({
+    mutationFn: async (bookId: string) => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!canManage) throw new Error("You do not have permission to manage library stock");
+      const { error } = await supabase.from("library_books").delete().eq("id", bookId).eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Book deleted");
       refresh();
     },
     onError: (error: Error) => toast.error(error.message),
@@ -206,14 +278,47 @@ function LibraryPage() {
     },
     onSuccess: () => {
       toast.success("Book issued");
-      setLoanForm({
-        book_id: "",
-        borrower_type: "student",
-        student_id: "",
-        user_id: "",
-        due_at: "",
-        notes: "",
-      });
+      resetLoanForm();
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const deleteLoan = useMutation({
+    mutationFn: async (loanId: string) => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!canManage) throw new Error("You do not have permission to delete loans");
+      const { data: loan, error: lookupError } = await supabase
+        .from("library_loans")
+        .select("id, book_id, returned_at")
+        .eq("id", loanId)
+        .eq("school_id", schoolId)
+        .maybeSingle();
+      if (lookupError) throw new Error(lookupError.message);
+      if (!loan) throw new Error("Loan not found");
+      const { error } = await supabase.from("library_loans").delete().eq("id", loanId).eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+      if (!loan.returned_at) {
+        const { data: book } = await supabase
+          .from("library_books")
+          .select("available_copies, total_copies")
+          .eq("id", loan.book_id)
+          .eq("school_id", schoolId)
+          .maybeSingle();
+        if (book) {
+          await supabase
+            .from("library_books")
+            .update({
+              available_copies: Math.min(Number(book.total_copies), Number(book.available_copies) + 1),
+              status: Math.min(Number(book.total_copies), Number(book.available_copies) + 1) > 0 ? "available" : "unavailable",
+            })
+            .eq("id", loan.book_id)
+            .eq("school_id", schoolId);
+        }
+      }
+    },
+    onSuccess: () => {
+      toast.success("Loan deleted");
       refresh();
     },
     onError: (error: Error) => toast.error(error.message),
@@ -275,6 +380,30 @@ function LibraryPage() {
   );
   const issuedTitles = new Set(activeLoans.map((loan) => loan.book_id));
 
+  function startEditingBook(book: BookRow) {
+    setBookForm({
+      id: book.id,
+      title: book.title,
+      author: book.author ?? "",
+      isbn: book.isbn ?? "",
+      category: book.category ?? "",
+      shelf_location: book.shelf_location ?? "",
+      total_copies: String(book.total_copies),
+    });
+  }
+
+  function startEditingLoan(loan: LoanRow) {
+    setLoanForm({
+      id: loan.id,
+      book_id: loan.book_id,
+      borrower_type: loan.borrower_type,
+      student_id: loan.student_id ?? "",
+      user_id: loan.user_id ?? "",
+      due_at: loan.due_at ?? "",
+      notes: loan.notes ?? "",
+    });
+  }
+
   return (
     <div>
       <PageHeader
@@ -305,6 +434,7 @@ function LibraryPage() {
                       <th className="pb-2">Copies</th>
                       <th className="pb-2">Location</th>
                       <th className="pb-2">Status</th>
+                      <th className="pb-2" />
                     </tr>
                   </thead>
                   <tbody>
@@ -321,11 +451,28 @@ function LibraryPage() {
                             {book.status}
                           </Pill>
                         </td>
+                        <td className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Btn variant="ghost" onClick={() => startEditingBook(book)}>
+                              Edit
+                            </Btn>
+                            <Btn
+                              variant="ghost"
+                              onClick={() => {
+                                if (window.confirm(`Delete book "${book.title}"?`)) {
+                                  deleteBook.mutate(book.id);
+                                }
+                              }}
+                            >
+                              Delete
+                            </Btn>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {books.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                        <td colSpan={6} className="py-6 text-center text-muted-foreground">
                           Add your first book to start using the library module.
                         </td>
                       </tr>

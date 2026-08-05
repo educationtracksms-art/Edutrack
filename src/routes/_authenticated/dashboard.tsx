@@ -22,7 +22,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { PageHeader, Panel, Stat } from "@/components/ui-kit";
-import { upsertReportComment, verifyStudent } from "@/lib/admin.functions";
+import { deleteReportComment, upsertReportComment, verifyStudent } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { getEnabledModuleMap } from "@/lib/modules";
 
@@ -130,7 +130,7 @@ function useDashboardData(
             .limit(8),
         ),
         schoolQuery(supabase.from("classes").select("id, name")),
-        schoolQuery(supabase.from("streams").select("id, name, class_id")),
+        schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id")),
         schoolQuery(
           supabase
             .from("terms")
@@ -280,10 +280,18 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
       .filter((item: any) => item.class_teacher_id === me?.userId)
       .map((item: any) => item.id),
   );
+  const assignedStreamIds = new Set(
+    (data.streams ?? [])
+      .filter((item: any) => item.stream_teacher_id === me?.userId)
+      .map((item: any) => item.id),
+  );
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const scopeStudents = data.students.filter((student: any) => {
     if (isClassTeacher) {
-      return student.status === "active" && assignedClassIds.has(student.class_id);
+      return (
+        student.status === "active" &&
+        (assignedClassIds.has(student.class_id) || assignedStreamIds.has(student.stream_id))
+      );
     }
     return (
       student.status === "active" &&
@@ -738,6 +746,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const approveStudent = useServerFn(verifyStudent);
+  const removeComment = useServerFn(deleteReportComment);
   const { data, isLoading } = useDashboardData(
     schoolId,
     isSuper,
@@ -749,6 +758,28 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     onSuccess: () => {
       toast.success("Learner approved");
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (vars: {
+      studentId: string;
+      commentType: "class_teacher" | "head_teacher";
+    }) => {
+      if (!termId) throw new Error("Choose a term first");
+      await removeComment({
+        data: {
+          studentId: vars.studentId,
+          termId,
+          commentType: vars.commentType,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Comment deleted");
+      queryClient.invalidateQueries({ queryKey: ["dashboard-report-comments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-co-curricular"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });

@@ -57,7 +57,7 @@ function AcademicsPage() {
   const deleteIdentifierScaleFn = useServerFn(deleteIdentifierScale);
 
   const [classForm, setClassForm] = useState({ name: "", level: "", class_teacher_id: "" });
-  const [streamForm, setStreamForm] = useState({ name: "", class_id: "" });
+  const [streamForm, setStreamForm] = useState({ name: "", class_id: "", stream_teacher_id: "" });
   const [subjectForm, setSubjectForm] = useState({
     name: "",
     code: "",
@@ -158,7 +158,7 @@ function AcademicsPage() {
   }
 
   function resetStreamForm() {
-    setStreamForm({ name: "", class_id: "" });
+    setStreamForm({ name: "", class_id: "", stream_teacher_id: "" });
     setEditingStreamId(null);
   }
 
@@ -268,6 +268,7 @@ function AcademicsPage() {
         school_id: schoolId,
         class_id: streamForm.class_id,
         name: streamForm.name.trim(),
+        stream_teacher_id: streamForm.stream_teacher_id || null,
       });
       if (error) throw new Error(error.message);
     },
@@ -289,6 +290,7 @@ function AcademicsPage() {
         .update({
           class_id: streamForm.class_id,
           name: streamForm.name.trim(),
+          stream_teacher_id: streamForm.stream_teacher_id || null,
         })
         .eq("id", editingStreamId)
         .eq("school_id", schoolId);
@@ -605,7 +607,11 @@ function AcademicsPage() {
 
   function startEditingStream(item: any) {
     setEditingStreamId(item.id);
-    setStreamForm({ name: item.name ?? "", class_id: item.class_id ?? "" });
+    setStreamForm({
+      name: item.name ?? "",
+      class_id: item.class_id ?? "",
+      stream_teacher_id: item.stream_teacher_id ?? "",
+    });
   }
 
   function startEditingSubject(item: any) {
@@ -749,6 +755,22 @@ function AcademicsPage() {
                 value={streamForm.name}
                 onChange={(e) => setStreamForm({ ...streamForm, name: e.target.value })}
               />
+            </Field>
+            <Field label="Stream teacher">
+              <select
+                className={inputClass}
+                value={streamForm.stream_teacher_id}
+                onChange={(e) =>
+                  setStreamForm({ ...streamForm, stream_teacher_id: e.target.value })
+                }
+              >
+                <option value="">Not assigned</option>
+                {(data?.teachers ?? []).map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.full_name}
+                  </option>
+                ))}
+              </select>
             </Field>
             <div className="flex flex-wrap gap-2">
               <Btn

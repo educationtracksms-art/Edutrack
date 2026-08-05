@@ -8,6 +8,8 @@ import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import {
+  deleteReportComment,
+  deleteAssessmentEntry,
   reviewAssessments,
   upsertAssessmentEntry,
   upsertReportComment,
@@ -75,6 +77,8 @@ type AssessmentsData = {
   teacherInitials: string;
 };
 
+type LearnerSortKey = "class" | "stream";
+
 export const Route = createFileRoute("/_authenticated/assessments")({
   beforeLoad: async () => {
     const { data: auth } = await supabase.auth.getUser();
@@ -130,11 +134,16 @@ function AssessmentsPage() {
   const canEditComments = isClassTeacher || isHeadTeacher;
   const review = useServerFn(reviewAssessments);
   const upsertEntry = useServerFn(upsertAssessmentEntry);
+  const deleteEntry = useServerFn(deleteAssessmentEntry);
   const saveComment = useServerFn(upsertReportComment);
+  const removeComment = useServerFn(deleteReportComment);
   const [subjectFilter, setSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [termFilter, setTermFilter] = useState("");
   const [allocationKey, setAllocationKey] = useState("");
+  const [learnerSearch, setLearnerSearch] = useState("");
+  const [learnerSortKey, setLearnerSortKey] = useState<LearnerSortKey>("class");
+  const [learnerSortDirection, setLearnerSortDirection] = useState<"asc" | "desc">("asc");
   const [activeCommentStudentId, setActiveCommentStudentId] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<
     Record<
@@ -284,6 +293,10 @@ function AssessmentsPage() {
     return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
   }, [data, isClassTeacher, me?.userId]);
 
+  const className = (id: string | null) => data?.classes.find((item) => item.id === id)?.name ?? "—";
+  const streamName = (id: string | null) =>
+    data?.streams.find((item) => item.id === id)?.name ?? "—";
+
   const autoDescriptor = useMemo(() => {
     const total = Number(entryForm.formative || 0) + Number(entryForm.summative || 0);
     return (
@@ -332,6 +345,36 @@ function AssessmentsPage() {
         (!selectedAllocation.stream_id || selectedAllocation.stream_id === student.stream_id),
     );
   }, [data, isTeacher, selectedAllocation]);
+
+  const sortedTeacherStudents = useMemo(() => {
+    const direction = learnerSortDirection === "asc" ? 1 : -1;
+    const term = learnerSearch.trim().toLowerCase();
+    const scopedStudents = term
+      ? teacherStudents.filter((student) => {
+          const fullName = student.full_name.toLowerCase();
+          const classLabel = className(student.class_id).toLowerCase();
+          const streamLabel = streamName(student.stream_id).toLowerCase();
+          return (
+            fullName.includes(term) ||
+            classLabel.includes(term) ||
+            streamLabel.includes(term)
+          );
+        })
+      : teacherStudents;
+
+    const sortValue = (student: StudentRow) =>
+      learnerSortKey === "stream"
+        ? `${streamName(student.stream_id)}|${className(student.class_id)}|${student.full_name}`
+        : `${className(student.class_id)}|${streamName(student.stream_id)}|${student.full_name}`;
+
+    return [...scopedStudents].sort((a, b) => {
+      const left = sortValue(a).toLowerCase();
+      const right = sortValue(b).toLowerCase();
+      if (left < right) return -1 * direction;
+      if (left > right) return 1 * direction;
+      return a.full_name.localeCompare(b.full_name);
+    });
+  }, [className, learnerSearch, learnerSortDirection, learnerSortKey, streamName, teacherStudents]);
 
   const teacherSubjects = useMemo(() => {
     if (!data) return [];
@@ -548,6 +591,39 @@ function AssessmentsPage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (assessmentId: string) => deleteEntry({ data: { assessmentId } }),
+    onSuccess: () => {
+      toast.success("Assessment deleted");
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (vars: {
+      studentId: string;
+      commentType: "class_teacher" | "head_teacher";
+    }) => {
+      const termId = termFilter || data?.currentTermId;
+      if (!termId) throw new Error("Choose a term first");
+      await removeComment({
+        data: {
+          studentId: vars.studentId,
+          termId,
+          commentType: vars.commentType,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Comment deleted");
+      queryClient.invalidateQueries({ queryKey: ["assessment-comments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-report-comments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-co-curricular"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!entryForm.termId && !data?.currentTermId) throw new Error("Choose a term");
@@ -669,21 +745,139 @@ function AssessmentsPage() {
                 })()}
               </Field>
             )}
-            <Field label="Learner">
-              <select
-                className={inputClass}
-                value={entryForm.studentId}
-                onChange={(event) => setEntryForm({ ...entryForm, studentId: event.target.value })}
-                disabled={teacherStudents.length === 0}
-              >
-                <option value="">Select learner</option>
-                {teacherStudents.map((student: StudentRow) => (
-                  <option key={student.id} value={student.id}>
-                    {student.full_name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="md:col-span-2 xl:col-span-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <Field label="Search learners" className="min-w-0 flex-1">
+                  <input
+                    className={inputClass}
+                    value={learnerSearch}
+                    onChange={(event) => setLearnerSearch(event.target.value)}
+                    placeholder="Search by name, class or stream"
+                  />
+                </Field>
+                <div className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                  Current allocation: {selectedAllocation?.label ?? "No allocation selected"}
+                </div>
+              </div>
+            </div>
+            <div className="md:col-span-2 xl:col-span-4">
+              <Field label="Learners to assess">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <Btn
+                    type="button"
+                    variant={learnerSortKey === "class" ? "accent" : "ghost"}
+                    onClick={() => setLearnerSortKey("class")}
+                  >
+                    Sort by class
+                  </Btn>
+                  <Btn
+                    type="button"
+                    variant={learnerSortKey === "stream" ? "accent" : "ghost"}
+                    onClick={() => setLearnerSortKey("stream")}
+                  >
+                    Sort by stream
+                  </Btn>
+                  <Btn
+                    type="button"
+                    variant="ghost"
+                    onClick={() =>
+                      setLearnerSortDirection((current) => (current === "asc" ? "desc" : "asc"))
+                    }
+                  >
+                    Direction: {learnerSortDirection === "asc" ? "A to Z" : "Z to A"}
+                  </Btn>
+                  <p className="text-xs text-muted-foreground">
+                    Select a learner from the table to load them into the assessment form.
+                  </p>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2">Learner</th>
+                        <th className="px-3 py-2">
+                          <button
+                            type="button"
+                            className="font-semibold text-foreground"
+                            onClick={() => {
+                              setLearnerSortKey("class");
+                              setLearnerSortDirection((current) =>
+                                learnerSortKey === "class"
+                                  ? current === "asc"
+                                    ? "desc"
+                                    : "asc"
+                                  : "asc",
+                              );
+                            }}
+                          >
+                            Class
+                          </button>
+                        </th>
+                        <th className="px-3 py-2">
+                          <button
+                            type="button"
+                            className="font-semibold text-foreground"
+                            onClick={() => {
+                              setLearnerSortKey("stream");
+                              setLearnerSortDirection((current) =>
+                                learnerSortKey === "stream"
+                                  ? current === "asc"
+                                    ? "desc"
+                                    : "asc"
+                                  : "asc",
+                              );
+                            }}
+                          >
+                            Stream
+                          </button>
+                        </th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedTeacherStudents.map((student) => {
+                        const selected = entryForm.studentId === student.id;
+                        return (
+                          <tr
+                            key={student.id}
+                            className={`border-t border-border transition-colors ${
+                              selected ? "bg-accent/10" : "hover:bg-muted/40"
+                            }`}
+                          >
+                            <td className="px-3 py-2 font-medium">{student.full_name}</td>
+                            <td className="px-3 py-2">{className(student.class_id)}</td>
+                            <td className="px-3 py-2">{streamName(student.stream_id)}</td>
+                            <td className="px-3 py-2 capitalize">{student.status}</td>
+                            <td className="px-3 py-2 text-right">
+                              <Btn
+                                type="button"
+                                variant={selected ? "accent" : "ghost"}
+                                onClick={() =>
+                                  setEntryForm((current) => ({
+                                    ...current,
+                                    studentId: student.id,
+                                  }))
+                                }
+                              >
+                                {selected ? "Selected" : "Select"}
+                              </Btn>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {sortedTeacherStudents.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                            No learners match the current allocation.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Field>
+            </div>
             <Field label="Subject">
               <select
                 className={inputClass}
@@ -768,7 +962,9 @@ function AssessmentsPage() {
               <Btn
                 type="submit"
                 variant="accent"
-                disabled={createMutation.isPending || (isTeacher && !selectedAllocation)}
+                disabled={
+                  createMutation.isPending || (isTeacher && !selectedAllocation) || !entryForm.studentId
+                }
               >
                 {createMutation.isPending ? "Saving…" : "Save draft"}
               </Btn>
@@ -923,36 +1119,53 @@ function AssessmentsPage() {
                               <td className="py-3 pr-4">{savedCoCurricular.clubs || "—"}</td>
                               <td className="py-3 pr-4">{savedCoCurricular.projects || "—"}</td>
                               <td className="py-3 pr-4">
-                                {savedComment.classTeacherComment || "—"}
+                                <div className="space-y-2">
+                                  <p>{savedComment.classTeacherComment || "—"}</p>
+                                  {savedComment.classTeacherComment && (
+                                    <div className="flex flex-wrap gap-2">
+                                      <Btn
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setActiveCommentStudentId(student.id);
+                                          setCommentDrafts((current) => {
+                                            const next = { ...current };
+                                            const currentDraft = next[student.id] ?? {
+                                              classTeacherComment: "",
+                                              headTeacherComment: "",
+                                              games: "",
+                                              clubs: "",
+                                              projects: "",
+                                            };
+                                            next[student.id] = {
+                                              ...currentDraft,
+                                              classTeacherComment: savedComment.classTeacherComment,
+                                              games: savedCoCurricular.games,
+                                              clubs: savedCoCurricular.clubs,
+                                              projects: savedCoCurricular.projects,
+                                            };
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        Edit
+                                      </Btn>
+                                      <Btn
+                                        variant="ghost"
+                                        onClick={() =>
+                                          deleteCommentMutation.mutate({
+                                            studentId: student.id,
+                                            commentType: "class_teacher",
+                                          })
+                                        }
+                                        disabled={deleteCommentMutation.isPending}
+                                      >
+                                        Delete
+                                      </Btn>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
-                              <td className="py-3 text-right">
-                                <Btn
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setActiveCommentStudentId(student.id);
-                                    setCommentDrafts((current) => {
-                                      const next = { ...current };
-                                      const currentDraft = next[student.id] ?? {
-                                        classTeacherComment: "",
-                                        headTeacherComment: "",
-                                        games: "",
-                                        clubs: "",
-                                        projects: "",
-                                      };
-                                      next[student.id] = {
-                                        ...currentDraft,
-                                        classTeacherComment: savedComment.classTeacherComment,
-                                        games: savedCoCurricular.games,
-                                        clubs: savedCoCurricular.clubs,
-                                        projects: savedCoCurricular.projects,
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  Edit
-                                </Btn>
-                              </td>
+                              <td className="py-3 text-right" />
                             </tr>
                           );
                         })}
@@ -1213,11 +1426,24 @@ function AssessmentsPage() {
                         </Pill>
                       </td>
                       <td className="text-right">
-                        {!row.locked && (
-                          <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
-                            Submit
+                        <div className="flex justify-end gap-2">
+                          {!row.locked && (
+                            <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
+                              Submit
+                            </Btn>
+                          )}
+                          <Btn
+                            variant="ghost"
+                            onClick={() => {
+                              if (window.confirm("Delete this assessment record?")) {
+                                deleteMutation.mutate(row.id);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                          >
+                            Delete
                           </Btn>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );

@@ -22,6 +22,7 @@ export async function buildReportCards(
   if (!students || students.length === 0) return [];
 
   const schoolId = students[0].school_id as string;
+  const ids = students.map((s: any) => s.id);
 
   const [
     { data: school },
@@ -30,6 +31,7 @@ export async function buildReportCards(
     { data: roles },
     { data: streams },
     { data: subjects },
+    { data: studentSubjects },
     { data: scales },
     { data: identifierScales },
     { data: toggles },
@@ -45,6 +47,11 @@ export async function buildReportCards(
       .select("id, name, position")
       .eq("school_id", schoolId)
       .order("position"),
+    supabase
+      .from("student_subjects")
+      .select("student_id, subject_id")
+      .in("student_id", ids)
+      .eq("school_id", schoolId),
     supabase
       .from("grading_scales")
       .select("*")
@@ -77,7 +84,6 @@ export async function buildReportCards(
     yearName = year?.name ?? "";
   }
 
-  const ids = students.map((s: any) => s.id);
   const termFilterId = term?.id ?? "00000000-0000-0000-0000-000000000000";
   const [{ data: assessments }, { data: attendance }, { data: comments }, { data: activities }] =
     await Promise.all([
@@ -140,39 +146,44 @@ export async function buildReportCards(
       (profiles ?? []).find((p: any) => p.id === cls?.class_teacher_id)?.full_name ?? "";
     const streamName = streams?.find((s: any) => s.id === student.stream_id)?.name ?? "";
     const marks = (assessments ?? []).filter((a: any) => a.student_id === student.id);
+    const assignedSubjectIds = new Set(
+      (studentSubjects ?? [])
+        .filter((assignment: any) => assignment.student_id === student.id)
+        .map((assignment: any) => assignment.subject_id),
+    );
 
     const totals: number[] = [];
-    const identifiers: number[] = [];
 
-    const rows: SubjectRow[] = (subjects ?? []).map((subject: any) => {
-      const mark = marks.find((m: any) => m.subject_id === subject.id);
-      if (!mark || (mark.formative == null && mark.summative == null)) {
+    const rows: SubjectRow[] = (subjects ?? [])
+      .filter((subject: any) => assignedSubjectIds.has(subject.id))
+      .map((subject: any) => {
+        const mark = marks.find((m: any) => m.subject_id === subject.id);
+        if (!mark || (mark.formative == null && mark.summative == null)) {
+          return {
+            subject: subject.name,
+            formative: "",
+            summative: "",
+            total: "",
+            grade: "",
+            descriptor: "",
+            teacher: mark?.teacher_initials ?? "",
+          };
+        }
+        const formative = Number(mark.formative ?? 0);
+        const summative = Number(mark.summative ?? 0);
+        const total = Math.round((formative + summative) * 10) / 10;
+        const g = gradeFor(total);
+        totals.push(total);
         return {
           subject: subject.name,
-          formative: "",
-          summative: "",
-          total: "",
-          grade: "",
-          descriptor: "",
-          teacher: mark?.teacher_initials ?? "",
+          formative: fmt(formative),
+          summative: fmt(summative),
+          total: fmt(total),
+          grade: g.grade,
+          gradeDescriptor: g.descriptor,
+          teacher: mark.teacher_initials ?? "",
         };
-      }
-      const formative = Number(mark.formative ?? 0);
-      const summative = Number(mark.summative ?? 0);
-      const total = Math.round((formative + summative) * 10) / 10;
-      const g = gradeFor(total);
-      totals.push(total);
-      identifiers.push(g.identifier);
-      return {
-        subject: subject.name,
-        formative: fmt(formative),
-        summative: fmt(summative),
-        total: fmt(total),
-        grade: g.grade,
-        gradeDescriptor: g.descriptor,
-        teacher: mark.teacher_initials ?? "",
-      };
-    });
+      });
 
     const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
     const identifierAvg = (average / 100) * 3;
