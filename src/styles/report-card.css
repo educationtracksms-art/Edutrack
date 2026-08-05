@@ -9,6 +9,7 @@
 .report-doc {
   font-family: "Segoe UI", Roboto, system-ui, sans-serif;
   color: #1a2634;
+  font-size: 18px;
 }
 @media print {
   @page {
@@ -91,10 +92,10 @@
 }
 .report-doc .logo {
   flex-shrink: 0;
-  width: 65px;
-  height: 65px;
-  max-width: 65px;
-  max-height: 65px;
+  width: 78px;
+  height: 78px;
+  max-width: 78px;
+  max-height: 78px;
   background: #f0f2f5;
   border-radius: 50%;
   display: flex;
@@ -103,13 +104,13 @@
   font-weight: 700;
   color: #1e2b3a;
   border: 2px solid #b0b8c5;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   overflow: hidden;
 }
 .report-doc .logo img {
-  max-width: 65px;
-  max-height: 65px;
+  max-width: 78px;
+  max-height: 78px;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -119,25 +120,25 @@
   text-align: center;
 }
 .report-doc .school-details h1 {
-  font-size: 26px;
+  font-size: 28px;
   letter-spacing: 0.5px;
   color: #1a2634;
   margin-bottom: 2px;
   font-weight: 700;
 }
 .report-doc .school-details p {
-  font-size: 14px;
+  font-size: 15px;
   color: #2c3e50;
   margin-bottom: 2px;
 }
 .report-doc .school-details p.motto {
-  font-size: 13px;
+  font-size: 14px;
   color: #555;
   font-style: italic;
   margin-bottom: 4px;
 }
 .report-doc .school-details h2 {
-  font-size: 16px;
+  font-size: 17px;
   color: #c9302c;
   font-weight: 600;
   margin-top: 2px;
@@ -168,7 +169,7 @@
   padding: 8px 10px;
   border: 1px solid #dde2ec;
   vertical-align: middle;
-  font-size: 13px;
+  font-size: 14px;
 }
 .report-doc .student-info-table .label {
   font-weight: 600;
@@ -231,7 +232,7 @@
 .report-doc .student-info-table .attendance-cell table {
   margin: 0 auto;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: 16px;
   width: 100%;
   max-width: 210px;
 }
@@ -240,12 +241,12 @@
   color: white;
   padding: 6px 14px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
 }
 .report-doc .student-info-table .attendance-cell td {
   border: 1px solid #3d4a5a;
   padding: 5px 12px;
-  font-size: 13px;
+  font-size: 14px;
   background: white;
 }
 .report-doc .student-info-table .attendance-cell tr:last-child td {
@@ -282,14 +283,14 @@
 .report-doc .title-row td {
   background: #f8faff;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   color: #1f2a3f;
   text-align: center;
   padding: 6px 14px;
 }
 .report-doc .title,
 .report-doc .section-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #1f2a3f;
   margin: 8px 0 6px;
@@ -298,14 +299,14 @@
 }
 .report-doc .approved-note {
   margin: -2px 0 6px 15px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #1e3a8a;
 }
 .report-doc .results {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10.5px;
+  font-size: 12px;
   margin-bottom: 4px;
 }
 .report-doc .results th {
@@ -314,13 +315,13 @@
   padding: 4px 3px;
   font-weight: 600;
   color: #141f2d;
-  font-size: 10px;
+  font-size: 12px;
 }
 .report-doc .results td {
   border: 1px solid #3d4a5a;
   padding: 3px 3px;
   vertical-align: middle;
-  font-size: 10px;
+  font-size: 12px;
 }
 .report-doc .results th:nth-child(1) {
   width: 16%;
@@ -392,7 +393,7 @@
   border: 1px solid #3d4a5a;
   padding: 5px 10px;
   background: #f7fafc;
-  font-size: 12px;
+  font-size: 14px;
 }
 .report-doc .approval-table .approval-label {
   width: 18%;
@@ -423,7 +424,7 @@
   color: #c9302c;
   text-align: center;
   margin-bottom: 4px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .report-doc .keywords table {
   width: 100%;
@@ -434,16 +435,16 @@
   border: 1px solid #3d4a5a;
   padding: 3px 5px;
   font-weight: 600;
-  font-size: 10.5px;
+  font-size: 12px;
 }
 .report-doc .keywords td {
   border: 1px solid #3d4a5a;
   padding: 3px 5px;
-  font-size: 10.5px;
+  font-size: 12px;
 }
 .report-doc .meaning p {
   margin-bottom: 4px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
   border-bottom: 1px dashed #d0d7e3;
   padding-bottom: 3px;
@@ -459,7 +460,7 @@
   width: 100%;
   border-collapse: collapse;
   margin: 4px 0 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .report-doc .activities td {
   border: 1px solid #3d4a5a;
@@ -480,13 +481,13 @@
   border: 1px solid #3d4a5a;
   padding: 5px 10px;
   vertical-align: top;
-  font-size: 12px;
+  font-size: 13px;
 }
 .report-doc .comments .label {
   font-weight: 700;
   background: #eef2f7;
   width: 18%;
-  font-size: 12px;
+  font-size: 13px;
 }
 .report-doc .signature-area {
   display: flex;
@@ -498,7 +499,7 @@
   border-top: 2px solid #d0d7e3;
 }
 .report-doc .signature-area div {
-  font-size: 12px;
+  font-size: 13px;
   min-width: 130px;
 }
 @media print {
@@ -547,34 +548,34 @@
   }
   .report-doc .student-info-table td {
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .label-lin {
-    font-size: 10px;
+    font-size: 12px;
     padding: 4px 3px;
     min-width: 30px;
     width: 4%;
   }
-  .report-doc .student-info-table .value-lin {
-    font-size: 10px;
+.report-doc .student-info-table .value-lin {
+    font-size: 12px;
     padding: 4px 3px;
     min-width: 40px;
     width: 6%;
   }
   .report-doc .student-info-table .label-name {
-    font-size: 10px;
+    font-size: 12px;
     min-width: 40px;
   }
   .report-doc .student-info-table .value-name {
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .label-small {
-    font-size: 10px;
+    font-size: 12px;
     min-width: 55px;
     width: 8%;
   }
   .report-doc .student-info-table .value-small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .attendance-cell {
     padding: 6px 8px;
@@ -585,11 +586,11 @@
     max-width: 180px;
   }
   .report-doc .student-info-table .attendance-cell th {
-    font-size: 11px;
+    font-size: 12px;
     padding: 4px 10px;
   }
   .report-doc .student-info-table .attendance-cell td {
-    font-size: 11px;
+    font-size: 12px;
     padding: 4px 10px;
   }
   .report-doc .passport-cell {
@@ -601,11 +602,11 @@
     height: 102px;
     max-width: 85px;
     max-height: 102px;
-    font-size: 11px;
+    font-size: 12px;
     border-width: 3px;
   }
   .report-doc .title-row td {
-    font-size: 12px;
+  font-size: 13px;
     padding: 4px 10px;
   }
   .report-doc .title,
@@ -616,23 +617,23 @@
     border-left-width: 4px;
   }
   .report-doc .approved-note {
-    font-size: 9px;
+    font-size: 12px;
     margin: -1px 0 3px 11px;
   }
   .report-doc .results {
-    font-size: 8.5px;
+    font-size: 12px;
   }
   .report-doc .results th,
   .report-doc .results td {
     padding: 2px 2px;
-    font-size: 8px;
+    font-size: 12px;
   }
   .report-doc .results th:nth-child(6) {
     width: 44%;
   }
   .report-doc .overall-table td {
     padding: 3px 6px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .overall-table .avg-score {
     font-size: 13px;
@@ -640,11 +641,11 @@
   }
   .report-doc .overall-table .identifier-block,
   .report-doc .overall-table .descriptor-block {
-    font-size: 9.5px;
+    font-size: 12px;
   }
   .report-doc .approval-table td {
     padding: 3px 6px;
-    font-size: 9.5px;
+    font-size: 12px;
   }
   .report-doc .definitions {
     padding: 4px 8px;
@@ -652,20 +653,20 @@
     gap: 4px;
   }
   .report-doc .keywords h3 {
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .keywords th,
   .report-doc .keywords td {
-    font-size: 8.5px;
+    font-size: 12px;
     padding: 2px 4px;
   }
   .report-doc .meaning p {
-    font-size: 9px;
+    font-size: 12px;
     margin-bottom: 2px;
     padding-bottom: 2px;
   }
   .report-doc .activities {
-    font-size: 9.5px;
+    font-size: 12px;
     margin: 2px 0 4px;
   }
   .report-doc .activities td {
@@ -673,10 +674,10 @@
   }
   .report-doc .comments td {
     padding: 3px 6px;
-    font-size: 9.5px;
+    font-size: 12px;
   }
   .report-doc .comments .label {
-    font-size: 9.5px;
+    font-size: 12px;
     width: 16%;
   }
   .report-doc .signature-area {
@@ -684,7 +685,7 @@
     padding-top: 6px;
   }
   .report-doc .signature-area div {
-    font-size: 9.5px;
+    font-size: 12px;
     min-width: 90px;
   }
   .report-doc,
@@ -703,47 +704,47 @@
     font-size: 20px;
   }
   .report-doc .school-details p {
-    font-size: 11px;
+    font-size: 12px;
   }
   .report-doc .student-info-table td {
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .label-lin {
-    font-size: 10px;
+    font-size: 12px;
     padding: 4px 3px;
     min-width: 30px;
     width: 6%;
   }
   .report-doc .student-info-table .value-lin {
-    font-size: 10px;
+    font-size: 12px;
     padding: 4px 3px;
     min-width: 40px;
   }
   .report-doc .student-info-table .label-name {
-    font-size: 10px;
+    font-size: 12px;
     min-width: 40px;
   }
   .report-doc .student-info-table .value-name {
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .label-small {
-    font-size: 10px;
+    font-size: 12px;
     min-width: 55px;
   }
   .report-doc .student-info-table .value-small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .attendance-cell table {
     font-size: 12px;
     max-width: 160px;
   }
   .report-doc .student-info-table .attendance-cell th {
-    font-size: 11px;
+    font-size: 12px;
     padding: 4px 8px;
   }
   .report-doc .student-info-table .attendance-cell td {
-    font-size: 11px;
+    font-size: 12px;
     padding: 4px 8px;
   }
   .report-doc .passport {
@@ -751,7 +752,7 @@
     height: 84px;
     max-width: 70px;
     max-height: 84px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .report-doc .definitions {
     flex-direction: column;
@@ -763,7 +764,7 @@
     font-size: 15px;
   }
   .report-doc .approval-table td {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (max-width: 480px) {
@@ -772,59 +773,60 @@
     height: 66px;
     max-width: 55px;
     max-height: 66px;
-    font-size: 8px;
+    font-size: 12px;
     border-width: 3px;
   }
   .report-doc .results th,
   .report-doc .results td {
-    font-size: 8px;
+    font-size: 12px;
   }
   .report-doc .student-info-table td {
     padding: 3px 4px;
-    font-size: 9px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .label-lin {
-    font-size: 9px;
+    font-size: 12px;
     padding: 3px 2px;
     min-width: 25px;
     width: 8%;
   }
   .report-doc .student-info-table .value-lin {
-    font-size: 9px;
+    font-size: 12px;
     padding: 3px 2px;
     min-width: 30px;
   }
   .report-doc .student-info-table .label-name {
-    font-size: 9px;
+    font-size: 12px;
     min-width: 30px;
   }
   .report-doc .student-info-table .value-name {
-    font-size: 9px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .label-small {
-    font-size: 9px;
+    font-size: 12px;
     min-width: 40px;
   }
   .report-doc .student-info-table .value-small {
-    font-size: 9px;
+    font-size: 12px;
   }
   .report-doc .student-info-table .attendance-cell table {
-    font-size: 10px;
+    font-size: 12px;
     max-width: 120px;
   }
   .report-doc .student-info-table .attendance-cell th {
-    font-size: 9px;
+    font-size: 12px;
     padding: 2px 6px;
   }
   .report-doc .student-info-table .attendance-cell td {
-    font-size: 9px;
+    font-size: 12px;
     padding: 2px 6px;
   }
   .report-doc .title-row td {
-    font-size: 10px;
+    font-size: 12px;
     padding: 3px 8px;
   }
   .report-doc .approved-note {
-    font-size: 8px;
+    font-size: 12px;
   }
 }
+
