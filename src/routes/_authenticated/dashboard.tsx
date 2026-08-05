@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+﻿import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -274,6 +274,16 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
     class_id: string | null;
     stream_id: string | null;
   }>;
+  const subjectById = new Map(
+    (data.subjects ?? []).map((subject: any) => [subject.id, subject.name as string]),
+  );
+  const classById = new Map((data.classes ?? []).map((item: any) => [item.id, item.name as string]));
+  const streamById = new Map(
+    (data.streams ?? []).map((item: any) => [
+      item.id,
+      { name: item.name as string, class_id: item.class_id as string | null },
+    ]),
+  );
   const assignedClassIds = new Set(
     (data.classes ?? [])
       .filter((item: any) => item.class_teacher_id === me?.userId)
@@ -285,25 +295,56 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
       .map((item: any) => item.id),
   );
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
-  const scopeStudents = data.students.filter((student: any) => {
-    if (isClassTeacher) {
-      return (
-        student.status === "active" &&
-        (assignedClassIds.has(student.class_id) || assignedStreamIds.has(student.stream_id))
-      );
-    }
-    return (
-      student.status === "active" &&
-      teacherAllocations.some(
-        (allocation) =>
-          (!allocation.class_id || allocation.class_id === student.class_id) &&
-          (!allocation.stream_id || allocation.stream_id === student.stream_id),
-      )
-    );
+  const scopeAllocations = teacherAllocations.filter((allocation) => {
+    if (!isClassTeacher) return true;
+    const classMatch = allocation.class_id ? assignedClassIds.has(allocation.class_id) : true;
+    const streamMatch = allocation.stream_id ? assignedStreamIds.has(allocation.stream_id) : true;
+    return classMatch && streamMatch;
   });
-  const scopeSubjects = data.subjects.filter((subject: any) =>
-    teacherAllocations.some((allocation) => allocation.subject_id === subject.id),
-  );
+  const scopeSubjectIds = new Set(scopeAllocations.map((allocation) => allocation.subject_id));
+  const scopeStudents = data.students
+    .filter((student: any) => {
+      if (student.status !== "active") return false;
+      return scopeAllocations.some((allocation) => {
+        const classMatches = allocation.class_id ? allocation.class_id === student.class_id : true;
+        const streamMatches = allocation.stream_id
+          ? allocation.stream_id === student.stream_id
+          : true;
+        return classMatches && streamMatches;
+      });
+    })
+    .sort((left: any, right: any) => {
+      const leftClass = classById.get(left.class_id) ?? "";
+      const rightClass = classById.get(right.class_id) ?? "";
+      if (leftClass !== rightClass) return leftClass.localeCompare(rightClass);
+
+      const leftStream = streamById.get(left.stream_id)?.name ?? "";
+      const rightStream = streamById.get(right.stream_id)?.name ?? "";
+      if (leftStream !== rightStream) return leftStream.localeCompare(rightStream);
+
+      const leftSubject = scopeAllocations
+        .filter(
+          (allocation) =>
+            (!allocation.class_id || allocation.class_id === left.class_id) &&
+            (!allocation.stream_id || allocation.stream_id === left.stream_id),
+        )
+        .map((allocation) => subjectById.get(allocation.subject_id) ?? "")
+        .filter(Boolean)
+        .sort()[0] ?? "";
+      const rightSubject = scopeAllocations
+        .filter(
+          (allocation) =>
+            (!allocation.class_id || allocation.class_id === right.class_id) &&
+            (!allocation.stream_id || allocation.stream_id === right.stream_id),
+        )
+        .map((allocation) => subjectById.get(allocation.subject_id) ?? "")
+        .filter(Boolean)
+        .sort()[0] ?? "";
+      if (leftSubject !== rightSubject) return leftSubject.localeCompare(rightSubject);
+
+      return left.full_name.localeCompare(right.full_name);
+    });
+  const scopeSubjects = data.subjects.filter((subject: any) => scopeSubjectIds.has(subject.id));
   const scopeAssessments = data.assessments.filter(
     (assessment: any) =>
       scopeStudents.some((student: any) => student.id === assessment.student_id) &&
@@ -313,15 +354,13 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
     (assessment: any) => assessment.status === "submitted",
   );
   const canEditComments = isClassTeacher;
-  const assignedLabels = teacherAllocations.map((allocation) => {
-    const subjectName =
-      data.subjects.find((subject: any) => subject.id === allocation.subject_id)?.name ?? "Subject";
-    const className =
-      data.classes.find((item: any) => item.id === allocation.class_id)?.name ?? "Any class";
-    const streamName =
-      data.streams.find((item: any) => item.id === allocation.stream_id)?.name ?? "Any stream";
+  const assignedLabels = scopeAllocations.map((allocation) => {
+    const subjectName = subjectById.get(allocation.subject_id) ?? "Subject";
+    const className = allocation.class_id ? classById.get(allocation.class_id) ?? "Any class" : "Any class";
+    const streamName = allocation.stream_id ? streamById.get(allocation.stream_id)?.name ?? "Any stream" : "Any stream";
     return `${subjectName} · ${className}${allocation.stream_id ? ` · ${streamName}` : ""}`;
   });
+  const visibleLearners = scopeStudents.slice(0, 10);
 
   const totals = scopeAssessments.map(
     (assessment: any) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
@@ -367,7 +406,7 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
           </p>
         ) : (
           <ul className="space-y-2 text-sm">
-            {scopeStudents.slice(0, 10).map((student: any) => (
+            {visibleLearners.map((student: any) => (
               <li
                 key={student.id}
                 className="flex items-center justify-between rounded-md border border-border px-3 py-2"
