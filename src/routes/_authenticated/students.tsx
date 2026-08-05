@@ -40,6 +40,7 @@ function StudentsPage() {
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const canAccessStudents = hasAny(me?.roles, ["super_admin", ...SCHOOL_ROLES]);
+  const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const canManageStudents = hasAny(me?.roles, [
     "school_admin",
     "head_teacher",
@@ -54,7 +55,6 @@ function StudentsPage() {
     "deputy_head_teacher",
     "super_admin",
   ]);
-  const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const canVerify = canManageStudents || isClassTeacher;
   const verify = useServerFn(verifyStudent);
   const updateStatus = useServerFn(updateStudentStatus);
