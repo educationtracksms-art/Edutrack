@@ -844,27 +844,37 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
     const summativeScore = Number(data.summative ?? 0);
     const totalScore = formativeScore + summativeScore;
     const gradeMatch = gradeFor(totalScore);
-    const { error } = await context.supabase.from("assessments").upsert(
-      {
-        school_id: schoolId,
-        student_id: data.studentId,
-        subject_id: data.subjectId,
-        term_id: data.termId,
-        exam_type: data.examType?.trim() || "end_of_term",
-        grade_descriptor: gradeMatch.descriptor || null,
-        formative: data.formative ?? null,
-        summative: data.summative ?? null,
-        teacher_initials: teacherInitials,
-        status: "draft",
-        locked: false,
-        rejection_reason: null,
-        submitted_by: null,
-        submitted_at: null,
-        approved_by: null,
-        approved_at: null,
-      },
-      { onConflict: "student_id,subject_id,term_id" },
-    );
+    const { data: existingAssessment, error: existingError } = await context.supabase
+      .from("assessments")
+      .select("id")
+      .eq("school_id", schoolId)
+      .eq("student_id", data.studentId)
+      .eq("subject_id", data.subjectId)
+      .eq("term_id", data.termId)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (existingAssessment) {
+      throw new Error("An assessment already exists for this learner, subject and term. Existing marks were left unchanged.");
+    }
+
+    const { error } = await context.supabase.from("assessments").insert({
+      school_id: schoolId,
+      student_id: data.studentId,
+      subject_id: data.subjectId,
+      term_id: data.termId,
+      exam_type: data.examType?.trim() || "end_of_term",
+      grade_descriptor: gradeMatch.descriptor || null,
+      formative: data.formative ?? null,
+      summative: data.summative ?? null,
+      teacher_initials: teacherInitials,
+      status: "draft",
+      locked: false,
+      rejection_reason: null,
+      submitted_by: null,
+      submitted_at: null,
+      approved_by: null,
+      approved_at: null,
+    });
     if (error) throw new Error(error.message);
 
     await logAudit(
@@ -879,6 +889,81 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
         term_id: data.termId,
       },
     );
+
+    return { ok: true };
+  });
+
+export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      assessmentId: string;
+      examType?: string;
+      gradeDescriptor?: string | null;
+      formative?: number | null;
+      summative?: number | null;
+      teacherInitials?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to edit assessments");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: existingAssessment, error: existingError } = await context.supabase
+      .from("assessments")
+      .select("id, school_id, status, locked")
+      .eq("id", data.assessmentId)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (!existingAssessment || existingAssessment.school_id !== schoolId) {
+      throw new Error("Assessment not found in your school");
+    }
+    if (existingAssessment.status !== "draft" || existingAssessment.locked) {
+      throw new Error("Only draft assessments can be edited");
+    }
+
+    const teacherInitials = data.teacherInitials?.trim() || null;
+    const { data: gradingScales } = await context.supabase
+      .from("grading_scales")
+      .select("grade, min_score, max_score, grade_descriptor")
+      .eq("school_id", schoolId);
+    const totalScore = Number(data.formative ?? 0) + Number(data.summative ?? 0);
+    const gradeMatch = (gradingScales ?? []).find(
+      (scale: any) => totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+    );
+
+    const { error } = await context.supabase
+      .from("assessments")
+      .update({
+        exam_type: data.examType?.trim() || "end_of_term",
+        grade_descriptor: gradeMatch?.grade_descriptor ?? null,
+        formative: data.formative ?? null,
+        summative: data.summative ?? null,
+        teacher_initials: teacherInitials,
+      })
+      .eq("id", data.assessmentId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_DRAFT_UPDATED", "assessments", {
+      assessment_id: data.assessmentId,
+    });
 
     return { ok: true };
   });

@@ -226,11 +226,10 @@ export function ReportCard({ data }: { data: ReportCardData }) {
               Class Teacher&apos;s Comment
               {staff.classTeacher && (
                 <>
-                  <br />
-                  <span className="text-xs font-normal">({staff.classTeacher})</span>
                 </>
               )}
             </td>
+            <td>{comments.classTeacher}</td>
           </tr>
           <tr>
             <td className="label">Head Teacher's Comment</td>

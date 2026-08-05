@@ -11,6 +11,7 @@ import {
   deleteReportComment,
   deleteAssessmentEntry,
   reviewAssessments,
+  updateAssessmentDraftEntry,
   upsertAssessmentEntry,
   upsertReportComment,
 } from "@/lib/admin.functions";
@@ -134,6 +135,7 @@ function AssessmentsPage() {
   const canEditComments = isClassTeacher || isHeadTeacher;
   const review = useServerFn(reviewAssessments);
   const upsertEntry = useServerFn(upsertAssessmentEntry);
+  const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);
   const deleteEntry = useServerFn(deleteAssessmentEntry);
   const saveComment = useServerFn(upsertReportComment);
   const removeComment = useServerFn(deleteReportComment);
@@ -522,6 +524,13 @@ function AssessmentsPage() {
       }));
   }, [data, isTeacher, selectedAllocation, subjectFilter, statusFilter, termFilter]);
 
+  const visibleRows = useMemo(() => {
+    const normalizedSubjectFilter = subjectFilter.trim();
+    return rows.filter((row) =>
+      normalizedSubjectFilter ? row.subject_id === normalizedSubjectFilter : true,
+    );
+  }, [rows, subjectFilter]);
+
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
       const edit = edits[id] ?? {};
@@ -543,6 +552,29 @@ function AssessmentsPage() {
         grade_descriptor:
           descriptorFromAssessmentScore(effectiveFormative, effectiveSummative) || null,
       };
+      if (existing?.status === "draft" && !existing.locked) {
+        await updateDraftEntry({
+          data: {
+            assessmentId: id,
+            examType: existing.exam_type,
+            formative:
+              edit.formative !== undefined
+                ? edit.formative === ""
+                  ? null
+                  : Number(edit.formative)
+                : existing.formative,
+            summative:
+              edit.summative !== undefined
+                ? edit.summative === ""
+                  ? null
+                  : Number(edit.summative)
+                : existing.summative,
+            teacherInitials: existing.teacher_initials ?? null,
+          },
+        });
+        return;
+      }
+
       const { error } = await supabase.from("assessments").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
     },
@@ -681,7 +713,7 @@ function AssessmentsPage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
-  const pendingIds = rows
+  const pendingIds = visibleRows
     .filter(
       (
         row: AssessmentRow & {
@@ -704,7 +736,7 @@ function AssessmentsPage() {
   );
   const scopedPendingIds = useMemo(() => {
     if (!reviewClassId && !reviewStreamId) return pendingIds;
-    return rows
+    return visibleRows
       .filter((row) => row.status === "submitted")
       .filter((row) => {
         const student = data?.students.find((item) => item.id === row.student_id);
@@ -714,7 +746,7 @@ function AssessmentsPage() {
         return true;
       })
       .map((row) => row.id);
-  }, [data?.students, pendingIds, reviewClassId, reviewStreamId, rows]);
+  }, [data?.students, pendingIds, reviewClassId, reviewStreamId, visibleRows]);
 
   return (
     <div>
@@ -1430,12 +1462,12 @@ function AssessmentsPage() {
                 <th className="pb-2">Formative (20)</th>
                 <th className="pb-2">Summative (80)</th>
                 <th className="pb-2">Total</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2" />
-              </tr>
+                    <th className="pb-2">Status</th>
+                    <th className="pb-2" />
+                  </tr>
             </thead>
             <tbody>
-              {rows.map(
+              {visibleRows.map(
                 (
                   row: AssessmentRow & {
                     studentName: string;
@@ -1515,11 +1547,15 @@ function AssessmentsPage() {
                       </td>
                       <td className="text-right">
                         <div className="flex justify-end gap-2">
-                          {!row.locked && (
+                          {row.status === "draft" && !row.locked ? (
+                            <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
+                              Save draft
+                            </Btn>
+                          ) : !row.locked ? (
                             <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
                               Submit
                             </Btn>
-                          )}
+                          ) : null}
                           <Btn
                             variant="ghost"
                             onClick={() => {
@@ -1537,7 +1573,7 @@ function AssessmentsPage() {
                   );
                 },
               )}
-              {rows.length === 0 && (
+              {visibleRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-6 text-center text-muted-foreground">
                     No assessment records match these filters.

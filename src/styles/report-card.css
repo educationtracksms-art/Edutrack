@@ -516,6 +516,13 @@
     padding-bottom: 5px;
     margin-bottom: 6px;
   }
+  .report-doc .header-top {
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: center;
+    width: fit-content;
+    margin: 0 auto;
+  }
   .report-doc .blue-line {
     height: 2.5px;
     margin-top: 2px;
@@ -527,28 +534,32 @@
     margin-bottom: 6px;
   }
   .report-doc .logo {
-    width: 50px;
-    height: 50px;
-    max-width: 50px;
-    max-height: 50px;
+    width: 88px;
+    height: 88px;
+    max-width: 88px;
+    max-height: 88px;
   }
   .report-doc .logo img {
-    max-width: 50px;
-    max-height: 50px;
+    max-width: 88px;
+    max-height: 88px;
+  }
+  .report-doc .school-details {
+    text-align: center;
+    flex: 0 1 auto;
   }
   .report-doc .school-details h1 {
-    font-size: 22px;
+    font-size: 26px;
   }
   .report-doc .school-details p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .report-doc .school-details h2 {
-    font-size: 14px;
+    font-size: 16px;
     margin-top: 2px;
   }
   .report-doc .student-info-table td {
     padding: 4px 6px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .report-doc .student-info-table .label-lin {
     font-size: 12px;
@@ -582,7 +593,7 @@
     width: 18%;
   }
   .report-doc .student-info-table .attendance-cell table {
-    font-size: 13px;
+    font-size: 12px;
     max-width: 180px;
   }
   .report-doc .student-info-table .attendance-cell th {
@@ -606,12 +617,12 @@
     border-width: 3px;
   }
   .report-doc .title-row td {
-  font-size: 13px;
+    font-size: 14px;
     padding: 4px 10px;
   }
   .report-doc .title,
   .report-doc .section-title {
-    font-size: 12px;
+    font-size: 14px;
     margin: 4px 0 3px;
     padding-left: 7px;
     border-left-width: 4px;
@@ -633,10 +644,10 @@
   }
   .report-doc .overall-table td {
     padding: 3px 6px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .report-doc .overall-table .avg-score {
-    font-size: 13px;
+    font-size: 15px;
     padding: 0 8px;
   }
   .report-doc .overall-table .identifier-block,
@@ -653,7 +664,7 @@
     gap: 4px;
   }
   .report-doc .keywords h3 {
-    font-size: 12px;
+    font-size: 13px;
   }
   .report-doc .keywords th,
   .report-doc .keywords td {
