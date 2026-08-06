@@ -12,6 +12,7 @@ import {
   deleteAssessmentEntry,
   reviewAssessments,
   updateAssessmentDraftEntry,
+  submitAssessmentEntry,
   upsertAssessmentEntry,
   upsertReportComment,
 } from "@/lib/admin.functions";
@@ -111,7 +112,9 @@ function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const isTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos"]);
+  const isAssignedTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
+  const isDos = hasAny(me?.roles, ["dos"]);
+  const isTeacher = isAssignedTeacher;
   const canReview = hasAny(me?.roles, [
     "dos",
     "school_admin",
@@ -136,6 +139,7 @@ function AssessmentsPage() {
   const review = useServerFn(reviewAssessments);
   const upsertEntry = useServerFn(upsertAssessmentEntry);
   const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);
+  const submitEntry = useServerFn(submitAssessmentEntry);
   const deleteEntry = useServerFn(deleteAssessmentEntry);
   const saveComment = useServerFn(upsertReportComment);
   const removeComment = useServerFn(deleteReportComment);
@@ -498,7 +502,7 @@ function AssessmentsPage() {
     if (!data) return [];
     return data.assessments
       .filter((assessment) => {
-        if (!isTeacher) return true;
+        if (!isAssignedTeacher) return true;
         if (!selectedAllocation) return false;
         const student = data.students.find((item: StudentRow) => item.id === assessment.student_id);
         if (!student) return false;
@@ -522,7 +526,7 @@ function AssessmentsPage() {
         termName: data.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
         gradeDescriptor: assessment.grade_descriptor ?? "",
       }));
-  }, [data, isTeacher, selectedAllocation, subjectFilter, statusFilter, termFilter]);
+  }, [data, isAssignedTeacher, selectedAllocation, subjectFilter, statusFilter, termFilter]);
 
   const visibleRows = useMemo(() => {
     const normalizedSubjectFilter = subjectFilter.trim();
@@ -698,6 +702,78 @@ function AssessmentsPage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      if (!entryForm.termId && !data?.currentTermId) throw new Error("Choose a term");
+      if (!entryForm.studentId) throw new Error("Choose a learner");
+      if (!entryForm.subjectId) throw new Error("Choose a subject");
+      if (isTeacher && !selectedAllocation)
+        throw new Error("Choose an assigned class / stream / subject");
+      if (isTeacher && selectedAllocation) {
+        const allowed = teacherStudents.some((student) => student.id === entryForm.studentId);
+        if (!allowed) throw new Error("This learner is not assigned to you for this subject");
+      }
+
+      const termId = entryForm.termId || data?.currentTermId || "";
+      const existing = data?.assessments.find(
+        (assessment) =>
+          assessment.student_id === entryForm.studentId &&
+          assessment.subject_id === entryForm.subjectId &&
+          assessment.term_id === termId,
+      );
+
+      if (!existing) {
+        await upsertEntry({
+          data: {
+            studentId: entryForm.studentId,
+            subjectId: entryForm.subjectId,
+            termId,
+            examType: entryForm.examType,
+            gradeDescriptor: autoDescriptor || null,
+            formative: entryForm.formative === "" ? null : Number(entryForm.formative),
+            summative: entryForm.summative === "" ? null : Number(entryForm.summative),
+            teacherInitials: entryForm.teacherInitials || null,
+          },
+        });
+      }
+
+      const assessmentId =
+        existing?.id ??
+        (
+          await supabase
+            .from("assessments")
+            .select("id")
+            .eq("student_id", entryForm.studentId)
+            .eq("subject_id", entryForm.subjectId)
+            .eq("term_id", termId)
+            .maybeSingle()
+        ).data?.id;
+      if (!assessmentId) throw new Error("Unable to locate the saved assessment");
+
+      await submitEntry({
+        data: {
+          assessmentId,
+          formative: entryForm.formative === "" ? null : Number(entryForm.formative),
+          summative: entryForm.summative === "" ? null : Number(entryForm.summative),
+          teacherInitials: entryForm.teacherInitials || null,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Marks submitted for DOS approval");
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      setEntryForm((current) => ({
+        ...current,
+        studentId: "",
+        formative: "",
+        summative: "",
+        examType: "end_of_term",
+        teacherInitials: "",
+      }));
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
   const reviewMutation = useMutation({
     mutationFn: (vars: {
       ids: string[];
@@ -747,6 +823,17 @@ function AssessmentsPage() {
       })
       .map((row) => row.id);
   }, [data?.students, pendingIds, reviewClassId, reviewStreamId, visibleRows]);
+  const scopedPendingRows = useMemo(() => {
+    return visibleRows
+      .filter((row) => row.status === "submitted")
+      .filter((row) => {
+        const student = data?.students.find((item) => item.id === row.student_id);
+        if (!student) return false;
+        if (reviewClassId && student.class_id !== reviewClassId) return false;
+        if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
+        return true;
+      });
+  }, [data?.students, reviewClassId, reviewStreamId, visibleRows]);
 
   return (
     <div>
@@ -828,6 +915,61 @@ function AssessmentsPage() {
             This approves every submitted assessment in the selected class and stream for the
             current filters.
           </p>
+          <div className="mt-4 overflow-hidden rounded-xl border border-border">
+            <div className="border-b border-border bg-muted/40 px-3 py-2 text-sm font-medium">
+              Submitted marks ready for DOS approval
+              <span className="ml-2 text-muted-foreground">
+                ({scopedPendingRows.length})
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Student</th>
+                    <th className="px-3 py-2 font-medium">Class</th>
+                    <th className="px-3 py-2 font-medium">Stream</th>
+                    <th className="px-3 py-2 font-medium">Subject</th>
+                    <th className="px-3 py-2 font-medium">Term</th>
+                    <th className="px-3 py-2 font-medium">Formative</th>
+                    <th className="px-3 py-2 font-medium">Summative</th>
+                    <th className="px-3 py-2 font-medium">Total</th>
+                    <th className="px-3 py-2 font-medium">Descriptor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scopedPendingRows.map((row) => {
+                    const student = data?.students.find((item) => item.id === row.student_id);
+                    const formative = Number(row.formative ?? 0);
+                    const summative = Number(row.summative ?? 0);
+                    const total = (formative + summative).toFixed(1);
+                    return (
+                      <tr key={row.id} className="border-t border-border">
+                        <td className="px-3 py-2 font-medium">{row.studentName}</td>
+                        <td className="px-3 py-2">{className(student?.class_id ?? null)}</td>
+                        <td className="px-3 py-2">{streamName(student?.stream_id ?? null)}</td>
+                        <td className="px-3 py-2">{row.subjectName}</td>
+                        <td className="px-3 py-2">{row.termName}</td>
+                        <td className="px-3 py-2">{formative.toFixed(1)}</td>
+                        <td className="px-3 py-2">{summative.toFixed(1)}</td>
+                        <td className="px-3 py-2 font-semibold">{total}</td>
+                        <td className="px-3 py-2">
+                          <Pill tone="warning">{row.gradeDescriptor || "Pending"}</Pill>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {scopedPendingRows.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
+                        No submitted marks match the selected class or stream.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </Panel>
       )}
 
@@ -1079,15 +1221,20 @@ function AssessmentsPage() {
               />
             </Field>
             <div className="flex items-end">
-              <Btn
-                type="submit"
-                variant="accent"
-                disabled={
-                  createMutation.isPending || (isTeacher && !selectedAllocation) || !entryForm.studentId
-                }
-              >
-                {createMutation.isPending ? "Saving…" : "Save draft"}
-              </Btn>
+              <div className="flex gap-2">
+                <Btn
+                  type="submit"
+                  variant="ghost"
+                  disabled={
+                    createMutation.isPending ||
+                    submitMutation.isPending ||
+                    (isTeacher && !selectedAllocation) ||
+                    !entryForm.studentId
+                  }
+                >
+                  {createMutation.isPending ? "Saving..." : "Save draft"}
+                </Btn>
+              </div>
             </div>
           </form>
         </Panel>
@@ -1209,7 +1356,87 @@ function AssessmentsPage() {
                     </div>
                   </form>
 
-                  <div className="overflow-x-auto">
+                  <div className="md:hidden space-y-4">
+                    {commentStudents.map((student) => {
+                      const draft = commentDrafts[student.id] ?? {
+                        classTeacherComment: "",
+                        headTeacherComment: "",
+                        games: "",
+                        clubs: "",
+                        projects: "",
+                      };
+                      return (
+                        <div key={student.id} className="rounded-lg border border-border p-4">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-semibold">{student.full_name}</h3>
+                            <button
+                              type="button"
+                              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
+                              onClick={() => commentMutation.mutate(student.id)}
+                              disabled={commentMutation.isPending}
+                            >
+                              Save
+                            </button>
+                          </div>
+                          <div className="grid gap-3">
+                            <Field label="Games">
+                              <textarea
+                                className={`${inputClass} min-h-24`}
+                                value={draft.games}
+                                onChange={(event) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [student.id]: { ...draft, games: event.target.value },
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <Field label="Clubs">
+                              <textarea
+                                className={`${inputClass} min-h-24`}
+                                value={draft.clubs}
+                                onChange={(event) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [student.id]: { ...draft, clubs: event.target.value },
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <Field label="Projects">
+                              <textarea
+                                className={`${inputClass} min-h-24`}
+                                value={draft.projects}
+                                onChange={(event) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [student.id]: { ...draft, projects: event.target.value },
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <Field label="Comment">
+                              <textarea
+                                className={`${inputClass} min-h-28`}
+                                value={draft.classTeacherComment}
+                                onChange={(event) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [student.id]: {
+                                      ...draft,
+                                      classTeacherComment: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </Field>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="hidden overflow-x-auto md:block">
                     <table className="w-full text-sm">
                       <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>
@@ -1549,11 +1776,11 @@ function AssessmentsPage() {
                         <div className="flex justify-end gap-2">
                           {row.status === "draft" && !row.locked ? (
                             <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
-                              Save draft
+                              Submit draft
                             </Btn>
                           ) : !row.locked ? (
                             <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
-                              Submit
+                              Submit draft
                             </Btn>
                           ) : null}
                           <Btn

@@ -968,6 +968,82 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const submitAssessmentEntry = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      assessmentId: string;
+      formative?: number | null;
+      summative?: number | null;
+      teacherInitials?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to submit assessments");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: existingAssessment, error: existingError } = await context.supabase
+      .from("assessments")
+      .select("id, school_id, status, locked")
+      .eq("id", data.assessmentId)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (!existingAssessment || existingAssessment.school_id !== schoolId) {
+      throw new Error("Assessment not found in your school");
+    }
+    if (existingAssessment.locked) {
+      throw new Error("Locked assessments cannot be submitted");
+    }
+
+    const { data: gradingScales } = await context.supabase
+      .from("grading_scales")
+      .select("grade, min_score, max_score, grade_descriptor")
+      .eq("school_id", schoolId);
+    const totalScore = Number(data.formative ?? 0) + Number(data.summative ?? 0);
+    const gradeMatch = (gradingScales ?? []).find(
+      (scale: any) => totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+    );
+
+    const teacherInitials = data.teacherInitials?.trim() || null;
+    const { error } = await context.supabase
+      .from("assessments")
+      .update({
+        formative: data.formative ?? null,
+        summative: data.summative ?? null,
+        teacher_initials: teacherInitials,
+        grade_descriptor: gradeMatch?.grade_descriptor ?? null,
+        status: "submitted",
+        submitted_by: context.userId,
+        submitted_at: new Date().toISOString(),
+      })
+      .eq("id", data.assessmentId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
+      assessment_id: data.assessmentId,
+    });
+
+    return { ok: true };
+  });
+
 export const deleteAssessmentEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(

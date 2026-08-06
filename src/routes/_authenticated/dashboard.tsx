@@ -22,7 +22,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { PageHeader, Panel, Stat } from "@/components/ui-kit";
-import { upsertReportComment, verifyStudent } from "@/lib/admin.functions";
+import { reviewAssessments, upsertReportComment, verifyStudent } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { getEnabledModuleMap } from "@/lib/modules";
 
@@ -761,6 +761,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const queryClient = useQueryClient();
   const isSuper = false;
   const schoolId = me?.profile?.school_id ?? null;
+  const isDos = hasAny(me?.roles, ["dos"]);
   const canSeeActivity = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher"]);
   const canApprove = hasAny(me?.roles, [
     "dos",
@@ -784,6 +785,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const approveStudent = useServerFn(verifyStudent);
+  const reviewMarks = useServerFn(reviewAssessments);
   const { data, isLoading } = useDashboardData(
     schoolId,
     isSuper,
@@ -794,6 +796,15 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     mutationFn: (studentId: string) => approveStudent({ data: { studentId } }),
     onSuccess: () => {
       toast.success("Learner approved");
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+  const markReviewMutation = useMutation({
+    mutationFn: (assessmentId: string) =>
+      reviewMarks({ data: { ids: [assessmentId], action: "approve" } }),
+    onSuccess: () => {
+      toast.success("Mark approved");
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -850,6 +861,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "—",
       subjectName:
         data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "—",
+      total: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
     }));
 
   const trend = ["Term I", "Term II", "Term III"].map((term, index) => ({
@@ -953,6 +965,54 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
               )}
             </div>
           </div>
+        </Panel>
+      )}
+
+      {isDos && (
+        <Panel title="Director of Studies approval queue" className="mt-4">
+          {pendingAssessments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No submitted marks are waiting for DOS approval.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="pb-2">Student</th>
+                    <th className="pb-2">Subject</th>
+                    <th className="pb-2">Formative</th>
+                    <th className="pb-2">Summative</th>
+                    <th className="pb-2">Total</th>
+                    <th className="pb-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingAssessments.map((assessment) => (
+                    <tr key={assessment.id} className="border-t border-border">
+                      <td className="py-2 pr-4 font-medium">{assessment.studentName}</td>
+                      <td className="py-2 pr-4">{assessment.subjectName}</td>
+                      <td className="py-2 pr-4">{Number(assessment.formative ?? 0)}</td>
+                      <td className="py-2 pr-4">{Number(assessment.summative ?? 0)}</td>
+                      <td className="py-2 pr-4 font-semibold">{assessment.total}</td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
+                          onClick={() =>
+                            markReviewMutation.mutate(assessment.id)
+                          }
+                          disabled={markReviewMutation.isPending}
+                        >
+                          Approve
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Panel>
       )}
 
