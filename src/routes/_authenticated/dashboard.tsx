@@ -94,86 +94,83 @@ function useDashboardData(
 ) {
   return useQuery({
     queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId],
+    retry: 3,
     queryFn: async () => {
-      try {
-        if (!isSuper && !schoolId) return EMPTY_DASHBOARD;
+      if (!isSuper && !schoolId) return EMPTY_DASHBOARD;
 
-        const schoolQuery =
-          !isSuper && schoolId
-            ? (query: any) => query.eq("school_id", schoolId)
-            : (query: any) => query;
+      const schoolQuery =
+        !isSuper && schoolId
+          ? (query: any) => query.eq("school_id", schoolId)
+          : (query: any) => query;
 
-        const [students, assessments, subjects, classes, streams, terms, teacherAllocations] =
-          await Promise.all([
-            schoolQuery(
-              supabase
-                .from("students")
-                .select("id, full_name, gender, status, class_id, stream_id, school_id"),
-            ),
-            schoolQuery(
-              supabase
-                .from("assessments")
-                .select("id, student_id, subject_id, formative, summative, status, school_id"),
-            ),
-            supabase.from("subjects").select("id, name"),
-            schoolQuery(supabase.from("classes").select("id, name, class_teacher_id")),
-            schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id")),
-            schoolQuery(
-              supabase
-                .from("terms")
-                .select("id, name, is_current")
-                .order("start_date", { ascending: false }),
-            ),
-            isTeacher && teacherId
-              ? supabase
-                  .from("teacher_allocations")
-                  .select("subject_id, class_id, stream_id")
-                  .eq("teacher_id", teacherId)
-              : Promise.resolve({ data: [] as any[] }),
-          ]);
-
-        const [schoolsResult, profilesResult, activityResult] = await Promise.all([
-          isTeacher
-            ? Promise.resolve({ data: [] as any[] })
-            : schoolQuery(supabase.from("schools").select("id, name, status")),
-          isTeacher
-            ? Promise.resolve({ data: [] as any[] })
-            : schoolQuery(supabase.from("profiles").select("id, full_name, school_id")),
-          isTeacher
-            ? Promise.resolve({ data: [] as any[] })
-            : schoolQuery(
-                supabase
-                  .from("audit_logs")
-                  .select("action, user_name, created_at")
-                  .order("created_at", { ascending: false })
-                  .limit(8),
-              ),
+      const [students, assessments, subjects, classes, streams, terms, teacherAllocations] =
+        await Promise.all([
+          schoolQuery(
+            supabase
+              .from("students")
+              .select("id, full_name, gender, status, class_id, stream_id, school_id"),
+          ),
+          schoolQuery(
+            supabase
+              .from("assessments")
+              .select("id, student_id, subject_id, formative, summative, status, school_id"),
+          ),
+          supabase.from("subjects").select("id, name"),
+          schoolQuery(supabase.from("classes").select("id, name, class_teacher_id")),
+          schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id")),
+          schoolQuery(
+            supabase
+              .from("terms")
+              .select("id, name, is_current")
+              .order("start_date", { ascending: false }),
+          ),
+          isTeacher && teacherId
+            ? supabase
+                .from("teacher_allocations")
+                .select("subject_id, class_id, stream_id")
+                .eq("teacher_id", teacherId)
+            : Promise.resolve({ data: [] as any[] }),
         ]);
-        return {
-          schools: schoolsResult.data ?? [],
-          students: students.data ?? [],
-          assessments: assessments.data ?? [],
-          subjects: subjects.data ?? [],
-          profiles: profilesResult.data ?? [],
-          activity: activityResult.data ?? [],
-          classes: classes.data ?? [],
-          streams: streams.data ?? [],
-          terms: terms.data ?? [],
-          teacherAllocations: teacherAllocations.data ?? [],
-        };
-      } catch (error) {
-        console.error("Dashboard data failed to load", error);
-        return EMPTY_DASHBOARD;
-      }
+
+      const [schoolsResult, profilesResult, activityResult] = await Promise.all([
+        isTeacher
+          ? Promise.resolve({ data: [] as any[] })
+          : schoolQuery(supabase.from("schools").select("id, name, status")),
+        isTeacher
+          ? Promise.resolve({ data: [] as any[] })
+          : schoolQuery(supabase.from("profiles").select("id, full_name, school_id")),
+        isTeacher
+          ? Promise.resolve({ data: [] as any[] })
+          : schoolQuery(
+              supabase
+                .from("audit_logs")
+                .select("action, user_name, created_at")
+                .order("created_at", { ascending: false })
+                .limit(8),
+            ),
+      ]);
+      return {
+        schools: schoolsResult.data ?? [],
+        students: students.data ?? [],
+        assessments: assessments.data ?? [],
+        subjects: subjects.data ?? [],
+        profiles: profilesResult.data ?? [],
+        activity: activityResult.data ?? [],
+        classes: classes.data ?? [],
+        streams: streams.data ?? [],
+        terms: terms.data ?? [],
+        teacherAllocations: teacherAllocations.data ?? [],
+      };
     },
   });
 }
 
 function Dashboard() {
   const { data: me, isLoading: isUserLoading } = useCurrentUser();
+  const dashboardLoading = !me;
   const isSuper = hasAny(me?.roles, ["super_admin"]);
 
-  if (isUserLoading) {
+  if (isUserLoading || dashboardLoading) {
     return <DashboardLoadingState label="Loading dashboard" description="Preparing your account and school data." />;
   }
 
@@ -937,13 +934,6 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     ? Math.round((approved / data.assessments.length) * 100)
     : 0;
   const pendingStudents = data.students.filter((student) => student.status === "pending");
-  const hasSchoolData =
-    data.students.length > 0 ||
-    data.assessments.length > 0 ||
-    data.subjects.length > 0 ||
-    data.classes.length > 0 ||
-    data.streams.length > 0 ||
-    data.activity.length > 0;
   const assessmentsTable = data.assessments.map((assessment) => ({
       ...assessment,
       studentName:
@@ -1006,15 +996,6 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         <Stat label="Approved assessments" value={approved} />
         <Stat label="Assessment completion" value={`${completion}%`} />
       </div>
-
-      {!hasSchoolData && (
-        <div className="mt-4">
-          <EmptyDashboardState
-            title="Dashboard ready"
-            description="There is no school data yet. Once learners, classes, assessments, and terms are added, the dashboard will fill in automatically."
-          />
-        </div>
-      )}
 
       {canApprove && (
         <Panel title="Needs your approval" className="mt-4">
