@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 import { PublicShell } from "@/components/layout/PublicShell";
 import logoUrl from "@/assets/logo.png";
@@ -54,7 +55,7 @@ function AuthPage() {
       <PublicShell>
         <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center bg-muted/40 px-4 py-10">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
-            <div className="mx-auto h-12 w-12 animate-pulse rounded-full bg-primary/15" />
+            <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
             <h1 className="mt-4 text-xl font-semibold">Loading your session</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Checking whether you should go straight to your dashboard.
@@ -83,9 +84,9 @@ function AuthPage() {
   }
 
   return (
-    <PublicShell>
-      <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center bg-muted/40 px-4 py-10">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
+      <PublicShell>
+        <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center bg-muted/40 px-4 py-10">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
           <div className="flex flex-col items-center text-center">
             <img src={logoUrl} alt="EduTrack logo" className="h-16 w-16 object-cover" />
             <h1 className="mt-4 text-xl font-semibold">Sign in to EduTrack</h1>
@@ -127,7 +128,7 @@ function AuthPage() {
               disabled={loading}
               className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
             >
-              {loading ? "Please wait..." : "Sign in"}
+              {loading ? "Signing you in..." : "Sign in"}
             </button>
           </form>
         </div>

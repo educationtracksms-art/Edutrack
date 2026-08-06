@@ -47,45 +47,20 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
     ],
   }),
   component: Dashboard,
-  errorComponent: DashboardErrorState,
 });
 
-function DashboardErrorState({
-  error,
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}) {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
-        <h1 className="text-xl font-semibold tracking-tight">Dashboard is taking a moment</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          We hit a problem while loading your dashboard. You can try again without leaving the
-          app.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
-            onClick={reset}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Try again
-          </button>
-          <button
-            type="button"
-            onClick={() => window.location.assign("/auth")}
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Back to sign in
-          </button>
-        </div>
-        <p className="mt-4 break-words text-xs text-muted-foreground">{error.message}</p>
-      </div>
-    </div>
-  );
-}
+const EMPTY_DASHBOARD = {
+  schools: [],
+  students: [],
+  assessments: [],
+  subjects: [],
+  profiles: [],
+  activity: [],
+  classes: [],
+  streams: [],
+  terms: [],
+  teacherAllocations: [],
+};
 
 const CHART_COLORS = [
   "var(--color-chart-1)",
@@ -120,84 +95,76 @@ function useDashboardData(
   return useQuery({
     queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId],
     queryFn: async () => {
-      if (!isSuper && !schoolId) {
-        return {
-          schools: [],
-          students: [],
-          assessments: [],
-          subjects: [],
-          profiles: [],
-          activity: [],
-          classes: [],
-          streams: [],
-          terms: [],
-          teacherAllocations: [],
-        };
-      }
+      try {
+        if (!isSuper && !schoolId) return EMPTY_DASHBOARD;
 
-      const schoolQuery =
-        !isSuper && schoolId
-          ? (query: any) => query.eq("school_id", schoolId)
-          : (query: any) => query;
+        const schoolQuery =
+          !isSuper && schoolId
+            ? (query: any) => query.eq("school_id", schoolId)
+            : (query: any) => query;
 
-      const [students, assessments, subjects, classes, streams, terms, teacherAllocations] =
-        await Promise.all([
-          schoolQuery(
-            supabase
-              .from("students")
-              .select("id, full_name, gender, status, class_id, stream_id, school_id"),
-          ),
-          schoolQuery(
-            supabase
-              .from("assessments")
-              .select("id, student_id, subject_id, formative, summative, status, school_id"),
-          ),
-          supabase.from("subjects").select("id, name"),
-          schoolQuery(supabase.from("classes").select("id, name, class_teacher_id")),
-          schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id")),
-          schoolQuery(
-            supabase
-              .from("terms")
-              .select("id, name, is_current")
-              .order("start_date", { ascending: false }),
-          ),
-          isTeacher && teacherId
-            ? supabase
-                .from("teacher_allocations")
-                .select("subject_id, class_id, stream_id")
-                .eq("teacher_id", teacherId)
-            : Promise.resolve({ data: [] as any[] }),
-        ]);
-
-      const [schoolsResult, profilesResult, activityResult] = await Promise.all([
-        isTeacher
-          ? Promise.resolve({ data: [] as any[] })
-          : schoolQuery(supabase.from("schools").select("id, name, status")),
-        isTeacher
-          ? Promise.resolve({ data: [] as any[] })
-          : schoolQuery(supabase.from("profiles").select("id, full_name, school_id")),
-        isTeacher
-          ? Promise.resolve({ data: [] as any[] })
-          : schoolQuery(
+        const [students, assessments, subjects, classes, streams, terms, teacherAllocations] =
+          await Promise.all([
+            schoolQuery(
               supabase
-                .from("audit_logs")
-                .select("action, user_name, created_at")
-                .order("created_at", { ascending: false })
-                .limit(8),
+                .from("students")
+                .select("id, full_name, gender, status, class_id, stream_id, school_id"),
             ),
-      ]);
-      return {
-        schools: schoolsResult.data ?? [],
-        students: students.data ?? [],
-        assessments: assessments.data ?? [],
-        subjects: subjects.data ?? [],
-        profiles: profilesResult.data ?? [],
-        activity: activityResult.data ?? [],
-        classes: classes.data ?? [],
-        streams: streams.data ?? [],
-        terms: terms.data ?? [],
-        teacherAllocations: teacherAllocations.data ?? [],
-      };
+            schoolQuery(
+              supabase
+                .from("assessments")
+                .select("id, student_id, subject_id, formative, summative, status, school_id"),
+            ),
+            supabase.from("subjects").select("id, name"),
+            schoolQuery(supabase.from("classes").select("id, name, class_teacher_id")),
+            schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id")),
+            schoolQuery(
+              supabase
+                .from("terms")
+                .select("id, name, is_current")
+                .order("start_date", { ascending: false }),
+            ),
+            isTeacher && teacherId
+              ? supabase
+                  .from("teacher_allocations")
+                  .select("subject_id, class_id, stream_id")
+                  .eq("teacher_id", teacherId)
+              : Promise.resolve({ data: [] as any[] }),
+          ]);
+
+        const [schoolsResult, profilesResult, activityResult] = await Promise.all([
+          isTeacher
+            ? Promise.resolve({ data: [] as any[] })
+            : schoolQuery(supabase.from("schools").select("id, name, status")),
+          isTeacher
+            ? Promise.resolve({ data: [] as any[] })
+            : schoolQuery(supabase.from("profiles").select("id, full_name, school_id")),
+          isTeacher
+            ? Promise.resolve({ data: [] as any[] })
+            : schoolQuery(
+                supabase
+                  .from("audit_logs")
+                  .select("action, user_name, created_at")
+                  .order("created_at", { ascending: false })
+                  .limit(8),
+              ),
+        ]);
+        return {
+          schools: schoolsResult.data ?? [],
+          students: students.data ?? [],
+          assessments: assessments.data ?? [],
+          subjects: subjects.data ?? [],
+          profiles: profilesResult.data ?? [],
+          activity: activityResult.data ?? [],
+          classes: classes.data ?? [],
+          streams: streams.data ?? [],
+          terms: terms.data ?? [],
+          teacherAllocations: teacherAllocations.data ?? [],
+        };
+      } catch (error) {
+        console.error("Dashboard data failed to load", error);
+        return EMPTY_DASHBOARD;
+      }
     },
   });
 }
@@ -234,13 +201,33 @@ function DashboardLoadingState({
   );
 }
 
+function EmptyDashboardState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
 function PlatformDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["platform-stats"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("platform_school_stats");
-      if (error) throw new Error(error.message);
-      return data ?? [];
+      try {
+        const { data, error } = await supabase.rpc("platform_school_stats");
+        if (error) throw new Error(error.message);
+        return data ?? [];
+      } catch (error) {
+        console.error("Platform dashboard failed to load", error);
+        return [];
+      }
     },
   });
 
@@ -278,6 +265,15 @@ function PlatformDashboard() {
         <Stat label="Staff accounts" value={totalUsers} />
         <Stat label="Enrolled learners" value={totalStudents} />
       </div>
+
+      {data.length === 0 && (
+        <div className="mt-4">
+          <EmptyDashboardState
+            title="No platform data yet"
+            description="Schools, staff accounts, and learners will appear here once records are added."
+          />
+        </div>
+      )}
 
       <Panel title="Usage by school" className="mt-4">
         <ResponsiveContainer width="100%" height={280}>
@@ -941,6 +937,13 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     ? Math.round((approved / data.assessments.length) * 100)
     : 0;
   const pendingStudents = data.students.filter((student) => student.status === "pending");
+  const hasSchoolData =
+    data.students.length > 0 ||
+    data.assessments.length > 0 ||
+    data.subjects.length > 0 ||
+    data.classes.length > 0 ||
+    data.streams.length > 0 ||
+    data.activity.length > 0;
   const assessmentsTable = data.assessments.map((assessment) => ({
       ...assessment,
       studentName:
@@ -1003,6 +1006,15 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         <Stat label="Approved assessments" value={approved} />
         <Stat label="Assessment completion" value={`${completion}%`} />
       </div>
+
+      {!hasSchoolData && (
+        <div className="mt-4">
+          <EmptyDashboardState
+            title="Dashboard ready"
+            description="There is no school data yet. Once learners, classes, assessments, and terms are added, the dashboard will fill in automatically."
+          />
+        </div>
+      )}
 
       {canApprove && (
         <Panel title="Needs your approval" className="mt-4">
