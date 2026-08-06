@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DashoardRouteImport } from './routes/dashoard'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedAcademicsRouteImport } from './routes/_authenticated/academics'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
@@ -42,6 +43,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashoardRoute = DashoardRouteImport.update({
+  id: '/dashoard',
+  path: '/dashoard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -135,6 +141,7 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/dashoard': typeof DashoardRoute
   '/signup': typeof SignupRoute
   '/academics': typeof AuthenticatedAcademicsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/dashoard': typeof DashoardRoute
   '/signup': typeof SignupRoute
   '/academics': typeof AuthenticatedAcademicsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/dashoard': typeof DashoardRoute
   '/signup': typeof SignupRoute
   '/_authenticated/academics': typeof AuthenticatedAcademicsRoute
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/dashoard'
     | '/signup'
     | '/academics'
     | '/approvals'
@@ -223,6 +233,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/dashoard'
     | '/signup'
     | '/academics'
     | '/approvals'
@@ -245,6 +256,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/dashoard'
     | '/signup'
     | '/_authenticated/academics'
     | '/_authenticated/approvals'
@@ -268,6 +280,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  DashoardRoute: typeof DashoardRoute
   SignupRoute: typeof SignupRoute
 }
 
@@ -292,6 +305,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashoard': {
+      id: '/dashoard'
+      path: '/dashoard'
+      fullPath: '/dashoard'
+      preLoaderRoute: typeof DashoardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -461,6 +481,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  DashoardRoute: DashoardRoute,
   SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport

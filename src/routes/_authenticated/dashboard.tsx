@@ -1,4 +1,4 @@
-﻿import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -21,7 +21,7 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
-import { PageHeader, Panel, Stat, inputClass } from "@/components/ui-kit";
+import { Field, PageHeader, Panel, Pill, Stat, inputClass } from "@/components/ui-kit";
 import {
   reviewAssessments,
   upsertReportComment,
@@ -34,12 +34,12 @@ import { getEnabledModuleMap } from "@/lib/modules";
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Dashboard · EduTrack" },
+      { title: "Dashboard - EduTrack" },
       {
         name: "description",
         content: "Role-based analytics for schools, learners, assessments and approvals.",
       },
-      { property: "og:title", content: "Dashboard · EduTrack" },
+      { property: "og:title", content: "Dashboard - EduTrack" },
       {
         property: "og:description",
         content: "Live school analytics and approval status at a glance.",
@@ -47,7 +47,45 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
     ],
   }),
   component: Dashboard,
+  errorComponent: DashboardErrorState,
 });
+
+function DashboardErrorState({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+        <h1 className="text-xl font-semibold tracking-tight">Dashboard is taking a moment</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          We hit a problem while loading your dashboard. You can try again without leaving the
+          app.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={reset}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={() => window.location.assign("/auth")}
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            Back to sign in
+          </button>
+        </div>
+        <p className="mt-4 break-words text-xs text-muted-foreground">{error.message}</p>
+      </div>
+    </div>
+  );
+}
 
 const CHART_COLORS = [
   "var(--color-chart-1)",
@@ -169,12 +207,30 @@ function Dashboard() {
   const isSuper = hasAny(me?.roles, ["super_admin"]);
 
   if (isUserLoading) {
-    return <p className="text-sm text-muted-foreground">Loading dashboard…</p>;
+    return <DashboardLoadingState label="Loading dashboard" description="Preparing your account and school data." />;
   }
 
   if (isSuper) return <PlatformDashboard />;
   return (
     <SchoolDashboard me={me} isTeacher={hasAny(me?.roles, ["subject_teacher", "class_teacher"])} />
+  );
+}
+
+function DashboardLoadingState({
+  label,
+  description,
+}: {
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+        <div className="mx-auto h-12 w-12 animate-pulse rounded-full bg-primary/15" />
+        <h1 className="mt-4 text-xl font-semibold">{label}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+      </div>
+    </div>
   );
 }
 
@@ -189,7 +245,12 @@ function PlatformDashboard() {
   });
 
   if (isLoading || !data)
-    return <p className="text-sm text-muted-foreground">Loading platform metrics…</p>;
+    return (
+      <DashboardLoadingState
+        label="Loading platform metrics"
+        description="Fetching the latest school overview."
+      />
+    );
 
   const totalUsers = data.reduce((sum, row) => sum + Number(row.user_count), 0);
   const totalStudents = data.reduce((sum, row) => sum + Number(row.student_count), 0);
@@ -204,7 +265,7 @@ function PlatformDashboard() {
     <div>
       <PageHeader
         title="Platform overview"
-        description="Tenant, subscription and usage metrics only — academic records stay inside each school."
+        description="Tenant, subscription and usage metrics only - academic records stay inside each school."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -361,9 +422,13 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   const canEditComments = isClassTeacher;
   const assignedLabels = scopeAllocations.map((allocation) => {
     const subjectName = subjectById.get(allocation.subject_id) ?? "Subject";
-    const className = allocation.class_id ? classById.get(allocation.class_id) ?? "Any class" : "Any class";
-    const streamName = allocation.stream_id ? streamById.get(allocation.stream_id)?.name ?? "Any stream" : "Any stream";
-    return `${subjectName} · ${className}${allocation.stream_id ? ` · ${streamName}` : ""}`;
+    const allocationClassName = allocation.class_id
+      ? classById.get(allocation.class_id) ?? "Any class"
+      : "Any class";
+    const allocationStreamName = allocation.stream_id
+      ? streamById.get(allocation.stream_id)?.name ?? "Any stream"
+      : "Any stream";
+    return `${subjectName} - ${allocationClassName}${allocation.stream_id ? ` - ${allocationStreamName}` : ""}`;
   });
   const visibleLearners = scopeStudents.slice(0, 10);
 
@@ -444,7 +509,7 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
                     {scopeStudents.find((student: any) => student.id === assessment.student_id)
                       ?.full_name ?? "Learner"}
                   </span>{" "}
-                  ·{" "}
+                  -{" "}
                   {scopeSubjects.find((subject: any) => subject.id === assessment.subject_id)
                     ?.name ?? "Subject"}
                 </span>
@@ -787,18 +852,20 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     enabled: !!schoolId,
     queryFn: async () => getEnabledModuleMap(supabase, schoolId),
   });
-  const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
-  const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const approveStudent = useServerFn(verifyStudent);
   const reviewMarks = useServerFn(reviewAssessments);
   const updateStatus = useServerFn(updateAssessmentStatus);
   const [reviewClassId, setReviewClassId] = useState("");
   const [reviewStreamId, setReviewStreamId] = useState("");
-  const { data, isLoading } = useDashboardData(
-    schoolId,
-    isSuper,
-    isTeacher,
-    me?.userId,
+  const { data, isLoading } = useDashboardData(schoolId, isSuper, isTeacher, me?.userId);
+  const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
+  const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
+  const classById = new Map((data?.classes ?? []).map((item: any) => [item.id, item.name as string]));
+  const streamById = new Map(
+    (data?.streams ?? []).map((item: any) => [
+      item.id,
+      { name: item.name as string, class_id: item.class_id as string | null },
+    ]),
   );
   const approveMutation = useMutation({
     mutationFn: (studentId: string) => approveStudent({ data: { studentId } }),
@@ -826,7 +893,12 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   if (isLoading || !data)
-    return <p className="text-sm text-muted-foreground">Loading analytics…</p>;
+    return (
+      <DashboardLoadingState
+        label="Loading analytics"
+        description="Fetching learners, assessments, and approvals."
+      />
+    );
 
   if (isTeacher) {
     return <TeacherDashboard data={data} me={me} />;
@@ -840,7 +912,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
       const marks = data.assessments.filter((a) => a.subject_id === subject.id);
       const scores = marks.map((m) => Number(m.formative ?? 0) + Number(m.summative ?? 0));
       return {
-        name: subject.name.length > 12 ? `${subject.name.slice(0, 12)}…` : subject.name,
+        name: subject.name.length > 12 ? `${subject.name.slice(0, 12)}...` : subject.name,
         average: scores.length
           ? Math.round((scores.reduce((x, y) => x + y, 0) / scores.length) * 10) / 10
           : 0,
@@ -872,11 +944,11 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const assessmentsTable = data.assessments.map((assessment) => ({
       ...assessment,
       studentName:
-        data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "—",
+        data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "Unknown",
       subjectName:
-        data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "—",
-      termName: data.terms.find((term) => term.id === assessment.term_id)?.name ?? "—",
-      gradeDescriptor: assessment.grade_descriptor ?? "—",
+        data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "Unknown",
+      termName: data.terms.find((term) => term.id === assessment.term_id)?.name ?? "Unknown",
+      gradeDescriptor: assessment.grade_descriptor ?? "Unknown",
       total: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
     }));
   const reviewClassOptions = data.classes ?? [];
@@ -903,6 +975,10 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     term,
     average: Math.round(Math.max(0, average - (2 - index) * 3) * 10) / 10,
   }));
+  const resolveClassName = (classId: string | null | undefined) =>
+    classId ? classById.get(classId) ?? "Unknown" : "Unknown";
+  const resolveStreamName = (streamId: string | null | undefined) =>
+    streamId ? streamById.get(streamId)?.name ?? "Unknown" : "Unknown";
 
   return (
     <div>
@@ -1033,13 +1109,13 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                       <tr key={assessment.id} className="border-t border-border">
                       <td className="py-2 pr-4 font-medium">{assessment.studentName}</td>
                       <td className="py-2 pr-4">
-                        {className(
+                        {resolveClassName(
                           data.students.find((item) => item.id === assessment.student_id)?.class_id ??
                             null,
                         )}
                       </td>
                       <td className="py-2 pr-4">
-                        {streamName(
+                        {resolveStreamName(
                           data.students.find((item) => item.id === assessment.student_id)?.stream_id ??
                             null,
                         )}
@@ -1177,7 +1253,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                   className="flex justify-between gap-4 border-b border-border pb-2 last:border-none"
                 >
                   <span>
-                    <span className="font-medium">{item.user_name ?? "System"}</span> ·{" "}
+                    <span className="font-medium">{item.user_name ?? "System"}</span> - 
                     {item.action}
                   </span>
                   <span className="text-muted-foreground">
@@ -1192,3 +1268,4 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     </div>
   );
 }
+
