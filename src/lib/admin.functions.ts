@@ -344,9 +344,7 @@ export const reviewAssessments = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    const canReviewAny = roles.some((r) =>
-      ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
-    );
+    const canReviewAny = roles.some((r) => ["dos", "super_admin"].includes(r));
     const isClassTeacher = roles.includes("class_teacher");
     if (!canReviewAny && !isClassTeacher) throw new Error("Not allowed to review assessments");
 
@@ -387,6 +385,10 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       if (unauthorized) {
         throw new Error("Class teachers can only review assessments for their assigned class");
       }
+    }
+
+    if (data.action === "approve" && !roles.includes("dos") && !roles.includes("super_admin")) {
+      throw new Error("Only the Director of Studies can approve submitted marks");
     }
 
     if (data.classId || data.streamId) {
@@ -475,6 +477,59 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       "assessments",
       { count: data.ids.length },
     );
+    return { ok: true };
+  });
+
+export const updateAssessmentStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      assessmentId: string;
+      status: "draft" | "submitted" | "approved" | "rejected";
+      reason?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["dos", "super_admin"].includes(r))) {
+      throw new Error("Only the Director of Studies can change assessment status");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: existingAssessment, error: existingError } = await context.supabase
+      .from("assessments")
+      .select("id, school_id")
+      .eq("id", data.assessmentId)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (!existingAssessment || existingAssessment.school_id !== schoolId) {
+      throw new Error("Assessment not found in your school");
+    }
+
+    const patch: Record<string, unknown> = {
+      status: data.status,
+      locked: data.status === "approved",
+      rejection_reason: data.status === "rejected" ? data.reason ?? "Returned for correction" : null,
+      submitted_by: data.status === "submitted" ? context.userId : null,
+      submitted_at: data.status === "submitted" ? new Date().toISOString() : null,
+      approved_by: data.status === "approved" ? context.userId : null,
+      approved_at: data.status === "approved" ? new Date().toISOString() : null,
+    };
+
+    const { error } = await context.supabase
+      .from("assessments")
+      .update(patch as never)
+      .eq("id", data.assessmentId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_STATUS_CHANGED", "assessments", {
+      assessment_id: data.assessmentId,
+      status: data.status,
+    });
+
     return { ok: true };
   });
 
@@ -935,8 +990,8 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
     if (!existingAssessment || existingAssessment.school_id !== schoolId) {
       throw new Error("Assessment not found in your school");
     }
-    if (existingAssessment.status !== "draft" || existingAssessment.locked) {
-      throw new Error("Only draft assessments can be edited");
+    if (!["draft", "rejected"].includes(existingAssessment.status) || existingAssessment.locked) {
+      throw new Error("Only draft or rejected assessments can be edited");
     }
 
     const teacherInitials = data.teacherInitials?.trim() || null;
@@ -957,6 +1012,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
         formative: data.formative ?? null,
         summative: data.summative ?? null,
         teacher_initials: teacherInitials,
+        rejection_reason: null,
       })
       .eq("id", data.assessmentId);
     if (error) throw new Error(error.message);
@@ -1030,6 +1086,8 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
         teacher_initials: teacherInitials,
         grade_descriptor: gradeMatch?.grade_descriptor ?? null,
         status: "submitted",
+        locked: false,
+        rejection_reason: null,
         submitted_by: context.userId,
         submitted_at: new Date().toISOString(),
       })

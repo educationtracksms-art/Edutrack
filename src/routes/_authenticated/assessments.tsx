@@ -112,17 +112,8 @@ function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const isAssignedTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
-  const isDos = hasAny(me?.roles, ["dos"]);
+  const isAssignedTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos"]);
   const isTeacher = isAssignedTeacher;
-  const canReview = hasAny(me?.roles, [
-    "dos",
-    "school_admin",
-    "head_teacher",
-    "deputy_head_teacher",
-    "super_admin",
-    "class_teacher",
-  ]);
   const canEnter =
     !!schoolId &&
     hasAny(me?.roles, [
@@ -136,7 +127,6 @@ function AssessmentsPage() {
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const isHeadTeacher = hasAny(me?.roles, ["head_teacher", "deputy_head_teacher"]);
   const canEditComments = isClassTeacher || isHeadTeacher;
-  const review = useServerFn(reviewAssessments);
   const upsertEntry = useServerFn(upsertAssessmentEntry);
   const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);
   const submitEntry = useServerFn(submitAssessmentEntry);
@@ -146,9 +136,9 @@ function AssessmentsPage() {
   const [subjectFilter, setSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [termFilter, setTermFilter] = useState("");
+  const [allocationKey, setAllocationKey] = useState("");
   const [reviewClassId, setReviewClassId] = useState("");
   const [reviewStreamId, setReviewStreamId] = useState("");
-  const [allocationKey, setAllocationKey] = useState("");
   const [learnerSearch, setLearnerSearch] = useState("");
   const [learnerSortKey, setLearnerSortKey] = useState<LearnerSortKey>("class");
   const [learnerSortDirection, setLearnerSortDirection] = useState<"asc" | "desc">("asc");
@@ -556,11 +546,29 @@ function AssessmentsPage() {
         grade_descriptor:
           descriptorFromAssessmentScore(effectiveFormative, effectiveSummative) || null,
       };
-      if (existing?.status === "draft" && !existing.locked) {
+      if (["draft", "rejected"].includes(existing?.status ?? "") && !existing?.locked) {
         await updateDraftEntry({
           data: {
             assessmentId: id,
             examType: existing.exam_type,
+            formative:
+              edit.formative !== undefined
+                ? edit.formative === ""
+                  ? null
+                  : Number(edit.formative)
+                : existing.formative,
+            summative:
+              edit.summative !== undefined
+                ? edit.summative === ""
+                  ? null
+                  : Number(edit.summative)
+                : existing.summative,
+            teacherInitials: existing.teacher_initials ?? null,
+          },
+        });
+        await submitEntry({
+          data: {
+            assessmentId: id,
             formative:
               edit.formative !== undefined
                 ? edit.formative === ""
@@ -781,10 +789,11 @@ function AssessmentsPage() {
       reason?: string;
       classId?: string | null;
       streamId?: string | null;
-    }) => review({ data: vars }),
+    }) => reviewAssessments({ data: vars }),
     onSuccess: () => {
       toast.success("Review recorded");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -810,10 +819,25 @@ function AssessmentsPage() {
       ),
     [data?.streams, reviewClassId],
   );
+  const dosSubmittedRows = useMemo(() => {
+    if (!data) return [];
+    return data.assessments
+      .filter((assessment) => assessment.status === "submitted")
+      .map((assessment) => ({
+        ...assessment,
+        studentName:
+          data.students.find((student: StudentRow) => student.id === assessment.student_id)
+            ?.full_name ?? "â€”",
+        subjectName:
+          data.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
+          "â€”",
+        termName: data.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "â€”",
+        gradeDescriptor: assessment.grade_descriptor ?? "",
+      }));
+  }, [data]);
   const scopedPendingIds = useMemo(() => {
     if (!reviewClassId && !reviewStreamId) return pendingIds;
-    return visibleRows
-      .filter((row) => row.status === "submitted")
+    return dosSubmittedRows
       .filter((row) => {
         const student = data?.students.find((item) => item.id === row.student_id);
         if (!student) return false;
@@ -822,10 +846,9 @@ function AssessmentsPage() {
         return true;
       })
       .map((row) => row.id);
-  }, [data?.students, pendingIds, reviewClassId, reviewStreamId, visibleRows]);
+  }, [data?.students, dosSubmittedRows, pendingIds, reviewClassId, reviewStreamId]);
   const scopedPendingRows = useMemo(() => {
-    return visibleRows
-      .filter((row) => row.status === "submitted")
+    return dosSubmittedRows
       .filter((row) => {
         const student = data?.students.find((item) => item.id === row.student_id);
         if (!student) return false;
@@ -833,145 +856,14 @@ function AssessmentsPage() {
         if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
         return true;
       });
-  }, [data?.students, reviewClassId, reviewStreamId, visibleRows]);
+  }, [data?.students, dosSubmittedRows, reviewClassId, reviewStreamId]);
 
   return (
     <div>
       <PageHeader
         title="Assessments"
         description="Formative counts 20%, summative 80%. Approved scores lock automatically."
-        actions={
-          canReview && pendingIds.length > 0 ? (
-            <>
-              <Btn
-                variant="accent"
-                onClick={() => reviewMutation.mutate({ ids: pendingIds, action: "approve" })}
-              >
-                Approve {pendingIds.length} submitted
-              </Btn>
-              <Btn
-                variant="ghost"
-                onClick={() => reviewMutation.mutate({ ids: pendingIds, action: "reject" })}
-              >
-                Return for correction
-              </Btn>
-            </>
-          ) : undefined
-        }
       />
-
-      {hasAny(me?.roles, ["dos"]) && (
-        <Panel title="DOS approval" className="mb-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Class">
-              <select
-                className={inputClass}
-                value={reviewClassId}
-                onChange={(event) => {
-                  setReviewClassId(event.target.value);
-                  setReviewStreamId("");
-                }}
-              >
-                <option value="">All classes</option>
-                {reviewClassOptions.map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Stream">
-              <select
-                className={inputClass}
-                value={reviewStreamId}
-                onChange={(event) => setReviewStreamId(event.target.value)}
-              >
-                <option value="">All streams</option>
-                {reviewStreamOptions.map((stream) => (
-                  <option key={stream.id} value={stream.id}>
-                    {stream.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex items-end gap-2">
-              <Btn
-                variant="accent"
-                disabled={scopedPendingIds.length === 0 || reviewMutation.isPending}
-                onClick={() =>
-                  reviewMutation.mutate({
-                    ids: scopedPendingIds,
-                    action: "approve",
-                    classId: reviewClassId || null,
-                    streamId: reviewStreamId || null,
-                  })
-                }
-              >
-                Approve class + stream
-              </Btn>
-            </div>
-          </div>
-          <p className="mt-3 text-sm text-muted-foreground">
-            This approves every submitted assessment in the selected class and stream for the
-            current filters.
-          </p>
-          <div className="mt-4 overflow-hidden rounded-xl border border-border">
-            <div className="border-b border-border bg-muted/40 px-3 py-2 text-sm font-medium">
-              Submitted marks ready for DOS approval
-              <span className="ml-2 text-muted-foreground">
-                ({scopedPendingRows.length})
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Student</th>
-                    <th className="px-3 py-2 font-medium">Class</th>
-                    <th className="px-3 py-2 font-medium">Stream</th>
-                    <th className="px-3 py-2 font-medium">Subject</th>
-                    <th className="px-3 py-2 font-medium">Term</th>
-                    <th className="px-3 py-2 font-medium">Formative</th>
-                    <th className="px-3 py-2 font-medium">Summative</th>
-                    <th className="px-3 py-2 font-medium">Total</th>
-                    <th className="px-3 py-2 font-medium">Descriptor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scopedPendingRows.map((row) => {
-                    const student = data?.students.find((item) => item.id === row.student_id);
-                    const formative = Number(row.formative ?? 0);
-                    const summative = Number(row.summative ?? 0);
-                    const total = (formative + summative).toFixed(1);
-                    return (
-                      <tr key={row.id} className="border-t border-border">
-                        <td className="px-3 py-2 font-medium">{row.studentName}</td>
-                        <td className="px-3 py-2">{className(student?.class_id ?? null)}</td>
-                        <td className="px-3 py-2">{streamName(student?.stream_id ?? null)}</td>
-                        <td className="px-3 py-2">{row.subjectName}</td>
-                        <td className="px-3 py-2">{row.termName}</td>
-                        <td className="px-3 py-2">{formative.toFixed(1)}</td>
-                        <td className="px-3 py-2">{summative.toFixed(1)}</td>
-                        <td className="px-3 py-2 font-semibold">{total}</td>
-                        <td className="px-3 py-2">
-                          <Pill tone="warning">{row.gradeDescriptor || "Pending"}</Pill>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {scopedPendingRows.length === 0 && (
-                    <tr>
-                      <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
-                        No submitted marks match the selected class or stream.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Panel>
-      )}
 
       {canEnter && (
         <Panel title="Enter assessment" className="mb-4">
@@ -1774,26 +1666,24 @@ function AssessmentsPage() {
                       </td>
                       <td className="text-right">
                         <div className="flex justify-end gap-2">
-                          {row.status === "draft" && !row.locked ? (
+                          {(!row.locked && (row.status === "draft" || row.status === "rejected")) ? (
                             <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
-                              Submit draft
-                            </Btn>
-                          ) : !row.locked ? (
-                            <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
-                              Submit draft
+                              {row.status === "rejected" ? "Resubmit draft" : "Submit draft"}
                             </Btn>
                           ) : null}
-                          <Btn
-                            variant="ghost"
-                            onClick={() => {
-                              if (window.confirm("Delete this assessment record?")) {
-                                deleteMutation.mutate(row.id);
-                              }
-                            }}
-                            disabled={deleteMutation.isPending}
-                          >
-                            Delete
-                          </Btn>
+                          {row.status !== "submitted" && row.status !== "approved" ? (
+                            <Btn
+                              variant="ghost"
+                              onClick={() => {
+                                if (window.confirm("Delete this assessment record?")) {
+                                  deleteMutation.mutate(row.id);
+                                }
+                              }}
+                              disabled={deleteMutation.isPending}
+                            >
+                              Delete
+                            </Btn>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

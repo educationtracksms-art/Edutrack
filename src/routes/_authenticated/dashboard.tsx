@@ -21,8 +21,13 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
-import { PageHeader, Panel, Stat } from "@/components/ui-kit";
-import { reviewAssessments, upsertReportComment, verifyStudent } from "@/lib/admin.functions";
+import { PageHeader, Panel, Stat, inputClass } from "@/components/ui-kit";
+import {
+  reviewAssessments,
+  upsertReportComment,
+  verifyStudent,
+  updateAssessmentStatus,
+} from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { getEnabledModuleMap } from "@/lib/modules";
 
@@ -786,6 +791,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const approveStudent = useServerFn(verifyStudent);
   const reviewMarks = useServerFn(reviewAssessments);
+  const updateStatus = useServerFn(updateAssessmentStatus);
+  const [reviewClassId, setReviewClassId] = useState("");
+  const [reviewStreamId, setReviewStreamId] = useState("");
   const { data, isLoading } = useDashboardData(
     schoolId,
     isSuper,
@@ -800,16 +808,23 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
-  const markReviewMutation = useMutation({
-    mutationFn: (assessmentId: string) =>
-      reviewMarks({ data: { ids: [assessmentId], action: "approve" } }),
+  const bulkApproveMutation = useMutation({
+    mutationFn: async () =>
+      reviewMarks({
+        data: {
+          ids: reviewedAssessments.map((assessment) => assessment.id),
+          action: "approve",
+          classId: reviewClassId || null,
+          streamId: reviewStreamId || null,
+        },
+      }),
     onSuccess: () => {
-      toast.success("Mark approved");
+      toast.success("Submitted marks approved");
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
-
   if (isLoading || !data)
     return <p className="text-sm text-muted-foreground">Loading analytics…</p>;
 
@@ -846,23 +861,43 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     { name: "Male", value: data.students.filter((s) => s.gender === "Male").length },
   ].filter((g) => g.value > 0);
 
-  const pending = data.assessments.filter((a) => a.status === "submitted").length;
   const approved = data.assessments.filter((a) => a.status === "approved").length;
   const rejected = data.assessments.filter((a) => a.status === "rejected").length;
+  const submitted = data.assessments.filter((a) => a.status === "submitted").length;
+  const draft = data.assessments.filter((a) => a.status === "draft").length;
   const completion = data.assessments.length
     ? Math.round((approved / data.assessments.length) * 100)
     : 0;
   const pendingStudents = data.students.filter((student) => student.status === "pending");
-  const pendingAssessments = data.assessments
-    .filter((assessment) => assessment.status === "submitted")
-    .map((assessment) => ({
+  const assessmentsTable = data.assessments.map((assessment) => ({
       ...assessment,
       studentName:
         data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "—",
       subjectName:
         data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "—",
+      termName: data.terms.find((term) => term.id === assessment.term_id)?.name ?? "—",
+      gradeDescriptor: assessment.grade_descriptor ?? "—",
       total: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
     }));
+  const reviewClassOptions = data.classes ?? [];
+  const reviewStreamOptions = useMemo(
+    () =>
+      (data.streams ?? []).filter((stream) => !reviewClassId || stream.class_id === reviewClassId),
+    [data.streams, reviewClassId],
+  );
+  const reviewedAssessments = useMemo(() => {
+    return assessmentsTable.filter((assessment) => {
+      const student = data.students.find((item) => item.id === assessment.student_id);
+      if (!student) return false;
+      if (reviewClassId && student.class_id !== reviewClassId) return false;
+      if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
+      return true;
+    });
+  }, [assessmentsTable, data.students, reviewClassId, reviewStreamId]);
+  const submittedAssessments = useMemo(
+    () => reviewedAssessments.filter((assessment) => assessment.status === "submitted"),
+    [reviewedAssessments],
+  );
 
   const trend = ["Term I", "Term II", "Term III"].map((term, index) => ({
     term,
@@ -886,8 +921,8 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         <Stat label="Average achievement" value={`${average.toFixed(1)}%`} />
         <Stat
           label="Pending approvals"
-          value={pending}
-          hint={`${rejected} returned for correction`}
+          value={submitted}
+          hint={`${rejected} returned, ${draft} drafts`}
         />
         <Stat label="Approved assessments" value={approved} />
         <Stat label="Assessment completion" value={`${completion}%`} />
@@ -895,124 +930,162 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
 
       {canApprove && (
         <Panel title="Needs your approval" className="mt-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Learner admissions</h3>
-                <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">
-                  {pendingStudents.length} pending
-                </span>
-              </div>
-              {pendingStudents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No learner admissions are waiting for verification.
-                </p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {pendingStudents.map((student) => (
-                    <li
-                      key={student.id}
-                      className="flex items-center justify-between rounded-md border border-border px-3 py-2"
-                    >
-                      <span>{student.full_name ?? "Unnamed learner"}</span>
-                      <div className="flex items-center gap-2">
-                        <Link to="/students" className="text-sm font-medium text-accent">
-                          Review
-                        </Link>
-                        <button
-                          type="button"
-                          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
-                          onClick={() => approveMutation.mutate(student.id)}
-                          disabled={approveMutation.isPending}
-                        >
-                          Approve
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Assessment approvals</h3>
-                <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">
-                  {pendingAssessments.length} pending
-                </span>
-              </div>
-              {pendingAssessments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No assessment entries are waiting for review.
-                </p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {pendingAssessments.map((assessment) => (
-                    <li
-                      key={assessment.id}
-                      className="flex items-center justify-between rounded-md border border-border px-3 py-2"
-                    >
-                      <span>
-                        <span className="font-medium">{assessment.studentName}</span> ·{" "}
-                        {assessment.subjectName}
-                      </span>
-                      <Link to="/assessments" className="text-sm font-medium text-accent">
-                        Review
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Learner admissions</h3>
+            <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">
+              {pendingStudents.length} pending
+            </span>
           </div>
+          {pendingStudents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No learner admissions are waiting for verification.
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {pendingStudents.map((student) => (
+                <li
+                  key={student.id}
+                  className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                >
+                  <span>{student.full_name ?? "Unnamed learner"}</span>
+                  <div className="flex items-center gap-2">
+                    <Link to="/students" className="text-sm font-medium text-accent">
+                      Review
+                    </Link>
+                    <button
+                      type="button"
+                      className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
+                      onClick={() => approveMutation.mutate(student.id)}
+                      disabled={approveMutation.isPending}
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
       )}
 
       {isDos && (
-        <Panel title="Director of Studies approval queue" className="mt-4">
-          {pendingAssessments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No submitted marks are waiting for DOS approval.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
+        <Panel title="Director of Studies approval" className="mt-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Class">
+              <select
+                className={inputClass}
+                value={reviewClassId}
+                onChange={(event) => {
+                  setReviewClassId(event.target.value);
+                  setReviewStreamId("");
+                }}
+              >
+                <option value="">All classes</option>
+                {reviewClassOptions.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Stream">
+              <select
+                className={inputClass}
+                value={reviewStreamId}
+                onChange={(event) => setReviewStreamId(event.target.value)}
+              >
+                <option value="">All streams</option>
+                {reviewStreamOptions.map((stream) => (
+                  <option key={stream.id} value={stream.id}>
+                    {stream.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Review submitted marks only. Rejected marks return to teachers for correction and
+            approved marks stay locked.
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            {submittedAssessments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No student marks are available.</p>
+            ) : (
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="pb-2">Student</th>
+                    <th className="pb-2">Learner</th>
+                    <th className="pb-2">Class</th>
+                    <th className="pb-2">Stream</th>
                     <th className="pb-2">Subject</th>
+                    <th className="pb-2">Term</th>
+                    <th className="pb-2">Grade descriptor</th>
                     <th className="pb-2">Formative</th>
                     <th className="pb-2">Summative</th>
                     <th className="pb-2">Total</th>
+                    <th className="pb-2">Status</th>
                     <th className="pb-2" />
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingAssessments.map((assessment) => (
-                    <tr key={assessment.id} className="border-t border-border">
+                  {(reviewClassId || reviewStreamId ? submittedAssessments : submittedAssessments).map(
+                    (assessment) => (
+                      <tr key={assessment.id} className="border-t border-border">
                       <td className="py-2 pr-4 font-medium">{assessment.studentName}</td>
+                      <td className="py-2 pr-4">
+                        {className(
+                          data.students.find((item) => item.id === assessment.student_id)?.class_id ??
+                            null,
+                        )}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {streamName(
+                          data.students.find((item) => item.id === assessment.student_id)?.stream_id ??
+                            null,
+                        )}
+                      </td>
                       <td className="py-2 pr-4">{assessment.subjectName}</td>
+                      <td className="py-2 pr-4">{assessment.termName}</td>
+                      <td className="py-2 pr-4">{assessment.gradeDescriptor}</td>
                       <td className="py-2 pr-4">{Number(assessment.formative ?? 0)}</td>
                       <td className="py-2 pr-4">{Number(assessment.summative ?? 0)}</td>
                       <td className="py-2 pr-4 font-semibold">{assessment.total}</td>
-                      <td className="py-2 text-right">
-                        <button
-                          type="button"
-                          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
-                          onClick={() =>
-                            markReviewMutation.mutate(assessment.id)
-                          }
-                          disabled={markReviewMutation.isPending}
-                        >
-                          Approve
-                        </button>
+                      <td className="py-2 pr-4">
+                        <Pill tone="warning">{assessment.status}</Pill>
                       </td>
-                    </tr>
-                  ))}
+                      <td className="py-2 text-right">
+                        <select
+                          className={inputClass}
+                          value={assessment.status}
+                          onChange={(event) => {
+                            const nextStatus = event.target.value as
+                              | "draft"
+                              | "submitted"
+                              | "approved"
+                              | "rejected";
+                            if (nextStatus === assessment.status) return;
+                            updateStatus.mutate({
+                              assessmentId: assessment.id,
+                              status: nextStatus,
+                              reason:
+                                nextStatus === "rejected" ? "Returned for correction" : undefined,
+                            });
+                          }}
+                          disabled={updateStatus.isPending}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="submitted">Submitted</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                        </td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
-            </div>
-          )}
+            )}
+          </div>
         </Panel>
       )}
 
