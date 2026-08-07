@@ -692,6 +692,44 @@ export type Database = {
           },
         ];
       };
+      report_comment_rules: {
+        Row: {
+          comment: string;
+          comment_role: string;
+          created_at: string;
+          descriptor: string;
+          id: string;
+          school_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          comment: string;
+          comment_role: string;
+          created_at?: string;
+          descriptor: string;
+          id?: string;
+          school_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          comment?: string;
+          comment_role?: string;
+          created_at?: string;
+          descriptor?: string;
+          id?: string;
+          school_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "report_comment_rules_school_id_fkey";
+            columns: ["school_id"];
+            isOneToOne: false;
+            referencedRelation: "schools";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       school_events: {
         Row: {
           academic_year_id: string | null;

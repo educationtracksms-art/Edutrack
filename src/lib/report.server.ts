@@ -85,8 +85,7 @@ export async function buildReportCards(
   }
 
   const termFilterId = term?.id ?? "00000000-0000-0000-0000-000000000000";
-  const [{ data: assessments }, { data: attendance }, { data: comments }, { data: activities }] =
-    await Promise.all([
+  const [{ data: assessments }, { data: attendance }, { data: activities }] = await Promise.all([
       supabase
         .from("assessments")
         .select(
@@ -97,11 +96,6 @@ export async function buildReportCards(
         .eq("status", "approved"),
       supabase
         .from("attendance_summaries")
-        .select("*")
-        .in("student_id", ids)
-        .eq("term_id", termFilterId),
-      supabase
-        .from("report_comments")
         .select("*")
         .in("student_id", ids)
         .eq("term_id", termFilterId),
@@ -198,13 +192,40 @@ export async function buildReportCards(
       )?.descriptor ?? descriptorFromIdentifier(identifierAvg);
 
     const att = attendance?.find((a: any) => a.student_id === student.id);
-    const comment = comments?.find((c: any) => c.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
     const approvedAssessment = marks.find((mark: any) => mark.approved_by || mark.approved_at);
     const approvedByName =
       approvedAssessment?.approved_by
         ? (profiles ?? []).find((p: any) => p.id === approvedAssessment.approved_by)?.full_name ?? ""
         : "";
+    const gradeCounts: Record<"A" | "B" | "C" | "D" | "E", number> = rows.reduce(
+      (counts, row) => {
+        const grade = row.grade.trim().toUpperCase() as keyof typeof counts;
+        if (grade in counts) {
+          counts[grade] += 1;
+        }
+        return counts;
+      },
+      { A: 0, B: 0, C: 0, D: 0, E: 0 },
+    );
+    const learnerName = student.full_name ?? "";
+    const resolveComment = (role: "class_teacher" | "head_teacher") => {
+      if (gradeCounts.A >= 6) return "Exceptional Performance.";
+      if (role === "class_teacher") {
+        if (gradeCounts.A >= 4) return `${learnerName} demonstrates understanding of most competencies.`;
+        if (gradeCounts.C >= 4) return `${learnerName} is making good progress in grasping key competencies.`;
+        if (gradeCounts.B >= 3) return `${learnerName} has shown good performance but should consult to be exceptional.`;
+        if (gradeCounts.D >= 3) return `${learnerName} needs to improve on concentration in class and time management.`;
+        if (gradeCounts.E >= 2) return `${learnerName} should consult teachers for better results.`;
+        return "";
+      }
+
+      if (gradeCounts.B >= 3) return `${learnerName} can do better.`;
+      if (gradeCounts.C >= 4) return `${learnerName} is an average learner.`;
+      if (gradeCounts.D >= 3) return `${learnerName} needs to improve.`;
+      if (gradeCounts.E >= 2) return `${learnerName} should consult your facilitators.`;
+      return "";
+    };
 
     return {
       studentId: student.id,
@@ -269,8 +290,8 @@ export async function buildReportCards(
         projects: coCurricularEnabled ? (activity?.projects ?? "") : "",
       },
       comments: {
-        classTeacher: comment?.class_teacher_comment ?? "",
-        headTeacher: comment?.head_teacher_comment ?? "",
+        classTeacher: resolveComment("class_teacher"),
+        headTeacher: resolveComment("head_teacher"),
       },
       staff: {
         classTeacher: classTeacherName,

@@ -13,6 +13,7 @@ import {
   reviewAssessments,
   updateAssessmentDraftEntry,
   submitAssessmentEntry,
+  submitAssessmentEntries,
   upsertAssessmentEntry,
   upsertReportComment,
 } from "@/lib/admin.functions";
@@ -130,6 +131,7 @@ function AssessmentsPage() {
   const upsertEntry = useServerFn(upsertAssessmentEntry);
   const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);
   const submitEntry = useServerFn(submitAssessmentEntry);
+  const submitEntries = useServerFn(submitAssessmentEntries);
   const deleteEntry = useServerFn(deleteAssessmentEntry);
   const saveComment = useServerFn(upsertReportComment);
   const removeComment = useServerFn(deleteReportComment);
@@ -143,6 +145,7 @@ function AssessmentsPage() {
   const [learnerSortKey, setLearnerSortKey] = useState<LearnerSortKey>("class");
   const [learnerSortDirection, setLearnerSortDirection] = useState<"asc" | "desc">("asc");
   const [activeCommentStudentId, setActiveCommentStudentId] = useState("");
+  const [editingAssessmentId, setEditingAssessmentId] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<
     Record<
       string,
@@ -308,6 +311,35 @@ function AssessmentsPage() {
     () => new Map(data?.assessments.map((assessment) => [assessment.id, assessment]) ?? []),
     [data?.assessments],
   );
+
+  const loadAssessmentIntoForm = (assessmentId: string) => {
+    const assessment = assessmentLookup.get(assessmentId);
+    if (!assessment) return;
+    setEditingAssessmentId(assessment.id);
+    setEntryForm({
+      studentId: assessment.student_id,
+      subjectId: assessment.subject_id,
+      termId: assessment.term_id,
+      examType: assessment.exam_type ?? "end_of_term",
+      formative: assessment.formative?.toString() ?? "",
+      summative: assessment.summative?.toString() ?? "",
+      teacherInitials: assessment.teacher_initials ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const resetEntryForm = () => {
+    setEntryForm((current) => ({
+      ...current,
+      studentId: "",
+      subjectId: isTeacher && selectedAllocation ? selectedAllocation.subject_id : "",
+      termId: data?.currentTermId || "",
+      formative: "",
+      summative: "",
+      examType: "end_of_term",
+      teacherInitials: "",
+    }));
+  };
 
   useEffect(() => {
     if (!data) return;
@@ -682,30 +714,35 @@ function AssessmentsPage() {
         if (!allowed) throw new Error("This learner is not assigned to you for this subject");
       }
 
-      await upsertEntry({
-        data: {
-          studentId: entryForm.studentId,
-          subjectId: entryForm.subjectId,
-          termId: entryForm.termId || data?.currentTermId || "",
-          examType: entryForm.examType,
-          gradeDescriptor: autoDescriptor || null,
-          formative: entryForm.formative === "" ? null : Number(entryForm.formative),
-          summative: entryForm.summative === "" ? null : Number(entryForm.summative),
-          teacherInitials: entryForm.teacherInitials || null,
-        },
-      });
+      const payload = {
+        studentId: entryForm.studentId,
+        subjectId: entryForm.subjectId,
+        termId: entryForm.termId || data?.currentTermId || "",
+        examType: entryForm.examType,
+        gradeDescriptor: autoDescriptor || null,
+        formative: entryForm.formative === "" ? null : Number(entryForm.formative),
+        summative: entryForm.summative === "" ? null : Number(entryForm.summative),
+        teacherInitials: entryForm.teacherInitials || null,
+      };
+      if (editingAssessmentId) {
+        await updateDraftEntry({
+          data: {
+            assessmentId: editingAssessmentId,
+            examType: payload.examType,
+            formative: payload.formative,
+            summative: payload.summative,
+            teacherInitials: payload.teacherInitials,
+          },
+        });
+      } else {
+        await upsertEntry({ data: payload });
+      }
     },
     onSuccess: () => {
-      toast.success("Assessment saved as draft");
+      toast.success(editingAssessmentId ? "Assessment updated" : "Assessment saved as draft");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
-      setEntryForm((current) => ({
-        ...current,
-        studentId: "",
-        formative: "",
-        summative: "",
-        examType: "end_of_term",
-        teacherInitials: "",
-      }));
+      resetEntryForm();
+      setEditingAssessmentId("");
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -858,6 +895,40 @@ function AssessmentsPage() {
       });
   }, [data?.students, dosSubmittedRows, reviewClassId, reviewStreamId]);
 
+  const teacherBulkSubmitIds = useMemo(() => {
+    if (!isTeacher || !selectedAllocation || !data) return [];
+    return data.assessments
+      .filter((assessment) => assessment.term_id === (entryForm.termId || data.currentTermId))
+      .filter((assessment) => assessment.subject_id === selectedAllocation.subject_id)
+      .filter((assessment) => assessment.status === "draft" || assessment.status === "rejected")
+      .filter((assessment) => {
+        const student = data.students.find((item) => item.id === assessment.student_id);
+        if (!student) return false;
+        if (selectedAllocation.class_id && student.class_id !== selectedAllocation.class_id) return false;
+        if (selectedAllocation.stream_id && student.stream_id !== selectedAllocation.stream_id) return false;
+        return true;
+      })
+      .map((assessment) => assessment.id);
+  }, [data, entryForm.termId, isTeacher, selectedAllocation]);
+
+  const bulkSubmitMutation = useMutation({
+    mutationFn: async () => {
+      if (!teacherBulkSubmitIds.length) {
+        throw new Error("No draft assessments found for the selected allocation");
+      }
+      await submitEntries({
+        data: {
+          assessmentIds: teacherBulkSubmitIds,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Selected allocation submitted for approval");
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
   return (
     <div>
       <PageHeader
@@ -943,6 +1014,26 @@ function AssessmentsPage() {
                   <p className="text-xs text-muted-foreground">
                     Select a learner from the table to load them into the assessment form.
                   </p>
+                  {isTeacher && selectedAllocation ? (
+                    <Btn
+                      type="button"
+                      variant="accent"
+                      disabled={bulkSubmitMutation.isPending || teacherBulkSubmitIds.length === 0}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Submit all ${teacherBulkSubmitIds.length} assessment(s) for this allocation?`,
+                          )
+                        ) {
+                          bulkSubmitMutation.mutate();
+                        }
+                      }}
+                    >
+                      {bulkSubmitMutation.isPending
+                        ? "Submitting..."
+                        : `Submit allocation (${teacherBulkSubmitIds.length})`}
+                    </Btn>
+                  ) : null}
                 </div>
                 <div className="overflow-x-auto rounded-xl border border-border">
                   <table className="w-full text-sm">
@@ -1124,8 +1215,24 @@ function AssessmentsPage() {
                     !entryForm.studentId
                   }
                 >
-                  {createMutation.isPending ? "Saving..." : "Save draft"}
+                  {createMutation.isPending
+                    ? "Saving..."
+                    : editingAssessmentId
+                      ? "Update draft"
+                      : "Save draft"}
                 </Btn>
+                {editingAssessmentId ? (
+                <Btn
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingAssessmentId("");
+                    resetEntryForm();
+                  }}
+                >
+                    Cancel edit
+                  </Btn>
+                ) : null}
               </div>
             </div>
           </form>
@@ -1666,6 +1773,11 @@ function AssessmentsPage() {
                       </td>
                       <td className="text-right">
                         <div className="flex justify-end gap-2">
+                          {(!row.locked && (row.status === "draft" || row.status === "rejected")) ? (
+                            <Btn variant="ghost" onClick={() => loadAssessmentIntoForm(row.id)}>
+                              Edit
+                            </Btn>
+                          ) : null}
                           {(!row.locked && (row.status === "draft" || row.status === "rejected")) ? (
                             <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
                               {row.status === "rejected" ? "Resubmit draft" : "Submit draft"}

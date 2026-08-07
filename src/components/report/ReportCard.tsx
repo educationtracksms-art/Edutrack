@@ -3,9 +3,17 @@ import type { ReportCardData } from "@/lib/report-types";
 export function ReportCard({ data }: { data: ReportCardData }) {
   const { school, student, attendance, rows, overall, approval, gradeKeys, coCurricular, comments, staff } =
     data;
+  const watermarkLabel = school.name || "School";
 
   return (
     <div className="report-doc">
+      <div className="report-watermark" aria-hidden="true">
+        {school.logoUrl ? (
+          <img src={school.logoUrl} alt="" />
+        ) : (
+          <span>{school.initials || watermarkLabel.slice(0, 3).toUpperCase()}</span>
+        )}
+      </div>
       <header>
         <div className="header-top">
           <div className="logo">

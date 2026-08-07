@@ -507,6 +507,14 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
     if (!existingAssessment || existingAssessment.school_id !== schoolId) {
       throw new Error("Assessment not found in your school");
     }
+    const { data: lockedAssessment } = await context.supabase
+      .from("assessments")
+      .select("status, locked")
+      .eq("id", data.assessmentId)
+      .maybeSingle();
+    if (lockedAssessment?.status === "approved" || lockedAssessment?.status === "rejected" || lockedAssessment?.locked) {
+      throw new Error("This assessment has already been finalized");
+    }
 
     const patch: Record<string, unknown> = {
       status: data.status,
@@ -677,6 +685,78 @@ export const upsertReportComment = createServerFn({ method: "POST" })
       },
     );
 
+    return { ok: true };
+  });
+
+export const upsertReportCommentRule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      id?: string | null;
+      commentRole: "class_teacher" | "head_teacher";
+      descriptor: string;
+      comment: string;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    const allowedRoles =
+      data.commentRole === "class_teacher"
+        ? ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]
+        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"];
+    if (!roles.some((role) => allowedRoles.includes(role))) {
+      throw new Error("Not allowed to manage report comment rules");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const payload = {
+      school_id: schoolId,
+      comment_role: data.commentRole,
+      descriptor: data.descriptor.trim(),
+      comment: data.comment.trim(),
+    };
+
+    const query = data.id
+      ? context.supabase
+          .from("report_comment_rules")
+          .update(payload)
+          .eq("id", data.id)
+          .eq("school_id", schoolId)
+      : context.supabase.from("report_comment_rules").insert(payload);
+    const { error } = await query;
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const deleteReportCommentRule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      id: string;
+      commentRole: "class_teacher" | "head_teacher";
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    const allowedRoles =
+      data.commentRole === "class_teacher"
+        ? ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]
+        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"];
+    if (!roles.some((role) => allowedRoles.includes(role))) {
+      throw new Error("Not allowed to manage report comment rules");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const { error } = await context.supabase
+      .from("report_comment_rules")
+      .delete()
+      .eq("id", data.id)
+      .eq("school_id", schoolId)
+      .eq("comment_role", data.commentRole);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -1097,6 +1177,87 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
 
     await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
       assessment_id: data.assessmentId,
+    });
+
+    return { ok: true };
+  });
+
+export const submitAssessmentEntries = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: { assessmentIds: string[]; teacherInitials?: string | null }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to submit assessments");
+    }
+
+    if (!data.assessmentIds.length) {
+      throw new Error("No assessments were selected");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: assessments, error: fetchError } = await context.supabase
+      .from("assessments")
+      .select("id, school_id, status, locked, formative, summative")
+      .in("id", data.assessmentIds);
+    if (fetchError) throw new Error(fetchError.message);
+    if (!assessments || assessments.length !== data.assessmentIds.length) {
+      throw new Error("One or more assessments were not found in your school");
+    }
+    if (assessments.some((item) => item.school_id !== schoolId)) {
+      throw new Error("One or more assessments were not found in your school");
+    }
+    if (assessments.some((item) => item.locked)) {
+      throw new Error("Locked assessments cannot be submitted");
+    }
+
+    const teacherInitials = data.teacherInitials?.trim() || null;
+    const { data: gradingScales } = await context.supabase
+      .from("grading_scales")
+      .select("grade, min_score, max_score, grade_descriptor")
+      .eq("school_id", schoolId);
+
+    const updates = assessments.map((assessment) => {
+      const totalScore = Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
+      const gradeMatch = (gradingScales ?? []).find(
+        (scale: any) => totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+      );
+      return context.supabase
+        .from("assessments")
+        .update({
+          status: "submitted",
+          locked: false,
+          rejection_reason: null,
+          submitted_by: context.userId,
+          submitted_at: new Date().toISOString(),
+          teacher_initials: teacherInitials,
+          grade_descriptor: gradeMatch?.grade_descriptor ?? null,
+        })
+        .eq("id", assessment.id)
+        .eq("school_id", schoolId);
+    });
+    const results = await Promise.all(updates);
+    const firstError = results.find((result) => result.error);
+    if (firstError?.error) throw new Error(firstError.error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENTS_SUBMITTED", "assessments", {
+      assessment_ids: data.assessmentIds,
     });
 
     return { ok: true };

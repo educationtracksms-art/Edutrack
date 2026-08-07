@@ -24,7 +24,8 @@ import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { Field, PageHeader, Panel, Pill, Stat, inputClass } from "@/components/ui-kit";
 import {
   reviewAssessments,
-  upsertReportComment,
+  deleteReportCommentRule,
+  upsertReportCommentRule,
   verifyStudent,
   updateAssessmentStatus,
 } from "@/lib/admin.functions";
@@ -70,20 +71,12 @@ const CHART_COLORS = [
   "var(--color-chart-5)",
 ];
 
-type DashboardTermRow = { id: string; name: string; is_current: boolean };
 type DashboardStudentRow = {
   id: string;
   full_name: string;
   status: string;
   class_id: string | null;
   stream_id: string | null;
-};
-
-type DashboardCoCurricularRow = {
-  student_id: string;
-  games: string | null;
-  clubs: string | null;
-  projects: string | null;
 };
 
 function useDashboardData(
@@ -517,10 +510,10 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
 
       {canEditComments && (
         <CommentEditorPanel
-          mode="class_teacher"
-          students={scopeStudents as DashboardStudentRow[]}
-          terms={(data.terms ?? []) as DashboardTermRow[]}
           schoolId={me?.profile?.school_id ?? null}
+          commentRole="class_teacher"
+          title="Class teacher comment rules"
+          description="These comments are applied automatically from the learner's overall descriptor."
         />
       )}
     </div>
@@ -528,294 +521,149 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
 }
 
 function CommentEditorPanel({
-  mode,
-  students,
-  terms,
+  commentRole,
   schoolId,
+  title,
+  description,
 }: {
-  mode: "class_teacher" | "head_teacher";
-  students: DashboardStudentRow[];
-  terms: DashboardTermRow[];
+  commentRole: "class_teacher" | "head_teacher";
   schoolId: string | null;
+  title: string;
+  description: string;
 }) {
-  const saveComment = useServerFn(upsertReportComment);
-  const [termId, setTermId] = useState("");
-  const [drafts, setDrafts] = useState<
-    Record<
-      string,
-      {
-        classTeacherComment: string;
-        headTeacherComment: string;
-        games: string;
-        clubs: string;
-        projects: string;
-      }
-    >
-  >({});
-  const currentTermId = useMemo(
-    () => terms.find((term) => term.is_current)?.id ?? terms[0]?.id ?? "",
-    [terms],
-  );
-
-  useEffect(() => {
-    if (!termId && currentTermId) setTermId(currentTermId);
-  }, [currentTermId, termId]);
-
-  const visible = students.filter((student) => student.status === "active");
-  const scopeStudents = visible;
-  const scopeIds = scopeStudents.map((student) => student.id);
-
-  const { data: comments } = useQuery({
-    queryKey: ["dashboard-report-comments", mode, termId, scopeIds.join(",")],
-    enabled: !!termId && scopeIds.length > 0,
+  const saveRule = useServerFn(upsertReportCommentRule);
+  const deleteRule = useServerFn(deleteReportCommentRule);
+  const [draft, setDraft] = useState({ id: "", descriptor: "Outstanding", comment: "" });
+  const { data: rules } = useQuery({
+    queryKey: ["dashboard-report-comment-rules", schoolId, commentRole],
+    enabled: !!schoolId,
     queryFn: async () =>
       (
         await supabase
-          .from("report_comments")
-          .select("student_id, class_teacher_comment, head_teacher_comment")
-          .eq("term_id", termId)
-          .in("student_id", scopeIds)
-      ).data ?? [],
-  });
-
-  const { data: coCurricularRows } = useQuery({
-    queryKey: ["dashboard-co-curricular", termId, scopeIds.join(","), schoolId],
-    enabled: mode === "class_teacher" && !!termId && scopeIds.length > 0 && !!schoolId,
-    queryFn: async () =>
-      (
-        await supabase
-          .from("co_curricular")
-          .select("student_id, games, clubs, projects")
-          .eq("term_id", termId)
+          .from("report_comment_rules")
+          .select("id, descriptor, comment")
           .eq("school_id", schoolId)
-          .in("student_id", scopeIds)
+          .eq("comment_role", commentRole)
+          .order("descriptor", { ascending: true })
       ).data ?? [],
   });
 
   useEffect(() => {
-    if (!comments) return;
-    setDrafts((current) => {
-      const next = { ...current };
-      for (const comment of comments as Array<{
-        student_id: string;
-        class_teacher_comment: string | null;
-        head_teacher_comment: string | null;
-      }>) {
-        next[comment.student_id] = {
-          classTeacherComment:
-            comment.class_teacher_comment ?? current[comment.student_id]?.classTeacherComment ?? "",
-          headTeacherComment:
-            comment.head_teacher_comment ?? current[comment.student_id]?.headTeacherComment ?? "",
-        };
-      }
-      return next;
-    });
-  }, [comments]);
+    if (!rules) return;
+    const first = rules[0] as { id: string; descriptor: string; comment: string } | undefined;
+    setDraft((current) => ({
+      id: first?.id ?? current.id ?? "",
+      descriptor: first?.descriptor ?? current.descriptor,
+      comment: first?.comment ?? current.comment,
+    }));
+  }, [rules]);
 
-  useEffect(() => {
-    if (!coCurricularRows || mode !== "class_teacher") return;
-    setDrafts((current) => {
-      const next = { ...current };
-      for (const row of coCurricularRows as DashboardCoCurricularRow[]) {
-        next[row.student_id] = {
-          classTeacherComment: current[row.student_id]?.classTeacherComment ?? "",
-          headTeacherComment: current[row.student_id]?.headTeacherComment ?? "",
-          games: row.games ?? current[row.student_id]?.games ?? "",
-          clubs: row.clubs ?? current[row.student_id]?.clubs ?? "",
-          projects: row.projects ?? current[row.student_id]?.projects ?? "",
-        };
-      }
-      return next;
-    });
-  }, [coCurricularRows, mode]);
-
-  const editableKey = mode === "class_teacher" ? "classTeacherComment" : "headTeacherComment";
-  const editableLabel =
-    mode === "class_teacher" ? "Class Teacher's Comment" : "Head Teacher's Comment";
   const saveMutation = useMutation({
-    mutationFn: async (studentId: string) => {
-      if (!termId) throw new Error("Choose a term first");
-      const draft = drafts[studentId] ?? {
-        classTeacherComment: "",
-        headTeacherComment: "",
-        games: "",
-        clubs: "",
-        projects: "",
-      };
-      await saveComment({
+    mutationFn: async () =>
+      saveRule({
         data: {
-          studentId,
-          termId,
-          ...(mode === "class_teacher"
-            ? {
-                classTeacherComment: draft.classTeacherComment,
-                games: draft.games,
-                clubs: draft.clubs,
-                projects: draft.projects,
-              }
-            : { headTeacherComment: draft.headTeacherComment }),
+          id: draft.id || null,
+          commentRole,
+          descriptor: draft.descriptor,
+          comment: draft.comment,
         },
-      });
-    },
-    onSuccess: () => toast.success("Comment saved"),
+      }),
+    onSuccess: () => toast.success("Comment rule saved"),
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) =>
+      deleteRule({
+        data: {
+          id,
+          commentRole,
+        },
+      }),
+    onSuccess: () => toast.success("Comment rule deleted"),
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
   return (
-    <Panel title="Report comments" className="mt-4">
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <select
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-          value={termId}
-          onChange={(event) => setTermId(event.target.value)}
-        >
-          <option value="">Select term</option>
-          {terms.map((term) => (
-            <option key={term.id} value={term.id}>
-              {term.name}
-              {term.is_current ? " (Current)" : ""}
-            </option>
-          ))}
-        </select>
-        <span className="text-sm text-muted-foreground">{visible.length} learner(s) in scope</span>
+    <Panel title={title} className="mt-4">
+      <p className="mb-4 text-sm text-muted-foreground">{description}</p>
+      <div className="grid gap-3 md:grid-cols-3">
+        <label className="block text-sm">
+          <span className="font-medium">Descriptor</span>
+          <select
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            value={draft.descriptor}
+            onChange={(event) => setDraft({ ...draft, descriptor: event.target.value })}
+          >
+            <option value="Outstanding">Outstanding</option>
+            <option value="Modulate">Modulate</option>
+            <option value="Basic">Basic</option>
+          </select>
+        </label>
+        <label className="block text-sm md:col-span-2">
+          <span className="font-medium">Comment</span>
+          <textarea
+            className="mt-1 min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
+            value={draft.comment}
+            onChange={(event) => setDraft({ ...draft, comment: event.target.value })}
+          />
+        </label>
       </div>
-
-      {scopeStudents.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No learners are available for comment entry yet.
-        </p>
-      ) : mode === "class_teacher" ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">Student</th>
-                <th className="pb-2">Games</th>
-                <th className="pb-2">Clubs</th>
-                <th className="pb-2">Projects</th>
-                <th className="pb-2">Comment</th>
-                <th className="pb-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {scopeStudents.map((student) => {
-                const draft = drafts[student.id] ?? {
-                  classTeacherComment: "",
-                  headTeacherComment: "",
-                  games: "",
-                  clubs: "",
-                  projects: "",
-                };
-                return (
-                  <tr key={student.id} className="border-t border-border align-top">
-                    <td className="py-3 pr-4 font-medium">{student.full_name}</td>
-                    <td className="py-3 pr-3">
-                      <textarea
-                        className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-                        value={draft.games}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [student.id]: { ...draft, games: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="py-3 pr-3">
-                      <textarea
-                        className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-                        value={draft.clubs}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [student.id]: { ...draft, clubs: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="py-3 pr-3">
-                      <textarea
-                        className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-                        value={draft.projects}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [student.id]: { ...draft, projects: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="py-3 pr-3">
-                      <textarea
-                        className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-                        value={draft.classTeacherComment}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [student.id]: { ...draft, classTeacherComment: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="py-3 text-right">
-                      <button
-                        type="button"
-                        className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
-                        onClick={() => saveMutation.mutate(student.id)}
-                        disabled={saveMutation.isPending}
-                      >
-                        Save
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {scopeStudents.map((student) => {
-            const draft = drafts[student.id] ?? {
-              classTeacherComment: "",
-              headTeacherComment: "",
-              games: "",
-              clubs: "",
-              projects: "",
-            };
-            return (
-              <div key={student.id} className="rounded-lg border border-border p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold">{student.full_name}</h3>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+        >
+          Save rule
+        </button>
+        {draft.id && (
+          <button
+            type="button"
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60"
+            onClick={() => deleteMutation.mutate(draft.id)}
+            disabled={deleteMutation.isPending}
+          >
+            Delete rule
+          </button>
+        )}
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="pb-2">Descriptor</th>
+              <th className="pb-2">Comment</th>
+              <th className="pb-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {(rules ?? []).map((rule: { id: string; descriptor: string; comment: string }) => (
+              <tr key={rule.id} className="border-t border-border">
+                <td className="py-2 pr-4">{rule.descriptor}</td>
+                <td className="py-2 pr-4">{rule.comment}</td>
+                <td className="py-2 text-right">
                   <button
                     type="button"
-                    className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-60"
-                    onClick={() => saveMutation.mutate(student.id)}
-                    disabled={saveMutation.isPending}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                    onClick={() => setDraft(rule)}
                   >
-                    Save comment
+                    Edit
                   </button>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="block text-sm">
-                    <span className="font-medium">{editableLabel}</span>
-                    <textarea
-                      className="mt-1 min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-                      value={draft[editableKey]}
-                      onChange={(event) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [student.id]: { ...draft, [editableKey]: event.target.value },
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                </td>
+              </tr>
+            ))}
+            {(rules ?? []).length === 0 && (
+              <tr>
+                <td colSpan={3} className="py-4 text-muted-foreground">
+                  No rules yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </Panel>
   );
 }
@@ -1160,11 +1008,10 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
 
       {canEditHeadComments && reportCardsEnabled && (
         <CommentEditorPanel
-          mode="head_teacher"
-          students={(data.students as DashboardStudentRow[]).filter(
-            (student) => student.status === "active",
-          )}
-          terms={(data.terms ?? []) as DashboardTermRow[]}
+          commentRole="head_teacher"
+          schoolId={me?.profile?.school_id ?? null}
+          title="Head teacher comment rules"
+          description="These comments are applied automatically from the learner's overall descriptor."
         />
       )}
 
