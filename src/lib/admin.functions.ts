@@ -507,14 +507,6 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
     if (!existingAssessment || existingAssessment.school_id !== schoolId) {
       throw new Error("Assessment not found in your school");
     }
-    const { data: lockedAssessment } = await context.supabase
-      .from("assessments")
-      .select("status, locked")
-      .eq("id", data.assessmentId)
-      .maybeSingle();
-    if (lockedAssessment?.status === "approved" || lockedAssessment?.status === "rejected" || lockedAssessment?.locked) {
-      throw new Error("This assessment has already been finalized");
-    }
 
     const patch: Record<string, unknown> = {
       status: data.status,

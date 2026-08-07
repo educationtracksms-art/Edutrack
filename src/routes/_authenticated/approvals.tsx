@@ -327,8 +327,7 @@ function ApprovalsPage() {
                       ) : null}
                       {group.rows.map((row) => {
                         const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
-                        const canChangeStatus = row.status === "submitted";
-                        return (
+                  return (
                           <tr key={row.id} className="border-t border-border">
                             <td className="py-3 pr-4 font-medium">{row.student_name}</td>
                             <td className="py-3 pr-4">{row.class_name}</td>
@@ -360,23 +359,19 @@ function ApprovalsPage() {
                                   className={inputClass}
                                   value={row.status}
                                   onChange={(event) => {
-                                    const nextStatus = event.target.value as
-                                      | "draft"
-                                      | "submitted"
-                                      | "approved"
-                                      | "rejected";
-                                    if (nextStatus === row.status) return;
-                                    if (!canChangeStatus) {
-                                      toast.error("This assessment status has already been finalized");
-                                      return;
-                                    }
-                                    actionMutation.mutate({
-                                      assessmentId: row.id,
-                                      status: nextStatus,
-                                    });
-                                  }}
-                                  disabled={actionMutation.isPending || !canChangeStatus}
-                                >
+                              const nextStatus = event.target.value as
+                                | "draft"
+                                | "submitted"
+                                | "approved"
+                                | "rejected";
+                              if (nextStatus === row.status) return;
+                              actionMutation.mutate({
+                                assessmentId: row.id,
+                                status: nextStatus,
+                              });
+                            }}
+                            disabled={actionMutation.isPending}
+                          >
                                   <option value="draft">Draft</option>
                                   <option value="submitted">Submitted</option>
                                   <option value="approved">Approved</option>

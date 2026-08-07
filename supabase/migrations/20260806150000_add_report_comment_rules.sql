@@ -4,7 +4,7 @@ CREATE TABLE public.report_comment_rules (
   comment_role text NOT NULL,
   descriptor text NOT NULL,
   comment text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),n
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (school_id, comment_role, descriptor)
 );
