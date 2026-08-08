@@ -136,6 +136,7 @@ function AssessmentsPage() {
   const saveComment = useServerFn(upsertReportComment);
   const removeComment = useServerFn(deleteReportComment);
   const [subjectFilter, setSubjectFilter] = useState("");
+  const [tableSubjectFilter, setTableSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [termFilter, setTermFilter] = useState("");
   const [allocationKey, setAllocationKey] = useState("");
@@ -281,6 +282,50 @@ function AssessmentsPage() {
       };
     },
   });
+  const { data: tableData } = useQuery<{
+    assessments: AssessmentRow[];
+    students: StudentRow[];
+    subjects: SubjectRow[];
+    terms: TermRow[];
+    gradingScales: GradingScaleRow[];
+  }>({
+    queryKey: ["assessment-table", schoolId],
+    queryFn: async () => {
+      const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
+      const [assessmentsResult, studentsResult, subjectsResult, termsResult, gradingScalesResult] =
+        (await Promise.all([
+          schoolQuery(supabase.from("assessments").select("*").order("created_at")),
+          schoolQuery(
+            supabase
+              .from("students")
+              .select("id, full_name, class_id, stream_id, status")
+              .eq("status", "active")
+              .order("full_name"),
+          ),
+          schoolQuery(supabase.from("subjects").select("id, name").order("position")),
+          schoolQuery(
+            supabase
+              .from("terms")
+              .select("id, name, is_current")
+              .order("start_date", { ascending: false }),
+          ),
+          schoolQuery(
+            supabase
+              .from("grading_scales")
+              .select("grade, min_score, max_score, descriptor")
+              .order("min_score", { ascending: false }),
+          ),
+        ])) as any[];
+
+      return {
+        assessments: (assessmentsResult.data ?? []) as AssessmentRow[],
+        students: (studentsResult.data ?? []) as StudentRow[],
+        subjects: (subjectsResult.data ?? []) as SubjectRow[],
+        terms: (termsResult.data ?? []) as TermRow[],
+        gradingScales: (gradingScalesResult.data ?? []) as GradingScaleRow[],
+      };
+    },
+  });
 
   const selectedAllocation = useMemo(
     () =>
@@ -308,8 +353,8 @@ function AssessmentsPage() {
   }, [data?.gradingScales, entryForm.formative, entryForm.summative]);
 
   const assessmentLookup = useMemo(
-    () => new Map(data?.assessments.map((assessment) => [assessment.id, assessment]) ?? []),
-    [data?.assessments],
+    () => new Map(tableData?.assessments.map((assessment) => [assessment.id, assessment]) ?? []),
+    [tableData?.assessments],
   );
 
   const loadAssessmentIntoForm = (assessmentId: string) => {
@@ -521,41 +566,30 @@ function AssessmentsPage() {
   }, [activeCommentStudentId, commentStudents]);
 
   const rows = useMemo(() => {
-    if (!data) return [];
-    return data.assessments
-      .filter((assessment) => {
-        if (!isAssignedTeacher) return true;
-        if (!selectedAllocation) return false;
-        const student = data.students.find((item: StudentRow) => item.id === assessment.student_id);
-        if (!student) return false;
-        return (
-          assessment.subject_id === selectedAllocation.subject_id &&
-          (!selectedAllocation.class_id || selectedAllocation.class_id === student.class_id) &&
-          (!selectedAllocation.stream_id || selectedAllocation.stream_id === student.stream_id)
-        );
-      })
-      .filter((assessment) => (subjectFilter ? assessment.subject_id === subjectFilter : true))
+    if (!tableData) return [];
+    return tableData.assessments
+      .filter((assessment) => (tableSubjectFilter ? assessment.subject_id === tableSubjectFilter : true))
       .filter((assessment) => (statusFilter ? assessment.status === statusFilter : true))
       .filter((assessment) => (termFilter ? assessment.term_id === termFilter : true))
       .map((assessment) => ({
         ...assessment,
         studentName:
-          data.students.find((student: StudentRow) => student.id === assessment.student_id)
+          tableData.students.find((student: StudentRow) => student.id === assessment.student_id)
             ?.full_name ?? "—",
         subjectName:
-          data.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
+          tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
           "—",
-        termName: data.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
+        termName: tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
         gradeDescriptor: assessment.grade_descriptor ?? "",
       }));
-  }, [data, isAssignedTeacher, selectedAllocation, subjectFilter, statusFilter, termFilter]);
+  }, [statusFilter, tableData, tableSubjectFilter, termFilter]);
 
   const visibleRows = useMemo(() => {
-    const normalizedSubjectFilter = subjectFilter.trim();
+    const normalizedSubjectFilter = tableSubjectFilter.trim();
     return rows.filter((row) =>
       normalizedSubjectFilter ? row.subject_id === normalizedSubjectFilter : true,
     );
-  }, [rows, subjectFilter]);
+  }, [rows, tableSubjectFilter]);
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -740,7 +774,7 @@ function AssessmentsPage() {
     },
     onSuccess: () => {
       toast.success(editingAssessmentId ? "Assessment updated" : "Assessment saved as draft");
-      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
       resetEntryForm();
       setEditingAssessmentId("");
     },
@@ -760,7 +794,7 @@ function AssessmentsPage() {
       }
 
       const termId = entryForm.termId || data?.currentTermId || "";
-      const existing = data?.assessments.find(
+      const existing = tableData?.assessments.find(
         (assessment) =>
           assessment.student_id === entryForm.studentId &&
           assessment.subject_id === entryForm.subjectId &&
@@ -829,7 +863,7 @@ function AssessmentsPage() {
     }) => reviewAssessments({ data: vars }),
     onSuccess: () => {
       toast.success("Review recorded");
-      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -857,21 +891,21 @@ function AssessmentsPage() {
     [data?.streams, reviewClassId],
   );
   const dosSubmittedRows = useMemo(() => {
-    if (!data) return [];
-    return data.assessments
+    if (!tableData) return [];
+    return tableData.assessments
       .filter((assessment) => assessment.status === "submitted")
       .map((assessment) => ({
         ...assessment,
         studentName:
-          data.students.find((student: StudentRow) => student.id === assessment.student_id)
+          tableData.students.find((student: StudentRow) => student.id === assessment.student_id)
             ?.full_name ?? "â€”",
         subjectName:
-          data.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
+          tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
           "â€”",
-        termName: data.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "â€”",
+        termName: tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "â€”",
         gradeDescriptor: assessment.grade_descriptor ?? "",
       }));
-  }, [data]);
+  }, [tableData]);
   const scopedPendingIds = useMemo(() => {
     if (!reviewClassId && !reviewStreamId) return pendingIds;
     return dosSubmittedRows
@@ -897,7 +931,7 @@ function AssessmentsPage() {
 
   const teacherBulkSubmitIds = useMemo(() => {
     if (!isTeacher || !selectedAllocation || !data) return [];
-    return data.assessments
+    return tableData.assessments
       .filter((assessment) => assessment.term_id === (entryForm.termId || data.currentTermId))
       .filter((assessment) => assessment.subject_id === selectedAllocation.subject_id)
       .filter((assessment) => assessment.status === "draft" || assessment.status === "rejected")
@@ -924,7 +958,7 @@ function AssessmentsPage() {
     },
     onSuccess: () => {
       toast.success("Selected allocation submitted for approval");
-      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -1642,8 +1676,8 @@ function AssessmentsPage() {
         <div className="mb-3 flex flex-wrap gap-2">
           <select
             className={`${inputClass} max-w-xs`}
-            value={subjectFilter}
-            onChange={(event) => setSubjectFilter(event.target.value)}
+            value={tableSubjectFilter}
+            onChange={(event) => setTableSubjectFilter(event.target.value)}
           >
             <option value="">All subjects</option>
             {(data?.subjects ?? []).map((subject: SubjectRow) => (
@@ -1816,3 +1850,5 @@ function AssessmentsPage() {
     </div>
   );
 }
+
+

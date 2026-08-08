@@ -27,6 +27,8 @@ type ApprovalRow = {
   term_name?: string;
   class_name?: string;
   stream_name?: string;
+  submitted_by_name?: string;
+  submitted_percentage?: number;
 };
 
 export const Route = createFileRoute("/_authenticated/approvals")({
@@ -64,11 +66,11 @@ function ApprovalsPage() {
     queryKey: ["dos-approvals", schoolId],
     enabled: !!schoolId && isDos,
     queryFn: async () => {
-      const [assessments, students, classes, streams, subjects, terms] = await Promise.all([
+      const [assessments, students, classes, streams, subjects, terms, profiles] = await Promise.all([
         supabase
           .from("assessments")
           .select(
-            "id, student_id, subject_id, term_id, formative, summative, status, locked, rejection_reason, created_at",
+            "id, student_id, subject_id, term_id, formative, summative, status, locked, rejection_reason, created_at, submitted_by",
           )
           .eq("school_id", schoolId)
           .order("created_at", { ascending: false }),
@@ -77,6 +79,7 @@ function ApprovalsPage() {
         supabase.from("streams").select("id, name").eq("school_id", schoolId),
         supabase.from("subjects").select("id, name").eq("school_id", schoolId),
         supabase.from("terms").select("id, name").eq("school_id", schoolId),
+        supabase.from("profiles").select("id, full_name").eq("school_id", schoolId),
       ]);
 
       const studentMap = new Map((students.data ?? []).map((row: any) => [row.id, row.full_name]));
@@ -86,6 +89,36 @@ function ApprovalsPage() {
       const streamMap = new Map((streams.data ?? []).map((row: any) => [row.id, row.name]));
       const subjectMap = new Map((subjects.data ?? []).map((row: any) => [row.id, row.name]));
       const termMap = new Map((terms.data ?? []).map((row: any) => [row.id, row.name]));
+      const profileMap = new Map((profiles.data ?? []).map((row: any) => [row.id, row.full_name]));
+      const scopeTotals = new Map<string, number>();
+      const scopeSubmitted = new Map<string, number>();
+
+      for (const row of assessments.data ?? []) {
+        const studentClassId = studentClassMap.get(row.student_id) ?? null;
+        const studentStreamId = studentStreamMap.get(row.student_id) ?? null;
+        const scopeKey = [
+          studentClassId ?? "all",
+          studentStreamId ?? "all",
+          row.subject_id ?? "unknown-subject",
+          row.term_id ?? "unknown-term",
+        ].join(":");
+        scopeSubmitted.set(scopeKey, (scopeSubmitted.get(scopeKey) ?? 0) + (row.status === "submitted" ? 1 : 0));
+      }
+
+      for (const student of students.data ?? []) {
+        const studentClassId = student.class_id ?? null;
+        const studentStreamId = student.stream_id ?? null;
+        for (const assessment of assessments.data ?? []) {
+          if (assessment.student_id !== student.id) continue;
+          const scopeKey = [
+            studentClassId ?? "all",
+            studentStreamId ?? "all",
+            assessment.subject_id ?? "unknown-subject",
+            assessment.term_id ?? "unknown-term",
+          ].join(":");
+          scopeTotals.set(scopeKey, (scopeTotals.get(scopeKey) ?? 0) + 1);
+        }
+      }
 
       return (assessments.data ?? []).map((row: any): ApprovalRow => ({
         ...row,
@@ -96,6 +129,18 @@ function ApprovalsPage() {
         stream_id: studentStreamMap.get(row.student_id) ?? null,
         class_name: classMap.get(studentClassMap.get(row.student_id)) ?? "Unknown class",
         stream_name: streamMap.get(studentStreamMap.get(row.student_id)) ?? "Unknown stream",
+        submitted_by_name: row.submitted_by ? profileMap.get(row.submitted_by) ?? "Unknown teacher" : "Not submitted",
+        submitted_percentage: (() => {
+          const scopeKey = [
+            (studentClassMap.get(row.student_id) ?? null) ?? "all",
+            (studentStreamMap.get(row.student_id) ?? null) ?? "all",
+            row.subject_id ?? "unknown-subject",
+            row.term_id ?? "unknown-term",
+          ].join(":");
+          const total = scopeTotals.get(scopeKey) ?? 0;
+          const submitted = scopeSubmitted.get(scopeKey) ?? 0;
+          return total ? Math.round((submitted / total) * 100) : 0;
+        })(),
       }));
     },
   });
@@ -280,6 +325,8 @@ function ApprovalsPage() {
                   <th className="pb-2">Stream</th>
                   <th className="pb-2">Subject</th>
                   <th className="pb-2">Term</th>
+                  <th className="pb-2">Submitted by</th>
+                  <th className="pb-2">Marks assigned</th>
                   <th className="pb-2">Score</th>
                   <th className="pb-2">Status</th>
                   <th className="pb-2" />
@@ -317,8 +364,17 @@ function ApprovalsPage() {
                           <td className="py-2 pr-4 font-semibold" colSpan={5}>
                             {group.label}
                           </td>
-                          <td className="py-2 pr-4 text-xs text-muted-foreground" colSpan={1}>
+                          <td className="py-2 pr-4 text-xs text-muted-foreground" colSpan={2}>
                             {submittedCount} submitted
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-muted-foreground" colSpan={1}>
+                            {Math.round(
+                              group.rows.reduce(
+                                (sum, row) => sum + (row.submitted_percentage ?? 0),
+                                0,
+                              ) / Math.max(group.rows.length, 1),
+                            )}
+                            % assigned
                           </td>
                           <td className="py-2 text-right" colSpan={2}>
                             {approveWholeGroup}
@@ -327,13 +383,17 @@ function ApprovalsPage() {
                       ) : null}
                       {group.rows.map((row) => {
                         const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
-                  return (
+                        return (
                           <tr key={row.id} className="border-t border-border">
                             <td className="py-3 pr-4 font-medium">{row.student_name}</td>
                             <td className="py-3 pr-4">{row.class_name}</td>
                             <td className="py-3 pr-4">{row.stream_name}</td>
                             <td className="py-3 pr-4">{row.subject_name}</td>
                             <td className="py-3 pr-4">{row.term_name}</td>
+                            <td className="py-3 pr-4">{row.submitted_by_name ?? "Not submitted"}</td>
+                            <td className="py-3 pr-4">
+                              {row.submitted_percentage != null ? `${row.submitted_percentage}%` : "0%"}
+                            </td>
                             <td className="py-3 pr-4">{total}</td>
                             <td className="py-3 pr-4">
                               <Pill
