@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { BookOpen, Filter, LayoutGrid, Users } from "lucide-react";
+import ExcelJS from "exceljs";
 
 import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -207,39 +208,159 @@ function MarksheetPage() {
 
   async function downloadExcel() {
     if (!subjects?.length || (!classId && !streamId)) return;
-    const xlsx = await import("xlsx");
-    const sheetRows: Record<string, string | number>[] = [];
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "EduTrack";
+    workbook.lastModifiedBy = "EduTrack";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+    workbook.subject = "Marksheet";
+    workbook.title = title;
+    const titleText = title;
+    const scopeText =
+      selectedClassName && selectedStreamName
+        ? `${selectedClassName} / ${selectedStreamName}`
+        : selectedClassName || selectedStreamName;
+    const infoText = [
+      `Term: ${terms?.find((term) => term.id === selectedTermId)?.name ?? "N/A"}`,
+      scopeText ? `Scope: ${scopeText}` : "",
+      `Learners: ${visibleStudents.length}`,
+      `Subjects: ${subjects.length}`,
+    ]
+      .filter(Boolean)
+      .join("  |  ");
+
+    const headerRow1: string[] = ["Learner"];
+    const headerRow2: string[] = ["Learner"];
+    for (const subject of subjects) {
+      headerRow1.push(subject.name, "", "", "");
+      headerRow2.push("Formative", "Summative", "Total", "Grade");
+    }
+
+    const sheet = workbook.addWorksheet("Marksheet", {
+      views: [{ state: "frozen", xSplit: 1, ySplit: 4 }],
+      properties: { defaultRowHeight: 22 },
+    });
+    const subjectCount = subjects.length;
+    const totalColumns = 1 + subjectCount * 4;
+    const headerFill = "FFE8EEF9";
+    const subjectFill = "FFDCE6F7";
+    const learnerFill = "FFF5F7FB";
+    const border = {
+      top: { style: "thin", color: { argb: "FFD9DEE8" } },
+      left: { style: "thin", color: { argb: "FFD9DEE8" } },
+      bottom: { style: "thin", color: { argb: "FFD9DEE8" } },
+      right: { style: "thin", color: { argb: "FFD9DEE8" } },
+    } as const;
+
+    const titleRow = sheet.addRow([titleText]);
+    const infoRow = sheet.addRow([infoText]);
+    sheet.addRow([]);
+    const subjectRow = sheet.addRow(headerRow1);
+    const detailRow = sheet.addRow(headerRow2);
+
+    titleRow.height = 24;
+    infoRow.height = 20;
+    subjectRow.height = 22;
+    detailRow.height = 20;
 
     for (const student of visibleStudents) {
-      const row: Record<string, string | number> = {
-        Learner: student.full_name,
-      };
-
+      const values: (string | number | null)[] = [student.full_name];
       for (const subject of subjects) {
         const record = assessmentLookup.get(`${student.id}:${subject.id}`);
-        const formative = record?.formative ?? "";
-        const summative = record?.summative ?? "";
+        const formative = record?.formative ?? null;
+        const summative = record?.summative ?? null;
         const total =
           record?.formative != null || record?.summative != null
             ? Number(record.formative ?? 0) + Number(record.summative ?? 0)
-            : "";
-        const grade = total === "" ? "" : gradeFor(Number(total));
-
-        row[`${subject.name} - Formative`] = formative === "" ? "" : formative;
-        row[`${subject.name} - Summative`] = summative === "" ? "" : summative;
-        row[`${subject.name} - Total`] = total === "" ? "" : total;
-        row[`${subject.name} - Grade`] = grade;
+            : null;
+        const grade = total == null ? null : gradeFor(Number(total));
+        values.push(formative, summative, total, grade);
       }
-
-      sheetRows.push(row);
+      sheet.addRow(values);
     }
 
-    const workbook = xlsx.utils.book_new();
-    const sheet = xlsx.utils.json_to_sheet(sheetRows);
-    xlsx.utils.book_append_sheet(workbook, sheet, "Marksheet");
+    sheet.mergeCells(1, 1, 1, totalColumns);
+    sheet.mergeCells(2, 1, 2, totalColumns);
+    for (let index = 0; index < subjects.length; index += 1) {
+      const start = 2 + index * 4;
+      sheet.mergeCells(4, start, 4, start + 3);
+    }
 
-    const safeTitle = title.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "marksheet";
-    xlsx.writeFile(workbook, `${safeTitle}.xlsx`);
+    const applyBanding = (rowNumber: number, fill: string, fontSize: number, bold = false) => {
+      const row = sheet.getRow(rowNumber);
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+        cell.font = { name: "Aptos", size: fontSize, bold, color: { argb: "FF1F2937" } };
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        cell.border = border;
+      });
+    };
+
+    applyBanding(1, "FF123A63", 14, true);
+    sheet.getRow(1).eachCell((cell) => {
+      cell.font = { name: "Aptos", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
+    });
+
+    applyBanding(2, "FFEAF1FB", 10, false);
+    applyBanding(4, subjectFill, 11, true);
+    applyBanding(5, headerFill, 10, true);
+
+    const learnerHeader = sheet.getCell("A5");
+    learnerHeader.value = "Learner";
+    learnerHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: headerFill } };
+    learnerHeader.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FF1F2937" } };
+    learnerHeader.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    learnerHeader.border = border;
+
+    for (let rowNumber = 6; rowNumber <= sheet.rowCount; rowNumber += 1) {
+      const row = sheet.getRow(rowNumber);
+      row.height = 22;
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.border = border;
+        cell.alignment =
+          colNumber === 1
+            ? { vertical: "middle", horizontal: "left", wrapText: true }
+            : { vertical: "middle", horizontal: "center", wrapText: true };
+        if (colNumber === 1) {
+          cell.font = { name: "Aptos", size: 10.5, bold: true, color: { argb: "FF111827" } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: learnerFill } };
+        } else {
+          cell.font = { name: "Aptos", size: 10.5, color: { argb: "FF111827" } };
+        }
+      });
+      if (rowNumber % 2 === 0) {
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          if (colNumber !== 1) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+          }
+        });
+      }
+    }
+
+    const columns = [
+      { width: 34 },
+      ...subjects.flatMap(() => [{ width: 14 }, { width: 14 }, { width: 12 }, { width: 10 }]),
+    ];
+    sheet.columns = columns as { width: number }[];
+    sheet.autoFilter = { from: "A5", to: sheet.getCell(sheet.rowCount, totalColumns).address };
+
+    const schoolName = "EduTrack";
+    const termName = terms?.find((term) => term.id === selectedTermId)?.name ?? "N/A";
+    const safeTitle =
+      `${schoolName}_${title}_${termName}`.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
+      "marksheet";
+
+    await workbook.xlsx.writeBuffer().then((buffer) => {
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${safeTitle}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
   }
 
   return (
