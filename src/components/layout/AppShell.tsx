@@ -13,6 +13,7 @@ import {
   LogOut,
   MoveUpRight,
   Menu,
+  NotebookText,
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
@@ -133,6 +134,13 @@ const NAV: NavItem[] = [
     icon: FileBadge,
     roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "class_teacher"],
     module: "report_cards",
+  },
+  {
+    to: "/marksheet",
+    label: "Marksheet",
+    icon: NotebookText,
+    roles: ["head_teacher", "deputy_head_teacher", "dos", "class_teacher"],
+    module: "academics",
   },
   {
     to: "/promotions",

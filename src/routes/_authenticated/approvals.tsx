@@ -28,7 +28,17 @@ type ApprovalRow = {
   class_name?: string;
   stream_name?: string;
   submitted_by_name?: string;
-  submitted_percentage?: number;
+};
+
+type SubmissionSummaryRow = {
+  key: string;
+  teacher_name: string;
+  subject_name: string;
+  class_name: string;
+  stream_name: string;
+  marks_submitted: number;
+  submitted_count: number;
+  expected_count: number;
 };
 
 export const Route = createFileRoute("/_authenticated/approvals")({
@@ -90,7 +100,6 @@ function ApprovalsPage() {
       const subjectMap = new Map((subjects.data ?? []).map((row: any) => [row.id, row.name]));
       const termMap = new Map((terms.data ?? []).map((row: any) => [row.id, row.name]));
       const profileMap = new Map((profiles.data ?? []).map((row: any) => [row.id, row.full_name]));
-      const scopeTotals = new Map<string, number>();
       const scopeSubmitted = new Map<string, number>();
 
       for (const row of assessments.data ?? []) {
@@ -105,21 +114,6 @@ function ApprovalsPage() {
         scopeSubmitted.set(scopeKey, (scopeSubmitted.get(scopeKey) ?? 0) + (row.status === "submitted" ? 1 : 0));
       }
 
-      for (const student of students.data ?? []) {
-        const studentClassId = student.class_id ?? null;
-        const studentStreamId = student.stream_id ?? null;
-        for (const assessment of assessments.data ?? []) {
-          if (assessment.student_id !== student.id) continue;
-          const scopeKey = [
-            studentClassId ?? "all",
-            studentStreamId ?? "all",
-            assessment.subject_id ?? "unknown-subject",
-            assessment.term_id ?? "unknown-term",
-          ].join(":");
-          scopeTotals.set(scopeKey, (scopeTotals.get(scopeKey) ?? 0) + 1);
-        }
-      }
-
       return (assessments.data ?? []).map((row: any): ApprovalRow => ({
         ...row,
         student_name: studentMap.get(row.student_id) ?? "Unknown learner",
@@ -130,17 +124,6 @@ function ApprovalsPage() {
         class_name: classMap.get(studentClassMap.get(row.student_id)) ?? "Unknown class",
         stream_name: streamMap.get(studentStreamMap.get(row.student_id)) ?? "Unknown stream",
         submitted_by_name: row.submitted_by ? profileMap.get(row.submitted_by) ?? "Unknown teacher" : "Not submitted",
-        submitted_percentage: (() => {
-          const scopeKey = [
-            (studentClassMap.get(row.student_id) ?? null) ?? "all",
-            (studentStreamMap.get(row.student_id) ?? null) ?? "all",
-            row.subject_id ?? "unknown-subject",
-            row.term_id ?? "unknown-term",
-          ].join(":");
-          const total = scopeTotals.get(scopeKey) ?? 0;
-          const submitted = scopeSubmitted.get(scopeKey) ?? 0;
-          return total ? Math.round((submitted / total) * 100) : 0;
-        })(),
       }));
     },
   });
@@ -176,6 +159,70 @@ function ApprovalsPage() {
     }
     return rows;
   }, [data, sortBy]);
+
+  const submissionSummaryRows = useMemo(() => {
+    const rows = data ?? [];
+    const expectedTotals = new Map<string, number>();
+    const submittedTotals = new Map<string, number>();
+    const teacherNames = new Map<string, string>();
+    const subjectNames = new Map<string, string>();
+    const classNames = new Map<string, string>();
+    const streamNames = new Map<string, string>();
+
+    for (const row of rows) {
+      const coverageKey = [
+        row.submitted_by ?? "unassigned",
+        row.subject_id ?? "unknown-subject",
+        row.class_id ?? "unknown-class",
+        row.stream_id ?? "all-streams",
+      ].join(":");
+
+      if (row.submitted_by) {
+        teacherNames.set(row.submitted_by, row.submitted_by_name ?? "Unknown teacher");
+      }
+      subjectNames.set(row.subject_id, row.subject_name ?? "Unknown subject");
+      classNames.set(row.class_id ?? "unknown-class", row.class_name ?? "Unknown class");
+      streamNames.set(row.stream_id ?? "all-streams", row.stream_name ?? "All streams");
+
+      expectedTotals.set(coverageKey, (expectedTotals.get(coverageKey) ?? 0) + 1);
+      if (row.status === "submitted" || row.status === "approved") {
+        submittedTotals.set(coverageKey, (submittedTotals.get(coverageKey) ?? 0) + 1);
+      }
+    }
+
+    const summary = new Map<string, SubmissionSummaryRow>();
+    for (const row of rows) {
+      if (!row.submitted_by) continue;
+      const coverageKey = [
+        row.submitted_by,
+        row.subject_id ?? "unknown-subject",
+        row.class_id ?? "unknown-class",
+        row.stream_id ?? "all-streams",
+      ].join(":");
+      const expectedCount = expectedTotals.get(coverageKey) ?? 0;
+      const submittedCount = submittedTotals.get(coverageKey) ?? 0;
+      if (expectedCount === 0) continue;
+
+      summary.set(coverageKey, {
+        key: coverageKey,
+        teacher_name: teacherNames.get(row.submitted_by) ?? "Unknown teacher",
+        subject_name: subjectNames.get(row.subject_id) ?? "Unknown subject",
+        class_name: classNames.get(row.class_id ?? "unknown-class") ?? "Unknown class",
+        stream_name: streamNames.get(row.stream_id ?? "all-streams") ?? "All streams",
+        marks_submitted: Math.round((submittedCount / expectedCount) * 100),
+        submitted_count: submittedCount,
+        expected_count: expectedCount,
+      });
+    }
+
+    return Array.from(summary.values()).sort((a, b) => {
+      const teacherCompare = a.teacher_name.localeCompare(b.teacher_name);
+      if (teacherCompare !== 0) return teacherCompare;
+      const subjectCompare = a.subject_name.localeCompare(b.subject_name);
+      if (subjectCompare !== 0) return subjectCompare;
+      return a.class_name.localeCompare(b.class_name);
+    });
+  }, [data]);
 
   const actionMutation = useMutation({
     mutationFn: async (vars: { assessmentId: string; status: "approved" | "rejected" }) => {
@@ -297,6 +344,46 @@ function ApprovalsPage() {
         description="Review submitted assessments and approve or return them for correction."
       />
 
+      <Panel title="Submission coverage">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="pb-2">Teacher name</th>
+                <th className="pb-2">Subject</th>
+                <th className="pb-2">Class</th>
+                <th className="pb-2">Stream</th>
+                <th className="pb-2">Marks submitted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {submissionSummaryRows.length ? (
+                submissionSummaryRows.map((row) => (
+                  <tr key={row.key} className="border-t border-border">
+                    <td className="py-2 pr-4 font-medium">{row.teacher_name}</td>
+                    <td className="py-2 pr-4">{row.subject_name}</td>
+                    <td className="py-2 pr-4">{row.class_name}</td>
+                    <td className="py-2 pr-4">{row.stream_name}</td>
+                    <td className="py-2 pr-4">
+                      {row.marks_submitted}%
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({row.submitted_count}/{row.expected_count})
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-4 text-muted-foreground">
+                    No submitted marks found yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
       <Panel title="All assessments">
         <div className="mb-3 flex flex-wrap gap-2">
           <select
@@ -326,7 +413,6 @@ function ApprovalsPage() {
                   <th className="pb-2">Subject</th>
                   <th className="pb-2">Term</th>
                   <th className="pb-2">Submitted by</th>
-                  <th className="pb-2">Marks assigned</th>
                   <th className="pb-2">Score</th>
                   <th className="pb-2">Status</th>
                   <th className="pb-2" />
@@ -361,22 +447,13 @@ function ApprovalsPage() {
                     <Fragment key={group.key}>
                       {group.kind !== "all" ? (
                         <tr className="border-t border-border bg-muted/30">
-                          <td className="py-2 pr-4 font-semibold" colSpan={5}>
+                          <td className="py-2 pr-4 font-semibold" colSpan={6}>
                             {group.label}
                           </td>
                           <td className="py-2 pr-4 text-xs text-muted-foreground" colSpan={2}>
                             {submittedCount} submitted
                           </td>
-                          <td className="py-2 pr-4 text-xs text-muted-foreground" colSpan={1}>
-                            {Math.round(
-                              group.rows.reduce(
-                                (sum, row) => sum + (row.submitted_percentage ?? 0),
-                                0,
-                              ) / Math.max(group.rows.length, 1),
-                            )}
-                            % assigned
-                          </td>
-                          <td className="py-2 text-right" colSpan={2}>
+                          <td className="py-2 text-right" colSpan={1}>
                             {approveWholeGroup}
                           </td>
                         </tr>
@@ -391,9 +468,6 @@ function ApprovalsPage() {
                             <td className="py-3 pr-4">{row.subject_name}</td>
                             <td className="py-3 pr-4">{row.term_name}</td>
                             <td className="py-3 pr-4">{row.submitted_by_name ?? "Not submitted"}</td>
-                            <td className="py-3 pr-4">
-                              {row.submitted_percentage != null ? `${row.submitted_percentage}%` : "0%"}
-                            </td>
                             <td className="py-3 pr-4">{total}</td>
                             <td className="py-3 pr-4">
                               <Pill
