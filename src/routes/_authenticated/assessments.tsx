@@ -357,6 +357,26 @@ function AssessmentsPage() {
     [tableData?.assessments],
   );
 
+  const teacherAssessmentRows = useMemo(() => {
+    if (!isTeacher || !tableData) return tableData?.assessments ?? [];
+    if (!data?.allocations.length) return [];
+
+    const studentById = new Map(
+      tableData.students.map((student) => [student.id, student]),
+    );
+
+    return tableData.assessments.filter((assessment) => {
+      const student = studentById.get(assessment.student_id);
+      if (!student) return false;
+      return data.allocations.some((allocation) => {
+        if (allocation.subject_id !== assessment.subject_id) return false;
+        if (allocation.class_id && student.class_id !== allocation.class_id) return false;
+        if (allocation.stream_id && student.stream_id !== allocation.stream_id) return false;
+        return true;
+      });
+    });
+  }, [data?.allocations, isTeacher, tableData]);
+
   const loadAssessmentIntoForm = (assessmentId: string) => {
     const assessment = assessmentLookup.get(assessmentId);
     if (!assessment) return;
@@ -567,7 +587,7 @@ function AssessmentsPage() {
 
   const rows = useMemo(() => {
     if (!tableData) return [];
-    return tableData.assessments
+    return teacherAssessmentRows
       .filter((assessment) => (tableSubjectFilter ? assessment.subject_id === tableSubjectFilter : true))
       .filter((assessment) => (statusFilter ? assessment.status === statusFilter : true))
       .filter((assessment) => (termFilter ? assessment.term_id === termFilter : true))
@@ -582,7 +602,7 @@ function AssessmentsPage() {
         termName: tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
         gradeDescriptor: assessment.grade_descriptor ?? "",
       }));
-  }, [statusFilter, tableData, tableSubjectFilter, termFilter]);
+  }, [statusFilter, tableData, tableSubjectFilter, teacherAssessmentRows, termFilter]);
 
   const visibleRows = useMemo(() => {
     const normalizedSubjectFilter = tableSubjectFilter.trim();
