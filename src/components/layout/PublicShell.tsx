@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Mail, Phone } from "lucide-react";
+import { Facebook, Instagram, Mail, Phone, Twitter } from "lucide-react";
 import type { ReactNode } from "react";
 
 import logoUrl from "@/assets/logo.png";
@@ -26,6 +26,34 @@ export function PublicShell({ children }: { children: ReactNode }) {
               Home
             </Link>
             <Link
+              to="/website-pages/about"
+              preload="intent"
+              className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
+            >
+              About
+            </Link>
+            <Link
+              to="/website-pages/features"
+              preload="intent"
+              className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
+            >
+              Features
+            </Link>
+            <Link
+              to="/website-pages/blogs"
+              preload="intent"
+              className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
+            >
+              Blogs
+            </Link>
+            <Link
+              to="/website-pages/contact-us"
+              preload="intent"
+              className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
+            >
+              Contact us
+            </Link>
+            <Link
               to="/signup"
               preload="intent"
               className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
@@ -45,41 +73,93 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
       <main>{children}</main>
 
-      {/*  <footer className="border-t border-border/70 bg-muted/30">
-        <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 md:grid-cols-[1.2fr_0.8fr] md:items-center">
+      <footer className="border-t border-white/10 bg-slate-950 text-slate-100">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.3fr_0.9fr_0.8fr]">
           <div>
-            <p className="text-sm font-semibold text-foreground">Developed by K-Dev Technologies Ltd</p>
-            <p className="mt-1 text-sm text-muted-foreground">Kevin Atwijuka</p>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <Link to="/" className="flex items-center gap-3">
+              <img src={logoUrl} alt="Education Track SMS logo" className="h-10 w-10 object-cover" />
+              <div>
+                <p className="text-sm font-semibold">Education Track SMS</p>
+                <p className="text-xs text-slate-400">Uganda School Management System</p>
+              </div>
+            </Link>
+            <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
+              A modern school platform for admissions, assessments, reporting, and day-to-day
+              administration.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <a
+                href="mailto:kevinatwijukat@gmail.com"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 transition-colors hover:bg-white/10"
+              >
+                <Mail className="h-4 w-4" />
+                Email us
+              </a>
+              <a
+                href="tel:+256760228289"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 transition-colors hover:bg-white/10"
+              >
+                <Phone className="h-4 w-4" />
+                Call us
+              </a>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-200">Pages</p>
+            <div className="mt-4 grid gap-3 text-sm text-slate-300">
+              <Link to="/website-pages/about" className="transition-colors hover:text-white">
+                About
+              </Link>
+              <Link to="/website-pages/features" className="transition-colors hover:text-white">
+                Features
+              </Link>
+              <Link to="/website-pages/blogs" className="transition-colors hover:text-white">
+                Blogs
+              </Link>
+              <Link to="/website-pages/contact-us" className="transition-colors hover:text-white">
+                Contact us
+              </Link>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-200">Stay connected</p>
+            <div className="mt-4 flex gap-3">
+              <a
+                href="https://www.facebook.com"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-white/10 bg-white/5 p-3 text-slate-100 transition-colors hover:bg-white/10"
+                aria-label="Facebook"
+              >
+                <Facebook className="h-4 w-4" />
+              </a>
+              <a
+                href="https://www.instagram.com"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-white/10 bg-white/5 p-3 text-slate-100 transition-colors hover:bg-white/10"
+                aria-label="Instagram"
+              >
+                <Instagram className="h-4 w-4" />
+              </a>
+              <a
+                href="https://www.x.com"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-white/10 bg-white/5 p-3 text-slate-100 transition-colors hover:bg-white/10"
+                aria-label="Twitter"
+              >
+                <Twitter className="h-4 w-4" />
+              </a>
+            </div>
+            <p className="mt-5 text-sm text-slate-400">
               © {new Date().getFullYear()} Education Track SMS. All rights reserved.
             </p>
           </div>
-
-          <div className="flex flex-wrap gap-3 md:justify-end">
-            <a
-              href="mailto:kevinatwijukat@gmail.com"
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <Mail className="h-4 w-4" />
-              kevinatwijukat@gmail.com
-            </a>
-            <a
-              href="tel:+256760228289"
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <Phone className="h-4 w-4" />
-              +256760228289
-            </a>
-            <Link
-              to="/signup"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Request access
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
         </div>
-      </footer> */}
+      </footer>
     </div>
   );
 }

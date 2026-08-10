@@ -31,6 +31,12 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedStudentsRouteImport } from './routes/_authenticated/students'
 import { Route as AuthenticatedTimetableRouteImport } from './routes/_authenticated/timetable'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as WebsitePagesIndexRouteImport } from './routes/website-pages/index'
+import { Route as WebsitePagesAboutRouteImport } from './routes/website-pages/about'
+import { Route as WebsitePagesBlogsRouteImport } from './routes/website-pages/blogs'
+import { Route as WebsitePagesContactUsRouteImport } from './routes/website-pages/contact-us'
+import { Route as WebsitePagesFeaturesRouteImport } from './routes/website-pages/features'
+import { Route as WebsitePagesFeaturesSlugRouteImport } from './routes/website-pages/features/$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -143,6 +149,37 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const WebsitePagesIndexRoute = WebsitePagesIndexRouteImport.update({
+  id: '/website-pages/',
+  path: '/website-pages/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebsitePagesAboutRoute = WebsitePagesAboutRouteImport.update({
+  id: '/website-pages/about',
+  path: '/website-pages/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebsitePagesBlogsRoute = WebsitePagesBlogsRouteImport.update({
+  id: '/website-pages/blogs',
+  path: '/website-pages/blogs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebsitePagesContactUsRoute = WebsitePagesContactUsRouteImport.update({
+  id: '/website-pages/contact-us',
+  path: '/website-pages/contact-us',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebsitePagesFeaturesRoute = WebsitePagesFeaturesRouteImport.update({
+  id: '/website-pages/features',
+  path: '/website-pages/features',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebsitePagesFeaturesSlugRoute =
+  WebsitePagesFeaturesSlugRouteImport.update({
+    id: '/$slug',
+    path: '/$slug',
+    getParentRoute: () => WebsitePagesFeaturesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -166,6 +203,12 @@ export interface FileRoutesByFullPath {
   '/students': typeof AuthenticatedStudentsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/website-pages/about': typeof WebsitePagesAboutRoute
+  '/website-pages/blogs': typeof WebsitePagesBlogsRoute
+  '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
+  '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
+  '/website-pages/': typeof WebsitePagesIndexRoute
+  '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -189,6 +232,12 @@ export interface FileRoutesByTo {
   '/students': typeof AuthenticatedStudentsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/website-pages/about': typeof WebsitePagesAboutRoute
+  '/website-pages/blogs': typeof WebsitePagesBlogsRoute
+  '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
+  '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
+  '/website-pages': typeof WebsitePagesIndexRoute
+  '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -214,6 +263,12 @@ export interface FileRoutesById {
   '/_authenticated/students': typeof AuthenticatedStudentsRoute
   '/_authenticated/timetable': typeof AuthenticatedTimetableRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
+  '/website-pages/about': typeof WebsitePagesAboutRoute
+  '/website-pages/blogs': typeof WebsitePagesBlogsRoute
+  '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
+  '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
+  '/website-pages/': typeof WebsitePagesIndexRoute
+  '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -239,6 +294,12 @@ export interface FileRouteTypes {
     | '/students'
     | '/timetable'
     | '/users'
+    | '/website-pages/about'
+    | '/website-pages/blogs'
+    | '/website-pages/contact-us'
+    | '/website-pages/features'
+    | '/website-pages/'
+    | '/website-pages/features/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -262,6 +323,12 @@ export interface FileRouteTypes {
     | '/students'
     | '/timetable'
     | '/users'
+    | '/website-pages/about'
+    | '/website-pages/blogs'
+    | '/website-pages/contact-us'
+    | '/website-pages/features'
+    | '/website-pages'
+    | '/website-pages/features/$slug'
   id:
     | '__root__'
     | '/'
@@ -286,6 +353,12 @@ export interface FileRouteTypes {
     | '/_authenticated/students'
     | '/_authenticated/timetable'
     | '/_authenticated/users'
+    | '/website-pages/about'
+    | '/website-pages/blogs'
+    | '/website-pages/contact-us'
+    | '/website-pages/features'
+    | '/website-pages/'
+    | '/website-pages/features/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -294,6 +367,11 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   DashoardRoute: typeof DashoardRoute
   SignupRoute: typeof SignupRoute
+  WebsitePagesAboutRoute: typeof WebsitePagesAboutRoute
+  WebsitePagesBlogsRoute: typeof WebsitePagesBlogsRoute
+  WebsitePagesContactUsRoute: typeof WebsitePagesContactUsRoute
+  WebsitePagesFeaturesRoute: typeof WebsitePagesFeaturesRouteWithChildren
+  WebsitePagesIndexRoute: typeof WebsitePagesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -452,6 +530,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/website-pages/': {
+      id: '/website-pages/'
+      path: '/website-pages'
+      fullPath: '/website-pages/'
+      preLoaderRoute: typeof WebsitePagesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/website-pages/about': {
+      id: '/website-pages/about'
+      path: '/website-pages/about'
+      fullPath: '/website-pages/about'
+      preLoaderRoute: typeof WebsitePagesAboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/website-pages/blogs': {
+      id: '/website-pages/blogs'
+      path: '/website-pages/blogs'
+      fullPath: '/website-pages/blogs'
+      preLoaderRoute: typeof WebsitePagesBlogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/website-pages/contact-us': {
+      id: '/website-pages/contact-us'
+      path: '/website-pages/contact-us'
+      fullPath: '/website-pages/contact-us'
+      preLoaderRoute: typeof WebsitePagesContactUsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/website-pages/features': {
+      id: '/website-pages/features'
+      path: '/website-pages/features'
+      fullPath: '/website-pages/features'
+      preLoaderRoute: typeof WebsitePagesFeaturesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/website-pages/features/$slug': {
+      id: '/website-pages/features/$slug'
+      path: '/$slug'
+      fullPath: '/website-pages/features/$slug'
+      preLoaderRoute: typeof WebsitePagesFeaturesSlugRouteImport
+      parentRoute: typeof WebsitePagesFeaturesRoute
+    }
   }
 }
 
@@ -498,12 +618,28 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface WebsitePagesFeaturesRouteChildren {
+  WebsitePagesFeaturesSlugRoute: typeof WebsitePagesFeaturesSlugRoute
+}
+
+const WebsitePagesFeaturesRouteChildren: WebsitePagesFeaturesRouteChildren = {
+  WebsitePagesFeaturesSlugRoute: WebsitePagesFeaturesSlugRoute,
+}
+
+const WebsitePagesFeaturesRouteWithChildren =
+  WebsitePagesFeaturesRoute._addFileChildren(WebsitePagesFeaturesRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   DashoardRoute: DashoardRoute,
   SignupRoute: SignupRoute,
+  WebsitePagesAboutRoute: WebsitePagesAboutRoute,
+  WebsitePagesBlogsRoute: WebsitePagesBlogsRoute,
+  WebsitePagesContactUsRoute: WebsitePagesContactUsRoute,
+  WebsitePagesFeaturesRoute: WebsitePagesFeaturesRouteWithChildren,
+  WebsitePagesIndexRoute: WebsitePagesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

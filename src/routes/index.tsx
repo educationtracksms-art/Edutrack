@@ -1,6 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BarChart3, FileBadge, Layers, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
 
+import hero1 from "@/assets/hero/hero-1.jpg";
+import hero2 from "@/assets/hero/hero-2.jpg";
+import hero3 from "@/assets/hero/hero-3.jpg";
 import { PublicShell } from "@/components/layout/PublicShell";
 
 export const Route = createFileRoute("/")({
@@ -23,64 +26,62 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
-const FEATURES = [
-  {
-    icon: Layers,
-    title: "Streamline daily work",
-    body: "Reduce paperwork and move common school processes into one simple system.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Improve trust and control",
-    body: "Keep records organized, secure and easy to review by the right staff members.",
-  },
-  {
-    icon: FileBadge,
-    title: "Better reporting",
-    body: "Create clear report cards and academic summaries faster with less manual work.",
-  },
-  {
-    icon: BarChart3,
-    title: "See progress faster",
-    body: "Track learner performance, attendance and school activity in one place.",
-  },
-];
+const HERO_IMAGES = [hero1, hero2, hero3];
 
 function Landing() {
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setHeroIndex((current) => (current + 1) % HERO_IMAGES.length);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
   return (
     <PublicShell>
-      <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center md:pt-20">
-        <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight md:text-5xl">
-          Give your school a smarter way to work, grow, and serve learners better.
-        </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground">
-          Education Track SMS helps schools reduce administrative stress, improve visibility, and
-          focus more on teaching, learning, and parent engagement.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link
-            to="/signup"
-            className="rounded-md bg-accent px-6 py-3 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
-          >
-            Join your school
-          </Link>
-          <Link
-            to="/auth"
-            className="rounded-md border border-border px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            Staff sign in
-          </Link>
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0">
+          {HERO_IMAGES.map((image, index) => (
+            <div
+              key={image}
+              className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${
+                index === heroIndex ? "opacity-100" : "opacity-0"
+              }`}
+              style={{ backgroundImage: `url(${image})` }}
+            />
+          ))}
+          <div className="absolute inset-0 bg-slate-950/60" />
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/20 via-slate-950/35 to-slate-950/80" />
         </div>
-      </section>
 
-      <section className="mx-auto grid max-w-6xl gap-4 px-6 pb-20 md:grid-cols-4">
-        {FEATURES.map((feature) => (
-          <div key={feature.title} className="rounded-xl border border-border bg-card p-5">
-            <feature.icon className="h-5 w-5 text-accent" />
-            <h2 className="mt-3 text-sm font-semibold">{feature.title}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{feature.body}</p>
+        <div className="relative mx-auto flex min-h-[82vh] max-w-6xl flex-col justify-center px-6 py-20 text-center text-white">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/80">
+            Education Track SMS
+          </p>
+          <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight md:text-6xl">
+            Give your school a smarter way to work, grow, and serve learners better.
+          </h1>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-white/85 md:text-lg">
+            Education Track SMS helps schools reduce administrative stress, improve visibility, and
+            focus more on teaching, learning, and parent engagement.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link
+              to="/signup"
+              className="rounded-md bg-accent px-6 py-3 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+            >
+              Join your school
+            </Link>
+            <Link
+              to="/auth"
+              className="rounded-md border border-white/25 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/20"
+            >
+              Staff sign in
+            </Link>
           </div>
-        ))}
+        </div>
       </section>
     </PublicShell>
   );
