@@ -15,7 +15,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border/70 bg-background/95 backdrop-blur">
+      <header className="relative z-50 border-b border-border/70 bg-background/95 backdrop-blur">
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link to="/" className="flex min-w-0 items-center gap-3">
             <img src={logoUrl} alt="Education Track SMS logo" className="h-10 w-10 object-cover" />
@@ -40,14 +40,14 @@ export function PublicShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               aria-label="Close navigation overlay"
-              className="fixed inset-0 z-40 cursor-default bg-black/30 md:hidden"
+              className="fixed inset-0 z-50 cursor-default bg-black/30 md:hidden"
               onClick={() => setMenuOpen(false)}
             />
           ) : null}
 
           <nav
             id="public-navigation"
-            className={`absolute left-0 right-0 top-full z-50 border-b border-border/70 bg-background px-4 py-4 shadow-lg md:static md:z-auto md:block md:border-0 md:bg-transparent md:p-0 md:shadow-none ${
+            className={`absolute left-0 right-0 top-full z-[60] border-b border-border/70 bg-background px-4 py-4 shadow-lg md:static md:z-auto md:block md:border-0 md:bg-transparent md:p-0 md:shadow-none ${
               menuOpen ? "block" : "hidden"
             } md:block`}
           >
