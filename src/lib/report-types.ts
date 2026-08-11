@@ -30,6 +30,8 @@ export type ReportCardData = {
     phone: string;
     logoUrl: string | null;
     initials: string;
+    reportPaymentReferenceType: "schpay_code" | "account_number";
+    reportAccountNumber: string | null;
   };
   title: string;
   student: {

@@ -237,6 +237,10 @@ export async function buildReportCards(
         phone: school?.phone ?? "",
         logoUrl: school?.logo_url ?? null,
         initials: schoolInitials,
+        reportPaymentReferenceType:
+          (school?.report_payment_reference_type as "schpay_code" | "account_number" | null) ??
+          "schpay_code",
+        reportAccountNumber: school?.report_account_number ?? null,
       },
       title: `LEARNER'S END OF ${term?.name ?? ""} REPORT CARD ${yearName}`
         .replace(/\s+/g, " ")

@@ -4,6 +4,12 @@ export function ReportCard({ data }: { data: ReportCardData }) {
   const { school, student, attendance, rows, overall, approval, gradeKeys, coCurricular, comments, staff } =
     data;
   const watermarkLabel = school.name || "School";
+  const paymentLabel =
+    school.reportPaymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
+  const paymentValue =
+    school.reportPaymentReferenceType === "account_number"
+      ? school.reportAccountNumber || "_____________________"
+      : student.schpayCode || "_____________________";
 
   return (
     <div className="report-doc">
@@ -81,8 +87,8 @@ export function ReportCard({ data }: { data: ReportCardData }) {
             </td>
           </tr>
           <tr>
-            <td className="label-small">SchPay Code:</td>
-            <td className="value-small">{student.schpayCode || "_____________________"}</td>
+            <td className="label-small">{paymentLabel}:</td>
+            <td className="value-small">{paymentValue}</td>
             {student.feesBalance !== null ? (
               <>
                 <td className="label-small">Fees Bal:</td>

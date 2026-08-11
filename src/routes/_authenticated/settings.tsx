@@ -32,6 +32,8 @@ function SettingsPage() {
     phone: "",
     motto: "",
     logo_url: "",
+    report_payment_reference_type: "schpay_code" as "schpay_code" | "account_number",
+    report_account_number: "",
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
@@ -39,7 +41,7 @@ function SettingsPage() {
     if (me?.school) {
       supabase
         .from("schools")
-        .select("name, address, email, phone, motto, logo_url")
+        .select("name, address, email, phone, motto, logo_url, report_payment_reference_type, report_account_number")
         .eq("id", me.school.id)
         .maybeSingle()
         .then(({ data }) => {
@@ -51,6 +53,11 @@ function SettingsPage() {
               phone: data.phone ?? "",
               motto: data.motto ?? "",
               logo_url: data.logo_url ?? "",
+              report_payment_reference_type: (data.report_payment_reference_type as
+                | "schpay_code"
+                | "account_number"
+                | null) ?? "schpay_code",
+              report_account_number: data.report_account_number ?? "",
             });
         });
     }
@@ -71,7 +78,14 @@ function SettingsPage() {
         : form.logo_url;
       const { error } = await supabase
         .from("schools")
-        .update({ ...form, logo_url: logoUrl })
+        .update({
+          ...form,
+          logo_url: logoUrl,
+          report_account_number:
+            form.report_payment_reference_type === "account_number"
+              ? form.report_account_number || null
+              : null,
+        })
         .eq("id", schoolId);
       if (error) throw new Error(error.message);
     },
@@ -167,6 +181,35 @@ function SettingsPage() {
                 bucket.
               </p>
             </Field>
+            <Field label="Report payment reference">
+              <select
+                className={inputClass}
+                value={form.report_payment_reference_type}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    report_payment_reference_type: e.target.value as
+                      | "schpay_code"
+                      | "account_number",
+                  })
+                }
+              >
+                <option value="schpay_code">SchPay Code</option>
+                <option value="account_number">Account No.</option>
+              </select>
+            </Field>
+            {form.report_payment_reference_type === "account_number" && (
+              <Field label="School account number">
+                <input
+                  className={inputClass}
+                  value={form.report_account_number}
+                  onChange={(e) =>
+                    setForm({ ...form, report_account_number: e.target.value })
+                  }
+                  placeholder="Enter the account number to print on reports"
+                />
+              </Field>
+            )}
             <Btn type="submit" variant="accent" disabled={saveMutation.isPending}>
               Save changes
             </Btn>

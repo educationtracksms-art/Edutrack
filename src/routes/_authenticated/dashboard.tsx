@@ -701,6 +701,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const { data, isLoading } = useDashboardData(schoolId, isSuper, isTeacher, me?.userId);
   const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
+  const timetableEnabled = moduleMap?.get("timetable") ?? true;
   const classById = new Map((data?.classes ?? []).map((item: any) => [item.id, item.name as string]));
   const streamById = new Map(
     (data?.streams ?? []).map((item: any) => [
@@ -708,6 +709,26 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
       { name: item.name as string, class_id: item.class_id as string | null },
     ]),
   );
+  const { data: timetableSummary } = useQuery({
+    queryKey: ["dashboard-timetable", schoolId],
+    enabled: !!schoolId && isDos && timetableEnabled,
+    queryFn: async () => {
+      const [entries, allocations] = await Promise.all([
+        supabase
+          .from("timetable_entries")
+          .select("id, teacher_id, class_id, stream_id, subject_id, is_published, school_id")
+          .eq("school_id", schoolId!),
+        supabase
+          .from("teacher_allocations")
+          .select("id, teacher_id, class_id, stream_id, subject_id, school_id")
+          .eq("school_id", schoolId!),
+      ]);
+      return {
+        entries: entries.data ?? [],
+        allocations: allocations.data ?? [],
+      };
+    },
+  });
   const approveMutation = useMutation({
     mutationFn: (studentId: string) => approveStudent({ data: { studentId } }),
     onSuccess: () => {
@@ -844,6 +865,31 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         <Stat label="Approved assessments" value={approved} />
         <Stat label="Assessment completion" value={`${completion}%`} />
       </div>
+
+      {isDos && timetableEnabled && (
+        <Panel title="Timetable snapshot" className="mt-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat label="Allocations" value={timetableSummary?.allocations.length ?? 0} />
+            <Stat label="Lessons" value={timetableSummary?.entries.length ?? 0} />
+            <Stat
+              label="Published"
+              value={timetableSummary?.entries.filter((entry) => entry.is_published).length ?? 0}
+            />
+            <Stat
+              label="Draft"
+              value={timetableSummary ? timetableSummary.entries.filter((entry) => !entry.is_published).length : 0}
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link to="/timetable" className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-accent-foreground">
+              Open timetable builder
+            </Link>
+            <Link to="/academics" className="rounded-md border border-border px-3.5 py-2 text-sm font-medium hover:bg-muted">
+              Review teaching allocations
+            </Link>
+          </div>
+        </Panel>
+      )}
 
       {canApprove && (
         <Panel title="Needs your approval" className="mt-4">

@@ -34,6 +34,7 @@ type AssessmentRow = {
   student_id: string;
   subject_id: string;
   term_id: string;
+  submitted_by?: string | null;
   formative: number | null;
   summative: number | null;
   status: "draft" | "submitted" | "approved" | "rejected";
@@ -359,15 +360,19 @@ function AssessmentsPage() {
 
   const teacherAssessmentRows = useMemo(() => {
     if (!isTeacher || !tableData) return tableData?.assessments ?? [];
-    if (!data?.allocations.length) return [];
 
     const studentById = new Map(
       tableData.students.map((student) => [student.id, student]),
     );
+    const currentTeacherId = me?.userId ?? "";
 
     return tableData.assessments.filter((assessment) => {
       const student = studentById.get(assessment.student_id);
       if (!student) return false;
+      if (assessment.status === "rejected" && assessment.submitted_by === currentTeacherId) {
+        return true;
+      }
+      if (!data?.allocations.length) return false;
       return data.allocations.some((allocation) => {
         if (allocation.subject_id !== assessment.subject_id) return false;
         if (allocation.class_id && student.class_id !== allocation.class_id) return false;
@@ -375,7 +380,7 @@ function AssessmentsPage() {
         return true;
       });
     });
-  }, [data?.allocations, isTeacher, tableData]);
+  }, [data?.allocations, isTeacher, me?.userId, tableData]);
 
   const loadAssessmentIntoForm = (assessmentId: string) => {
     const assessment = assessmentLookup.get(assessmentId);
