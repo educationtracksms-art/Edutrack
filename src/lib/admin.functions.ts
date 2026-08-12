@@ -997,7 +997,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       status: "draft",
       locked: false,
       rejection_reason: null,
-      submitted_by: null,
+      submitted_by: context.userId,
       submitted_at: null,
       approved_by: null,
       approved_at: null,
@@ -1085,6 +1085,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
         summative: data.summative ?? null,
         teacher_initials: teacherInitials,
         rejection_reason: null,
+        submitted_by: context.userId,
       })
       .eq("id", data.assessmentId);
     if (error) throw new Error(error.message);
