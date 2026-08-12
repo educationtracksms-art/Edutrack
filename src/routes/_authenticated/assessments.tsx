@@ -624,19 +624,6 @@ function AssessmentsPage() {
         edit.formative !== undefined ? edit.formative : (existing?.formative?.toString() ?? "");
       const effectiveSummative =
         edit.summative !== undefined ? edit.summative : (existing?.summative?.toString() ?? "");
-      const patch = {
-        status: "submitted" as const,
-        submitted_by: me?.userId,
-        submitted_at: new Date().toISOString(),
-        ...(edit.formative !== undefined
-          ? { formative: edit.formative === "" ? null : Number(edit.formative) }
-          : {}),
-        ...(edit.summative !== undefined
-          ? { summative: edit.summative === "" ? null : Number(edit.summative) }
-          : {}),
-        grade_descriptor:
-          descriptorFromAssessmentScore(effectiveFormative, effectiveSummative) || null,
-      };
       if (["draft", "rejected"].includes(existing?.status ?? "") && !existing?.locked) {
         await updateDraftEntry({
           data: {
@@ -678,8 +665,24 @@ function AssessmentsPage() {
         return;
       }
 
-      const { error } = await supabase.from("assessments").update(patch).eq("id", id);
-      if (error) throw new Error(error.message);
+      await submitEntry({
+        data: {
+          assessmentId: id,
+          formative:
+            edit.formative !== undefined
+              ? edit.formative === ""
+                ? null
+                : Number(edit.formative)
+              : existing?.formative ?? null,
+          summative:
+            edit.summative !== undefined
+              ? edit.summative === ""
+                ? null
+                : Number(edit.summative)
+              : existing?.summative ?? null,
+          teacherInitials: existing?.teacher_initials ?? null,
+        },
+      });
     },
     onSuccess: () => {
       toast.success("Scores submitted for approval");

@@ -24,20 +24,17 @@ export const Route = createFileRoute("/_authenticated/timetable")({
   component: TimetablePage,
 });
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const DAY_SLOTS = [
-  { label: "8:00", period: 1, start_time: "08:00", end_time: "08:40" },
-  { label: "8:40", period: 2, start_time: "08:40", end_time: "09:20" },
-  { label: "9:20", period: 3, start_time: "09:20", end_time: "10:00" },
-  { label: "10:00", separator: "BREAK" },
-  { label: "10:30", period: 4, start_time: "10:30", end_time: "11:10" },
-  { label: "11:10", period: 5, start_time: "11:10", end_time: "11:50" },
-  { label: "11:50", period: 6, start_time: "11:50", end_time: "12:30" },
-  { label: "12:30", separator: "LUNCH" },
-  { label: "2:00", period: 7, start_time: "14:00", end_time: "14:40" },
-  { label: "2:40", period: 8, start_time: "14:40", end_time: "15:20" },
-  { label: "3:20", period: 9, start_time: "15:20", end_time: "16:00" },
-];
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+type PeriodRow = {
+  id: string;
+  period_order: number;
+  label: string;
+  start_time: string | null;
+  end_time: string | null;
+  is_break: boolean;
+  is_lunch: boolean;
+};
 
 function TimetablePage() {
   const queryClient = useQueryClient();
@@ -45,6 +42,7 @@ function TimetablePage() {
   const schoolId = me?.profile?.school_id ?? null;
   const canEdit = hasAny(me?.roles, ACADEMIC_MANAGERS) || hasAny(me?.roles, ["dos"]);
   const [dayFilter, setDayFilter] = useState("1");
+  const [visibleDays, setVisibleDays] = useState<string[]>(DAYS.map((_, index) => String(index + 1)));
   const [classFilter, setClassFilter] = useState("");
   const [streamFilter, setStreamFilter] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -65,7 +63,7 @@ function TimetablePage() {
     queryKey: ["timetable", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
-      const [entries, classes, streams, subjects, teachers, terms, allocations, years] =
+      const [entries, classes, streams, subjects, teachers, terms, allocations, years, settings, periods] =
         await Promise.all([
           supabase.from("timetable_entries").select("*").eq("school_id", schoolId!).order("day_of_week").order("period"),
           supabase.from("classes").select("id, name, school_id").eq("school_id", schoolId!),
@@ -75,6 +73,16 @@ function TimetablePage() {
           supabase.from("terms").select("id, name, academic_year_id, is_current, school_id").eq("school_id", schoolId!),
           supabase.from("teacher_allocations").select("id, teacher_id, subject_id, class_id, stream_id, school_id").eq("school_id", schoolId!),
           supabase.from("academic_years").select("id, name, is_current, school_id").eq("school_id", schoolId!),
+          supabase
+            .from("timetable_settings" as any)
+            .select("break_start, break_end, lunch_start, lunch_end")
+            .eq("school_id", schoolId!)
+            .maybeSingle(),
+          supabase
+            .from("timetable_periods" as any)
+            .select("id, period_order, label, start_time, end_time, is_break, is_lunch, is_active")
+            .eq("school_id", schoolId!)
+            .order("period_order"),
         ]);
       return {
         entries: entries.data ?? [],
@@ -85,6 +93,8 @@ function TimetablePage() {
         terms: terms.data ?? [],
         allocations: allocations.data ?? [],
         years: years.data ?? [],
+        settings: settings.data ?? null,
+        periods: periods.data ?? [],
       };
     },
   });
@@ -94,19 +104,55 @@ function TimetablePage() {
     if (!data) return null;
     return data.years.find((year) => year.is_current) ?? (currentTerm ? data.years.find((year) => year.id === currentTerm.academic_year_id) ?? null : null);
   }, [data, currentTerm]);
+  const periodRows = useMemo<PeriodRow[]>(() => {
+    const rows = (data?.periods ?? []).filter((item: PeriodRow) => item.is_active !== false);
+    if (rows.length) return rows;
+    return [
+      { id: "1", period_order: 1, label: "8:00", start_time: "08:00", end_time: "08:40", is_break: false, is_lunch: false },
+      { id: "2", period_order: 2, label: "8:40", start_time: "08:40", end_time: "09:20", is_break: false, is_lunch: false },
+      { id: "3", period_order: 3, label: "9:20", start_time: "09:20", end_time: "10:00", is_break: false, is_lunch: false },
+      { id: "4", period_order: 4, label: "BREAK", start_time: null, end_time: null, is_break: true, is_lunch: false },
+      { id: "5", period_order: 5, label: "10:30", start_time: "10:30", end_time: "11:10", is_break: false, is_lunch: false },
+      { id: "6", period_order: 6, label: "11:10", start_time: "11:10", end_time: "11:50", is_break: false, is_lunch: false },
+      { id: "7", period_order: 7, label: "11:50", start_time: "11:50", end_time: "12:30", is_break: false, is_lunch: false },
+      { id: "8", period_order: 8, label: "LUNCH", start_time: null, end_time: null, is_break: false, is_lunch: true },
+      { id: "9", period_order: 9, label: "2:00", start_time: "14:00", end_time: "14:40", is_break: false, is_lunch: false },
+      { id: "10", period_order: 10, label: "2:40", start_time: "14:40", end_time: "15:20", is_break: false, is_lunch: false },
+      { id: "11", period_order: 11, label: "3:20", start_time: "15:20", end_time: "16:00", is_break: false, is_lunch: false },
+    ];
+  }, [data?.periods]);
 
   const classColumns = useMemo(() => {
-    const base = (data?.classes ?? []).map((item) => ({ id: item.id, label: item.name, kind: "class" as const }));
-    const streams = (data?.streams ?? [])
-      .filter((stream) => !classFilter || stream.class_id === classFilter)
+    const classes = [...(data?.classes ?? [])].filter((item) => !classFilter || item.id === classFilter);
+    return classes.map((item) => ({ id: item.id, label: item.name, kind: "class" as const }));
+  }, [data?.classes, data?.streams, classFilter, streamFilter]);
+
+  const classGroups = useMemo(() => {
+    const classes = [...(data?.classes ?? [])].filter((item) => !classFilter || item.id === classFilter);
+    return classes.map((item) => ({
+      id: item.id,
+      label: item.name,
+      streams: [...(data?.streams ?? [])]
+        .filter((stream) => stream.class_id === item.id)
+        .filter((stream) => !streamFilter || stream.id === streamFilter)
+        .map((stream) => ({
+          id: stream.id,
+          label: stream.name,
+        })),
+    }));
+  }, [data?.classes, data?.streams, classFilter, streamFilter]);
+
+  const streamColumns = useMemo(() => {
+    const streams = [...(data?.streams ?? [])].filter((stream) => !classFilter || stream.class_id === classFilter);
+    return streams
+      .filter((stream) => !streamFilter || stream.id === streamFilter)
       .map((stream) => ({
         id: stream.id,
         label: `${data?.classes.find((c) => c.id === stream.class_id)?.name ?? "Class"} ${stream.name}`,
         kind: "stream" as const,
         class_id: stream.class_id,
       }));
-    return classFilter ? streams : [...base, ...streams];
-  }, [data?.classes, data?.streams, classFilter]);
+  }, [data?.classes, data?.streams, classFilter, streamFilter]);
 
   const dayEntries = useMemo(
     () =>
@@ -117,6 +163,10 @@ function TimetablePage() {
         return true;
       }),
     [data?.entries, dayFilter, classFilter, streamFilter],
+  );
+  const visibleDayLabels = useMemo(
+    () => visibleDays.map((day) => ({ day, label: DAYS[Number(day) - 1] ?? `Day ${day}` })),
+    [visibleDays],
   );
 
   const selectedEntry = useMemo(
@@ -144,6 +194,7 @@ function TimetablePage() {
       ]),
     ),
   };
+  const lessonPeriods = useMemo(() => periodRows.filter((row) => !row.is_break && !row.is_lunch), [periodRows]);
 
   const autoGenerate = useMutation({
     mutationFn: async () => {
@@ -169,12 +220,15 @@ function TimetablePage() {
           resolvedClassId: string;
         }
       >;
-      const slots = DAY_SLOTS.filter((slot) => "period" in slot) as Array<{
-        label: string;
-        period: number;
-        start_time: string;
-        end_time: string;
-      }>;
+      allocationTargets.sort((a, b) => {
+        const aSpecificity = a.stream_id ? 0 : 1;
+        const bSpecificity = b.stream_id ? 0 : 1;
+        if (aSpecificity !== bSpecificity) return aSpecificity - bSpecificity;
+        if (a.resolvedClassId !== b.resolvedClassId) return a.resolvedClassId.localeCompare(b.resolvedClassId);
+        if (a.subject_id !== b.subject_id) return a.subject_id.localeCompare(b.subject_id);
+        return a.teacher_id.localeCompare(b.teacher_id);
+      });
+      const slots = lessonPeriods.filter((slot) => slot.start_time && slot.end_time);
       const generated: any[] = [];
       const teacherOccupied = new Set<string>(
         existing.map((entry) => JSON.stringify({ day: entry.day_of_week, period: entry.period, teacher: entry.teacher_id })),
@@ -188,23 +242,16 @@ function TimetablePage() {
           .map((entry) => JSON.stringify({ day: entry.day_of_week, period: entry.period, stream_id: entry.stream_id })),
       );
 
-      const clearQuery = supabase
-        .from("timetable_entries")
-        .delete()
-        .eq("school_id", schoolId)
-        .eq("term_id", currentTerm.id);
-      if (currentYear) {
-        clearQuery.eq("academic_year_id", currentYear.id);
-      }
+      const clearQuery = supabase.from("timetable_entries").delete().eq("school_id", schoolId).eq("term_id", currentTerm.id).eq("academic_year_id", currentYear.id);
       const { error: deleteError } = await clearQuery;
       if (deleteError) throw new Error(deleteError.message);
 
       let cursor = 0;
       for (const allocation of allocationTargets) {
-        const lessonsToCreate = 1;
-        for (let lessonIndex = 0; lessonIndex < lessonsToCreate; lessonIndex += 1) {
+        for (let dayIndex = 0; dayIndex < DAYS.length; dayIndex += 1) {
           const slot = findNextSlot({
             cursor,
+            preferredDay: dayIndex + 1,
             teacherOccupied,
             classOccupied,
             streamOccupied,
@@ -213,13 +260,13 @@ function TimetablePage() {
             streamId: allocation.stream_id,
             slots,
           });
-          if (!slot) break;
+          if (!slot) continue;
 
           const targetDay = slot.day;
-          const teacherKey = JSON.stringify({ day: targetDay, period: slot.period.period, teacher: allocation.teacher_id });
-          const classKey = JSON.stringify({ day: targetDay, period: slot.period.period, class_id: allocation.resolvedClassId });
+          const teacherKey = JSON.stringify({ day: targetDay, period: slot.period.period_order, teacher: allocation.teacher_id });
+          const classKey = JSON.stringify({ day: targetDay, period: slot.period.period_order, class_id: allocation.resolvedClassId });
           const streamKey = allocation.stream_id
-            ? JSON.stringify({ day: targetDay, period: slot.period.period, stream_id: allocation.stream_id })
+            ? JSON.stringify({ day: targetDay, period: slot.period.period_order, stream_id: allocation.stream_id })
             : null;
           generated.push({
             id: crypto.randomUUID(),
@@ -231,7 +278,7 @@ function TimetablePage() {
             subject_id: allocation.subject_id,
             teacher_id: allocation.teacher_id,
             day_of_week: targetDay,
-            period: slot.period.period,
+            period: slot.period.period_order,
             start_time: slot.period.start_time,
             end_time: slot.period.end_time,
             classroom: null,
@@ -240,6 +287,7 @@ function TimetablePage() {
           classOccupied.add(classKey);
           if (streamKey) streamOccupied.add(streamKey);
           cursor = slot.nextCursor;
+          if (cursor >= slots.length * DAYS.length) cursor = 0;
         }
       }
 
@@ -347,7 +395,7 @@ function TimetablePage() {
           canEdit ? (
             <>
               <Btn variant="ghost" onClick={runAutoGenerate} disabled={autoGenerate.isPending}>
-                Auto-generate from allocations
+                Delete and regenerate
               </Btn>
             </>
           ) : undefined
@@ -399,73 +447,159 @@ function TimetablePage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full border border-border text-[11px] sm:text-sm">
-              <thead>
-                <tr>
-                  <th className="border border-border px-2 py-2 text-center font-semibold">Time</th>
-                  <th className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classColumns.length, 1)}>
-                    {DAYS[Number(dayFilter) - 1]}
-                  </th>
-                </tr>
-                <tr>
-                  <th className="border border-border px-2 py-2 text-center font-semibold">Time</th>
-                  {classColumns.map((column) => (
-                    <th key={column.id} className="border border-border px-2 py-2 text-center font-semibold">
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {DAY_SLOTS.map((slot, index) => {
-                  if ("separator" in slot) {
-                    return (
-                      <tr key={`${slot.separator}-${index}`} className="bg-muted/20">
-                        <td className="border border-border px-2 py-2 text-center font-semibold">{slot.label}</td>
-                        <td className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classColumns.length, 1)}>
-                          {slot.separator}
-                        </td>
-                      </tr>
-                    );
-                  }
+          <div className="mb-3 flex flex-wrap gap-2">
+            {DAYS.map((day, index) => {
+              const value = String(index + 1);
+              const checked = visibleDays.includes(value);
+              return (
+                <label key={day} className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setVisibleDays((current) =>
+                        current.includes(value) ? current.filter((item) => item !== value) : [...current, value].sort((a, b) => Number(a) - Number(b)),
+                      )
+                    }
+                  />
+                  <span>{day}</span>
+                </label>
+              );
+            })}
+          </div>
 
-                  return (
-                    <tr key={slot.period}>
-                      <td className="border border-border px-2 py-2 text-center font-semibold leading-tight">
-                        {slot.label}
-                      </td>
-                      {classColumns.map((column) => {
-                        const entry = (entriesByPeriod.get(slot.period) ?? []).find((item) =>
-                          column.kind === "stream"
-                            ? item.stream_id === column.id
-                            : item.class_id === column.id && !item.stream_id,
-                        );
+          <div className="overflow-x-auto">
+            <div className="space-y-6">
+              {visibleDayLabels.map(({ day, label }) => {
+                const dayNumber = Number(day);
+                const entriesForDay = (data?.entries ?? []).filter((entry) => {
+                  if (entry.day_of_week !== dayNumber) return false;
+                  if (classFilter && entry.class_id !== classFilter) return false;
+                  if (streamFilter && entry.stream_id !== streamFilter) return false;
+                  return true;
+                });
+                const entriesByPeriodForDay = new Map<number, typeof entriesForDay>();
+                for (const entry of entriesForDay) {
+                  const list = entriesByPeriodForDay.get(entry.period) ?? [];
+                  list.push(entry);
+                  entriesByPeriodForDay.set(entry.period, list);
+                }
+
+                return (
+                  <table key={day} className="min-w-full border border-border text-[11px] sm:text-sm">
+                    <thead>
+                      <tr>
+                        <th className="border border-border px-2 py-2 text-center font-semibold">Time</th>
+                        <th className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classColumns.length, 1)}>
+                          {label}
+                        </th>
+                      </tr>
+                      <tr>
+                        <th className="border border-border px-2 py-2 text-center font-semibold">Class</th>
+                        <th className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classGroups.length, 1)}>
+                          Classes
+                        </th>
+                      </tr>
+                      <tr>
+                        <th className="border border-border px-2 py-2 text-center font-semibold">Stream</th>
+                        {classGroups.length ? (
+                          classGroups.map((group) => (
+                            <th key={group.id} className="border border-border px-2 py-2 text-center font-semibold">
+                              {group.label}
+                            </th>
+                          ))
+                        ) : (
+                          <th className="border border-border px-2 py-2 text-center font-semibold">No classes</th>
+                        )}
+                      </tr>
+                      <tr>
+                        <th className="border border-border px-2 py-2 text-center font-semibold">Streams</th>
+                        {classGroups.length ? (
+                          classGroups.map((group) => (
+                            <th key={`${group.id}-streams`} className="border border-border px-2 py-2 text-center font-semibold">
+                              {group.streams.length ? group.streams.map((stream) => stream.label).join(", ") : "No streams"}
+                            </th>
+                          ))
+                        ) : (
+                          <th className="border border-border px-2 py-2 text-center font-semibold">No streams</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {periodRows.map((slot, index) => {
+                        if (slot.is_break || slot.is_lunch) {
+                          return (
+                            <tr key={`${day}-${slot.label}-${index}`} className="bg-muted/20">
+                              <td className="border border-border px-2 py-2 text-center font-semibold">{slot.label}</td>
+                              <td className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classColumns.length, 1)}>
+                                {slot.is_break ? "BREAK" : "LUNCH"}
+                              </td>
+                            </tr>
+                          );
+                        }
+
                         return (
-                          <td key={column.id} className="border border-border p-0 align-top">
-                            {entry ? (
-                              <button
-                                type="button"
-                                onClick={() => startEditing(entry)}
-                                className="flex min-h-[46px] w-full flex-col justify-center px-2 py-1 text-left hover:bg-muted/40"
-                              >
-                                <span className="font-semibold leading-tight">{byId.subjectName.get(entry.subject_id) ?? "Subject"}</span>
-                                <span className="text-[10px] leading-tight text-muted-foreground">
-                                  {teacherInitials(byId, entry.teacher_id)}
-                                  {entry.classroom ? ` ${entry.classroom}` : ""}
-                                </span>
-                              </button>
-                            ) : (
-                              <div className="flex min-h-[46px] items-center justify-center px-2 py-1 text-center text-muted-foreground" />
-                            )}
-                          </td>
+                          <tr key={`${day}-${slot.period_order}`}>
+                            <td className="border border-border px-2 py-2 text-center font-semibold leading-tight">
+                              {slot.label}
+                            </td>
+                            {classGroups.map((group) => {
+                              const entry = (entriesByPeriodForDay.get(slot.period_order) ?? []).find((item) => item.class_id === group.id && !item.stream_id);
+                              return (
+                                <td key={group.id} className="border border-border p-0 align-top">
+                                  {entry ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditing(entry)}
+                                      className="flex min-h-[46px] w-full flex-col justify-center px-2 py-1 text-left hover:bg-muted/40"
+                                    >
+                                      <span className="font-semibold leading-tight">{byId.subjectName.get(entry.subject_id) ?? "Subject"}</span>
+                                      <span className="text-[10px] leading-tight text-muted-foreground">
+                                        {teacherInitials(byId, entry.teacher_id)}
+                                        {entry.classroom ? ` ${entry.classroom}` : ""}
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <div className="flex min-h-[46px] items-center justify-center px-2 py-1 text-center text-muted-foreground" />
+                                  )}
+                                </td>
+                              );
+                            })}
+                            {classGroups.map((group) => {
+                              const entriesForGroup = (entriesByPeriodForDay.get(slot.period_order) ?? []).filter((item) => item.class_id === group.id && item.stream_id);
+                              return (
+                                <td key={`${group.id}-streams`} className="border border-border p-0 align-top">
+                                  {entriesForGroup.length ? (
+                                    <div className="space-y-1 p-1">
+                                      {entriesForGroup.map((entry) => (
+                                        <button
+                                          key={entry.id}
+                                          type="button"
+                                          onClick={() => startEditing(entry)}
+                                          className="flex min-h-[46px] w-full flex-col justify-center px-2 py-1 text-left hover:bg-muted/40"
+                                        >
+                                          <span className="font-semibold leading-tight">{byId.subjectName.get(entry.subject_id) ?? "Subject"}</span>
+                                          <span className="text-[10px] leading-tight text-muted-foreground">
+                                            {teacherInitials(byId, entry.teacher_id)}
+                                            {entry.classroom ? ` ${entry.classroom}` : ""}
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="flex min-h-[46px] items-center justify-center px-2 py-1 text-center text-muted-foreground" />
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
                         );
                       })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    </tbody>
+                  </table>
+                );
+              })}
+            </div>
           </div>
         </Panel>
 
@@ -533,9 +667,9 @@ function TimetablePage() {
                   </Field>
                   <Field label="Period">
                     <select className={inputClass} value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })}>
-                      {DAY_SLOTS.filter((slot) => "period" in slot).map((slot) => (
-                        <option key={slot.period} value={String(slot.period)}>
-                          P{slot.period}
+                      {lessonPeriods.map((slot) => (
+                        <option key={slot.period_order} value={String(slot.period_order)}>
+                          P{slot.period_order}
                         </option>
                       ))}
                     </select>
@@ -609,6 +743,7 @@ function teacherInitials(byId: { teacher: Map<string, { name: string; initials: 
 
 function findNextSlot({
   cursor,
+  preferredDay,
   teacherOccupied,
   classOccupied,
   streamOccupied,
@@ -624,21 +759,27 @@ function findNextSlot({
   teacherId: string;
   classId: string;
   streamId: string | null;
-  slots: Array<{ label: string; period: number; start_time: string; end_time: string }>;
+  preferredDay: number;
+  slots: Array<{ label: string; period_order: number; start_time: string; end_time: string }>;
 }) {
-  for (let offset = 0; offset < slots.length; offset += 1) {
-    const index = (cursor + offset) % slots.length;
-    const period = slots[index];
-    for (let dayIndex = 0; dayIndex < DAYS.length; dayIndex += 1) {
-      const day = dayIndex + 1;
-      const teacherKey = JSON.stringify({ day, period: period.period, teacher: teacherId });
-      const classKey = JSON.stringify({ day, period: period.period, class_id: classId });
-      const streamKey = streamId ? JSON.stringify({ day, period: period.period, stream_id: streamId }) : null;
-      if (teacherOccupied.has(teacherKey) || classOccupied.has(classKey) || (streamKey ? streamOccupied.has(streamKey) : false)) {
-        continue;
-      }
-      return { period, day, nextCursor: index + 1 };
+  const candidates = DAYS.flatMap((_, dayIndex) =>
+    slots.map((period) => ({
+      day: dayIndex + 1,
+      period,
+    })),
+  );
+
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const index = (cursor + offset) % candidates.length;
+    const candidate = candidates[index];
+    if (candidate.day !== preferredDay) continue;
+    const teacherKey = JSON.stringify({ day: candidate.day, period: candidate.period.period_order, teacher: teacherId });
+    const classKey = JSON.stringify({ day: candidate.day, period: candidate.period.period_order, class_id: classId });
+    const streamKey = streamId ? JSON.stringify({ day: candidate.day, period: candidate.period.period_order, stream_id: streamId }) : null;
+    if (teacherOccupied.has(teacherKey) || classOccupied.has(classKey) || (streamKey ? streamOccupied.has(streamKey) : false)) {
+      continue;
     }
+    return { period: candidate.period, day: candidate.day, nextCursor: index + 1 };
   }
   return null;
 }
