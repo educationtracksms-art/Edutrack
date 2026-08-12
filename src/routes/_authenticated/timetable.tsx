@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Btn, Field, PageHeader, Panel, Pill, Stat, inputClass } from "@/components/ui-kit";
@@ -13,13 +13,9 @@ export const Route = createFileRoute("/_authenticated/timetable")({
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) throw redirect({ to: "/auth" });
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
-    if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "timetable"))) {
-      throw redirect({ to: "/dashboard" });
-    }
   },
   head: () => ({
-    meta: [{ title: "Timetable · EduTrack" }],
+    meta: [{ title: "Timetable Â· EduTrack" }],
   }),
   component: TimetablePage,
 });
@@ -36,16 +32,39 @@ type PeriodRow = {
   is_lunch: boolean;
 };
 
+type TimetableSettingsRow = {
+  break_start: string | null;
+  break_end: string | null;
+  lunch_start: string | null;
+  lunch_end: string | null;
+};
+
+type PeriodDraft = PeriodRow & {
+  id: string;
+};
+
 function TimetablePage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
+  const { data: timetableEnabled = true, isLoading: isModuleLoading } = useQuery({
+    queryKey: ["module-enabled", schoolId, "timetable"],
+    enabled: !!schoolId,
+    queryFn: async () => isModuleEnabled(supabase, schoolId, "timetable"),
+  });
   const canEdit = hasAny(me?.roles, ACADEMIC_MANAGERS) || hasAny(me?.roles, ["dos"]);
   const [dayFilter, setDayFilter] = useState("1");
   const [visibleDays, setVisibleDays] = useState<string[]>(DAYS.map((_, index) => String(index + 1)));
   const [classFilter, setClassFilter] = useState("");
   const [streamFilter, setStreamFilter] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<TimetableSettingsRow>({
+    break_start: null,
+    break_end: null,
+    lunch_start: null,
+    lunch_end: null,
+  });
+  const [periodDrafts, setPeriodDrafts] = useState<PeriodDraft[]>([]);
   const [form, setForm] = useState({
     id: "",
     class_id: "",
@@ -122,12 +141,7 @@ function TimetablePage() {
     ];
   }, [data?.periods]);
 
-  const classColumns = useMemo(() => {
-    const classes = [...(data?.classes ?? [])].filter((item) => !classFilter || item.id === classFilter);
-    return classes.map((item) => ({ id: item.id, label: item.name, kind: "class" as const }));
-  }, [data?.classes, data?.streams, classFilter, streamFilter]);
-
-  const classGroups = useMemo(() => {
+  const classStreamGroups = useMemo(() => {
     const classes = [...(data?.classes ?? [])].filter((item) => !classFilter || item.id === classFilter);
     return classes.map((item) => ({
       id: item.id,
@@ -142,17 +156,19 @@ function TimetablePage() {
     }));
   }, [data?.classes, data?.streams, classFilter, streamFilter]);
 
-  const streamColumns = useMemo(() => {
-    const streams = [...(data?.streams ?? [])].filter((stream) => !classFilter || stream.class_id === classFilter);
-    return streams
-      .filter((stream) => !streamFilter || stream.id === streamFilter)
-      .map((stream) => ({
-        id: stream.id,
-        label: `${data?.classes.find((c) => c.id === stream.class_id)?.name ?? "Class"} ${stream.name}`,
-        kind: "stream" as const,
-        class_id: stream.class_id,
-      }));
-  }, [data?.classes, data?.streams, classFilter, streamFilter]);
+  const streamColumns = useMemo(
+    () =>
+      classStreamGroups.flatMap((group) =>
+        group.streams.map((stream) => ({
+          key: `${group.id}:${stream.id}`,
+          classId: group.id,
+          classLabel: group.label,
+          streamId: stream.id,
+          streamLabel: stream.label,
+        })),
+      ),
+    [classStreamGroups],
+  );
 
   const dayEntries = useMemo(
     () =>
@@ -195,122 +211,47 @@ function TimetablePage() {
     ),
   };
   const lessonPeriods = useMemo(() => periodRows.filter((row) => !row.is_break && !row.is_lunch), [periodRows]);
+  const timetableColumnCount = streamColumns.length || classStreamGroups.length;
 
-  const autoGenerate = useMutation({
-    mutationFn: async () => {
-      if (!schoolId) throw new Error("Your account is not linked to a school");
-      if (!currentTerm || !currentYear) throw new Error("Create an academic year and term first");
-
-      const existing = data?.entries ?? [];
-      const allocations = data?.allocations ?? [];
-      const streams = data?.streams ?? [];
-      const allocationTargets = allocations
-        .map((allocation) => {
-          const resolvedClassId =
-            allocation.class_id ?? streams.find((stream) => stream.id === allocation.stream_id)?.class_id ?? null;
-          return resolvedClassId
-            ? {
-                ...allocation,
-                resolvedClassId,
-              }
-            : null;
-        })
-        .filter(Boolean) as Array<
-        (typeof allocations)[number] & {
-          resolvedClassId: string;
-        }
-      >;
-      allocationTargets.sort((a, b) => {
-        const aSpecificity = a.stream_id ? 0 : 1;
-        const bSpecificity = b.stream_id ? 0 : 1;
-        if (aSpecificity !== bSpecificity) return aSpecificity - bSpecificity;
-        if (a.resolvedClassId !== b.resolvedClassId) return a.resolvedClassId.localeCompare(b.resolvedClassId);
-        if (a.subject_id !== b.subject_id) return a.subject_id.localeCompare(b.subject_id);
-        return a.teacher_id.localeCompare(b.teacher_id);
-      });
-      const slots = lessonPeriods.filter((slot) => slot.start_time && slot.end_time);
-      const generated: any[] = [];
-      const teacherOccupied = new Set<string>(
-        existing.map((entry) => JSON.stringify({ day: entry.day_of_week, period: entry.period, teacher: entry.teacher_id })),
-      );
-      const classOccupied = new Set<string>(
-        existing.map((entry) => JSON.stringify({ day: entry.day_of_week, period: entry.period, class_id: entry.class_id })),
-      );
-      const streamOccupied = new Set<string>(
-        (data?.entries ?? [])
-          .filter((entry) => entry.stream_id)
-          .map((entry) => JSON.stringify({ day: entry.day_of_week, period: entry.period, stream_id: entry.stream_id })),
-      );
-
-      const clearQuery = supabase.from("timetable_entries").delete().eq("school_id", schoolId).eq("term_id", currentTerm.id).eq("academic_year_id", currentYear.id);
-      const { error: deleteError } = await clearQuery;
-      if (deleteError) throw new Error(deleteError.message);
-
-      let cursor = 0;
-      for (const allocation of allocationTargets) {
-        for (let dayIndex = 0; dayIndex < DAYS.length; dayIndex += 1) {
-          const slot = findNextSlot({
-            cursor,
-            preferredDay: dayIndex + 1,
-            teacherOccupied,
-            classOccupied,
-            streamOccupied,
-            teacherId: allocation.teacher_id,
-            classId: allocation.resolvedClassId,
-            streamId: allocation.stream_id,
-            slots,
-          });
-          if (!slot) continue;
-
-          const targetDay = slot.day;
-          const teacherKey = JSON.stringify({ day: targetDay, period: slot.period.period_order, teacher: allocation.teacher_id });
-          const classKey = JSON.stringify({ day: targetDay, period: slot.period.period_order, class_id: allocation.resolvedClassId });
-          const streamKey = allocation.stream_id
-            ? JSON.stringify({ day: targetDay, period: slot.period.period_order, stream_id: allocation.stream_id })
-            : null;
-          generated.push({
-            id: crypto.randomUUID(),
-            school_id: schoolId,
-            academic_year_id: currentYear.id,
-            term_id: currentTerm.id,
-            class_id: allocation.resolvedClassId,
-            stream_id: allocation.stream_id,
-            subject_id: allocation.subject_id,
-            teacher_id: allocation.teacher_id,
-            day_of_week: targetDay,
-            period: slot.period.period_order,
-            start_time: slot.period.start_time,
-            end_time: slot.period.end_time,
-            classroom: null,
-          });
-          teacherOccupied.add(teacherKey);
-          classOccupied.add(classKey);
-          if (streamKey) streamOccupied.add(streamKey);
-          cursor = slot.nextCursor;
-          if (cursor >= slots.length * DAYS.length) cursor = 0;
-        }
-      }
-
-      if (!generated.length) throw new Error("No timetable slots could be generated from the current allocations");
-      const { error } = await supabase.from("timetable_entries").insert(generated);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      toast.success("Timetable generated from allocations");
-      queryClient.invalidateQueries({ queryKey: ["timetable", schoolId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const runAutoGenerate = () => {
-    autoGenerate.mutate();
-  };
+  useEffect(() => {
+    if (!data) return;
+    setSettingsDraft({
+      break_start: data.settings?.break_start ?? null,
+      break_end: data.settings?.break_end ?? null,
+      lunch_start: data.settings?.lunch_start ?? null,
+      lunch_end: data.settings?.lunch_end ?? null,
+    });
+    setPeriodDrafts(
+      [...periodRows]
+        .sort((a, b) => a.period_order - b.period_order)
+        .map((row) => ({
+          ...row,
+          id: row.id,
+        })),
+    );
+  }, [data, periodRows]);
 
   const saveEntry = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!currentTerm || !currentYear) throw new Error("Create an academic year and term first");
       if (!form.class_id || !form.subject_id || !form.teacher_id) throw new Error("Class, subject and teacher are required");
+      const classStreams = (data?.streams ?? []).filter((stream) => stream.class_id === form.class_id);
+      if (classStreams.length && !form.stream_id) {
+        throw new Error("Select a stream for this class. Streams must be scheduled separately.");
+      }
+      const conflictingLesson = (data?.entries ?? []).find((entry) => {
+        if (form.id && entry.id === form.id) return false;
+        return (
+          entry.day_of_week === Number(form.day_of_week) &&
+          entry.period === Number(form.period) &&
+          entry.teacher_id === form.teacher_id &&
+          entry.stream_id !== form.stream_id
+        );
+      });
+      if (conflictingLesson) {
+        throw new Error("This teacher is already assigned to another stream in that period.");
+      }
 
       const payload = {
         school_id: schoolId,
@@ -340,12 +281,58 @@ function TimetablePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const deleteEntry = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("timetable_entries").delete().eq("id", id);
-      if (error) throw new Error(error.message);
+  const saveTimings = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      const { error: settingsError } = await supabase.from("timetable_settings" as any).upsert(
+        {
+          school_id: schoolId,
+          break_start: settingsDraft.break_start,
+          break_end: settingsDraft.break_end,
+          lunch_start: settingsDraft.lunch_start,
+          lunch_end: settingsDraft.lunch_end,
+        },
+        { onConflict: "school_id" },
+      );
+      if (settingsError) throw new Error(settingsError.message);
+
+      for (const row of periodDrafts) {
+        const { error } = await supabase.from("timetable_periods" as any).upsert(
+          {
+            id: row.id,
+            school_id: schoolId,
+            period_order: Number(row.period_order),
+            label: row.label,
+            start_time: row.start_time,
+            end_time: row.end_time,
+            is_break: row.is_break,
+            is_lunch: row.is_lunch,
+            is_active: true,
+          },
+          { onConflict: "id" },
+        );
+        if (error) throw new Error(error.message);
+      }
+
+      const activeIds = new Set(periodDrafts.map((row) => row.id));
+      const inactiveRows = (data?.periods ?? []).filter((row: any) => !activeIds.has(row.id));
+      if (inactiveRows.length) {
+        const { error } = await supabase
+          .from("timetable_periods" as any)
+          .update({ is_active: false })
+          .eq("school_id", schoolId)
+          .in(
+            "id",
+            inactiveRows.map((row: any) => row.id),
+          );
+        if (error) throw new Error(error.message);
+      }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["timetable", schoolId] }),
+    onSuccess: () => {
+      toast.success("Timetable timings saved");
+      queryClient.invalidateQueries({ queryKey: ["timetable", schoolId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const stats = {
@@ -353,6 +340,33 @@ function TimetablePage() {
     scheduled: dayEntries.length,
     conflicts: countConflicts(dayEntries),
   };
+
+  if (isModuleLoading) {
+    return (
+      <div>
+        <PageHeader title="Timetable" description="Loading timetable access and schedule data." />
+        <Panel title="Loading timetable">
+          <p className="text-sm text-muted-foreground">
+            Checking timetable access for your school.
+          </p>
+        </Panel>
+      </div>
+    );
+  }
+
+  if (!timetableEnabled) {
+    return (
+      <div>
+        <PageHeader title="Timetable" description="Schedule lessons, periods, and room allocations." />
+        <Panel title="Timetable module unavailable">
+          <p className="text-sm text-muted-foreground">
+            The timetable module is turned off for this school. Nothing is broken, but timetable
+            tools are hidden until the module is enabled.
+          </p>
+        </Panel>
+      </div>
+    );
+  }
 
   function resetForm() {
     setSelectedEntryId(null);
@@ -367,6 +381,38 @@ function TimetablePage() {
       start_time: "08:00",
       end_time: "08:40",
       classroom: "",
+    });
+  }
+
+  function addPeriodDraft() {
+    const nextOrder = (periodDrafts[periodDrafts.length - 1]?.period_order ?? 0) + 1;
+    setPeriodDrafts((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        period_order: nextOrder,
+        label: `Period ${nextOrder}`,
+        start_time: null,
+        end_time: null,
+        is_break: false,
+        is_lunch: false,
+      },
+    ]);
+  }
+
+  function removePeriodDraft(id: string) {
+    setPeriodDrafts((current) => current.filter((row) => row.id !== id));
+  }
+
+  function movePeriodDraft(id: string, direction: "up" | "down") {
+    setPeriodDrafts((current) => {
+      const index = current.findIndex((row) => row.id === id);
+      if (index < 0) return current;
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next.map((row, rowIndex) => ({ ...row, period_order: rowIndex + 1 }));
     });
   }
 
@@ -391,15 +437,6 @@ function TimetablePage() {
       <PageHeader
         title="Timetable"
         description="Screenshot-style timetable with classes across the top and time down the left."
-        actions={
-          canEdit ? (
-            <>
-              <Btn variant="ghost" onClick={runAutoGenerate} disabled={autoGenerate.isPending}>
-                Delete and regenerate
-              </Btn>
-            </>
-          ) : undefined
-        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -440,11 +477,6 @@ function TimetablePage() {
                 ))}
               </select>
             </Field>
-            <div className="flex items-end">
-              <Btn variant="ghost" onClick={runAutoGenerate} disabled={autoGenerate.isPending}>
-                Auto-generate from allocations
-              </Btn>
-            </div>
           </div>
 
           <div className="mb-3 flex flex-wrap gap-2">
@@ -470,7 +502,7 @@ function TimetablePage() {
 
           <div className="overflow-x-auto">
             <div className="space-y-6">
-              {visibleDayLabels.map(({ day, label }) => {
+      {visibleDayLabels.map(({ day, label }) => {
                 const dayNumber = Number(day);
                 const entriesForDay = (data?.entries ?? []).filter((entry) => {
                   if (entry.day_of_week !== dayNumber) return false;
@@ -490,21 +522,21 @@ function TimetablePage() {
                     <thead>
                       <tr>
                         <th className="border border-border px-2 py-2 text-center font-semibold">Time</th>
-                        <th className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classColumns.length, 1)}>
+                        <th className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(timetableColumnCount, 1)}>
                           {label}
                         </th>
                       </tr>
                       <tr>
                         <th className="border border-border px-2 py-2 text-center font-semibold">Class</th>
-                        <th className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classGroups.length, 1)}>
-                          Classes
+                        <th className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(timetableColumnCount, 1)}>
+                          Streams
                         </th>
                       </tr>
                       <tr>
-                        <th className="border border-border px-2 py-2 text-center font-semibold">Stream</th>
-                        {classGroups.length ? (
-                          classGroups.map((group) => (
-                            <th key={group.id} className="border border-border px-2 py-2 text-center font-semibold">
+                        <th className="border border-border px-2 py-2 text-center font-semibold">Class</th>
+                        {classStreamGroups.length ? (
+                          classStreamGroups.map((group) => (
+                            <th key={group.id} className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(group.streams.length, 1)}>
                               {group.label}
                             </th>
                           ))
@@ -513,11 +545,11 @@ function TimetablePage() {
                         )}
                       </tr>
                       <tr>
-                        <th className="border border-border px-2 py-2 text-center font-semibold">Streams</th>
-                        {classGroups.length ? (
-                          classGroups.map((group) => (
-                            <th key={`${group.id}-streams`} className="border border-border px-2 py-2 text-center font-semibold">
-                              {group.streams.length ? group.streams.map((stream) => stream.label).join(", ") : "No streams"}
+                        <th className="border border-border px-2 py-2 text-center font-semibold">Stream</th>
+                        {streamColumns.length ? (
+                          streamColumns.map((column) => (
+                            <th key={column.key} className="border border-border px-2 py-2 text-center font-semibold">
+                              {column.streamLabel}
                             </th>
                           ))
                         ) : (
@@ -531,7 +563,7 @@ function TimetablePage() {
                           return (
                             <tr key={`${day}-${slot.label}-${index}`} className="bg-muted/20">
                               <td className="border border-border px-2 py-2 text-center font-semibold">{slot.label}</td>
-                              <td className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(classColumns.length, 1)}>
+                              <td className="border border-border px-2 py-2 text-center font-semibold" colSpan={Math.max(timetableColumnCount, 1)}>
                                 {slot.is_break ? "BREAK" : "LUNCH"}
                               </td>
                             </tr>
@@ -543,55 +575,41 @@ function TimetablePage() {
                             <td className="border border-border px-2 py-2 text-center font-semibold leading-tight">
                               {slot.label}
                             </td>
-                            {classGroups.map((group) => {
-                              const entry = (entriesByPeriodForDay.get(slot.period_order) ?? []).find((item) => item.class_id === group.id && !item.stream_id);
-                              return (
-                                <td key={group.id} className="border border-border p-0 align-top">
-                                  {entry ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => startEditing(entry)}
-                                      className="flex min-h-[46px] w-full flex-col justify-center px-2 py-1 text-left hover:bg-muted/40"
-                                    >
-                                      <span className="font-semibold leading-tight">{byId.subjectName.get(entry.subject_id) ?? "Subject"}</span>
-                                      <span className="text-[10px] leading-tight text-muted-foreground">
-                                        {teacherInitials(byId, entry.teacher_id)}
-                                        {entry.classroom ? ` ${entry.classroom}` : ""}
-                                      </span>
-                                    </button>
-                                  ) : (
-                                    <div className="flex min-h-[46px] items-center justify-center px-2 py-1 text-center text-muted-foreground" />
-                                  )}
-                                </td>
-                              );
-                            })}
-                            {classGroups.map((group) => {
-                              const entriesForGroup = (entriesByPeriodForDay.get(slot.period_order) ?? []).filter((item) => item.class_id === group.id && item.stream_id);
-                              return (
-                                <td key={`${group.id}-streams`} className="border border-border p-0 align-top">
-                                  {entriesForGroup.length ? (
-                                    <div className="space-y-1 p-1">
-                                      {entriesForGroup.map((entry) => (
-                                        <button
-                                          key={entry.id}
-                                          type="button"
-                                          onClick={() => startEditing(entry)}
-                                          className="flex min-h-[46px] w-full flex-col justify-center px-2 py-1 text-left hover:bg-muted/40"
-                                        >
-                                          <span className="font-semibold leading-tight">{byId.subjectName.get(entry.subject_id) ?? "Subject"}</span>
-                                          <span className="text-[10px] leading-tight text-muted-foreground">
-                                            {teacherInitials(byId, entry.teacher_id)}
-                                            {entry.classroom ? ` ${entry.classroom}` : ""}
-                                          </span>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <div className="flex min-h-[46px] items-center justify-center px-2 py-1 text-center text-muted-foreground" />
-                                  )}
-                                </td>
-                              );
-                            })}
+                            {streamColumns.length ? (
+                              streamColumns.map((column) => {
+                                const entry =
+                                  (entriesByPeriodForDay.get(slot.period_order) ?? []).find(
+                                    (item) => item.class_id === column.classId && item.stream_id === column.streamId,
+                                  ) ?? null;
+                                return (
+                                  <td key={column.key} className="border border-border p-0 align-top">
+                                    {entry ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => startEditing(entry)}
+                                        className="flex min-h-[46px] w-full flex-col justify-center px-2 py-1 text-left hover:bg-muted/40"
+                                      >
+                                        <span className="font-semibold leading-tight">
+                                          {byId.subjectName.get(entry.subject_id) ?? "Subject"}
+                                        </span>
+                                        <span className="text-[10px] leading-tight text-muted-foreground">
+                                          {column.classLabel} {column.streamLabel}
+                                          {" · "}
+                                          {teacherInitials(byId, entry.teacher_id)}
+                                          {entry.classroom ? ` · ${entry.classroom}` : ""}
+                                        </span>
+                                      </button>
+                                    ) : (
+                                      <div className="flex min-h-[46px] items-center justify-center px-2 py-1 text-center text-muted-foreground" />
+                                    )}
+                                  </td>
+                                );
+                              })
+                            ) : (
+                              <td className="border border-border px-2 py-2 text-center text-muted-foreground" colSpan={1}>
+                                No streams available
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -604,6 +622,143 @@ function TimetablePage() {
         </Panel>
 
         <div className="space-y-4">
+          <Panel title="Timetable timings">
+            {!canEdit ? (
+              <p className="text-sm text-muted-foreground">Only DOS and academic managers can adjust timetable periods.</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="Break start">
+                    <input
+                      className={inputClass}
+                      type="time"
+                      value={settingsDraft.break_start ?? ""}
+                      onChange={(e) => setSettingsDraft((current) => ({ ...current, break_start: e.target.value || null }))}
+                    />
+                  </Field>
+                  <Field label="Break end">
+                    <input
+                      className={inputClass}
+                      type="time"
+                      value={settingsDraft.break_end ?? ""}
+                      onChange={(e) => setSettingsDraft((current) => ({ ...current, break_end: e.target.value || null }))}
+                    />
+                  </Field>
+                  <Field label="Lunch start">
+                    <input
+                      className={inputClass}
+                      type="time"
+                      value={settingsDraft.lunch_start ?? ""}
+                      onChange={(e) => setSettingsDraft((current) => ({ ...current, lunch_start: e.target.value || null }))}
+                    />
+                  </Field>
+                  <Field label="Lunch end">
+                    <input
+                      className={inputClass}
+                      type="time"
+                      value={settingsDraft.lunch_end ?? ""}
+                      onChange={(e) => setSettingsDraft((current) => ({ ...current, lunch_end: e.target.value || null }))}
+                    />
+                  </Field>
+                </div>
+
+                <div className="space-y-3">
+                  {periodDrafts.map((row, index) => (
+                    <div key={row.id} className="rounded-lg border border-border p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">
+                          {row.is_break ? "Break" : row.is_lunch ? "Lunch" : `Period ${row.period_order}`}
+                        </p>
+                        <Pill tone={row.is_break || row.is_lunch ? "warning" : "muted"}>
+                          {row.is_break ? "Break" : row.is_lunch ? "Lunch" : "Lesson"}
+                        </Pill>
+                      </div>
+                      <div className="mb-3 flex justify-end">
+                        <div className="flex gap-2">
+                          <Btn type="button" variant="ghost" onClick={() => movePeriodDraft(row.id, "up")} disabled={index === 0}>
+                            Up
+                          </Btn>
+                          <Btn
+                            type="button"
+                            variant="ghost"
+                            onClick={() => movePeriodDraft(row.id, "down")}
+                            disabled={index === periodDrafts.length - 1}
+                          >
+                            Down
+                          </Btn>
+                          <Btn type="button" variant="ghost" onClick={() => removePeriodDraft(row.id)}>
+                            Remove
+                          </Btn>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <Field label="Title">
+                          <input
+                            className={inputClass}
+                            value={row.label}
+                            onChange={(e) =>
+                              setPeriodDrafts((current) =>
+                                current.map((item, itemIndex) => (itemIndex === index ? { ...item, label: e.target.value } : item)),
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field label="Order">
+                          <input
+                            className={inputClass}
+                            type="number"
+                            min={1}
+                            value={row.period_order}
+                            onChange={(e) =>
+                              setPeriodDrafts((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, period_order: Number(e.target.value) || item.period_order } : item,
+                                ),
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field label="Start time">
+                          <input
+                            className={inputClass}
+                            type="time"
+                            value={row.start_time ?? ""}
+                            onChange={(e) =>
+                              setPeriodDrafts((current) =>
+                                current.map((item, itemIndex) => (itemIndex === index ? { ...item, start_time: e.target.value || null } : item)),
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field label="End time">
+                          <input
+                            className={inputClass}
+                            type="time"
+                            value={row.end_time ?? ""}
+                            onChange={(e) =>
+                              setPeriodDrafts((current) =>
+                                current.map((item, itemIndex) => (itemIndex === index ? { ...item, end_time: e.target.value || null } : item)),
+                              )
+                            }
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Btn type="button" variant="ghost" onClick={addPeriodDraft}>
+                    Add period
+                  </Btn>
+                  <Btn type="button" variant="accent" onClick={() => saveTimings.mutate()} disabled={saveTimings.isPending}>
+                    Save timings
+                  </Btn>
+                </div>
+              </div>
+            )}
+          </Panel>
+
           <Panel title={form.id ? "Edit lesson" : "Create lesson"}>
             {!canEdit ? (
               <p className="text-sm text-muted-foreground">You can view the timetable here, but editing is reserved for DOS and academic managers.</p>
@@ -708,14 +863,11 @@ function TimetablePage() {
                 <p className="font-semibold">{byId.subjectName.get(selectedEntry.subject_id) ?? "Subject"}</p>
                 <p className="text-xs text-muted-foreground">{teacherInitials(byId, selectedEntry.teacher_id)}</p>
                 <p className="text-xs text-muted-foreground">
-                  {DAYS[selectedEntry.day_of_week - 1]} · P{selectedEntry.period} · {selectedEntry.start_time} - {selectedEntry.end_time}
+                  {DAYS[selectedEntry.day_of_week - 1]} Â· P{selectedEntry.period} Â· {selectedEntry.start_time} - {selectedEntry.end_time}
                 </p>
                 <div className="flex gap-2">
                   <Btn variant="ghost" onClick={() => startEditing(selectedEntry)}>
                     Edit
-                  </Btn>
-                  <Btn variant="ghost" onClick={() => deleteEntry.mutate(selectedEntry.id)}>
-                    Delete
                   </Btn>
                 </div>
               </div>

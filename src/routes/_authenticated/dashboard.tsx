@@ -693,6 +693,40 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     enabled: !!schoolId,
     queryFn: async () => getEnabledModuleMap(supabase, schoolId),
   });
+  const moduleToggleMutation = useMutation({
+    mutationFn: async (vars: { module: string; enabled: boolean }) => {
+      if (!schoolId) throw new Error("No school linked to your account");
+      const { data: existing, error: selectError } = await supabase
+        .from("feature_toggles")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("module", vars.module)
+        .maybeSingle();
+      if (selectError) throw new Error(selectError.message);
+
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("feature_toggles")
+          .update({ enabled: vars.enabled })
+          .eq("id", existing.id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+
+      const { error } = await supabase.from("feature_toggles").insert({
+        school_id: schoolId,
+        module: vars.module,
+        enabled: vars.enabled,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["enabled-modules", schoolId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard", schoolId, false, isTeacher, me?.userId] });
+      toast.success("Module setting updated");
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
   const approveStudent = useServerFn(verifyStudent);
   const reviewMarks = useServerFn(reviewAssessments);
   const updateStatus = useServerFn(updateAssessmentStatus);
@@ -841,6 +875,16 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     classId ? classById.get(classId) ?? "Unknown" : "Unknown";
   const resolveStreamName = (streamId: string | null | undefined) =>
     streamId ? streamById.get(streamId)?.name ?? "Unknown" : "Unknown";
+  const moduleOptions = [
+    { key: "academics", label: "Academics" },
+    { key: "attendance", label: "Attendance" },
+    { key: "library", label: "Library" },
+    { key: "report_cards", label: "Report cards" },
+    { key: "co_curricular", label: "Co-curricular" },
+    { key: "students", label: "Students" },
+    { key: "timetable", label: "Timetable" },
+    { key: "fees", label: "Fees" },
+  ] as const;
 
   return (
     <div>
@@ -865,6 +909,37 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         <Stat label="Approved assessments" value={approved} />
         <Stat label="Assessment completion" value={`${completion}%`} />
       </div>
+
+      <Panel title="Module controls" className="mt-4">
+        <p className="text-sm text-muted-foreground">
+          Turn school modules on or off from the dashboard. Disabled modules disappear from staff
+          navigation and route guards.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {moduleOptions.map((module) => {
+            const enabled = moduleMap?.get(module.key) ?? true;
+            return (
+              <label
+                key={module.key}
+                className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
+              >
+                <span className="text-sm font-medium">{module.label}</span>
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) =>
+                    moduleToggleMutation.mutate({
+                      module: module.key,
+                      enabled: e.target.checked,
+                    })
+                  }
+                  disabled={moduleToggleMutation.isPending}
+                />
+              </label>
+            );
+          })}
+        </div>
+      </Panel>
 
       {isDos && timetableEnabled && (
         <Panel title="Timetable snapshot" className="mt-4">

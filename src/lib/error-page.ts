@@ -3,28 +3,37 @@ export function renderErrorPage(): string {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>We couldn't load this page</title>
+    <title>EduTrack</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      body { font: 15px/1.5 system-ui, -apple-system, sans-serif; background: #fafafa; color: #111; display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 1.5rem; }
-      .card { max-width: 28rem; width: 100%; text-align: center; padding: 2rem; }
-      h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
-      p { color: #4b5563; margin: 0 0 1.5rem; }
-      .actions { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
-      a, button { padding: 0.5rem 1rem; border-radius: 0.375rem; font: inherit; cursor: pointer; text-decoration: none; border: 1px solid transparent; }
-      .primary { background: #111; color: #fff; }
-      .secondary { background: #fff; color: #111; border-color: #d1d5db; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Arial, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .card {
+        max-width: 32rem;
+        margin: 1.5rem;
+        padding: 2rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 1rem;
+        background: white;
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+        text-align: center;
+      }
+      h1 { margin: 0 0 0.75rem; font-size: 1.5rem; }
+      p { margin: 0; line-height: 1.5; color: #475569; }
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>We couldn't load this page</h1>
-      <p>Something went wrong on our end. Please try again or return to the dashboard.</p>
-      <div class="actions">
-        <button class="primary" onclick="location.reload()">Retry</button>
-        <a class="secondary" href="/dashboard">Back to dashboard</a>
-      </div>
-    </div>
+    <main class="card">
+      <h1>Something went wrong</h1>
+      <p>The app hit an error while loading. Please try again from a clean page instead of being redirected in a loop.</p>
+    </main>
   </body>
 </html>`;
 }

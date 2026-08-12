@@ -70,12 +70,11 @@ function AuthPage() {
     event.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        navigate({ to: "/dashboard", replace: true });
-      }
+      const session = data.session ?? (await supabase.auth.getSession()).data.session;
+      if (!session) throw new Error("Sign-in succeeded, but no session was created.");
+      navigate({ to: "/dashboard", replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Something went wrong");
     } finally {
@@ -84,9 +83,9 @@ function AuthPage() {
   }
 
   return (
-      <PublicShell>
-        <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center bg-muted/40 px-4 py-10">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
+    <PublicShell>
+      <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center bg-muted/40 px-4 py-10">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
           <div className="flex flex-col items-center text-center">
             <img src={logoUrl} alt="EduTrack logo" className="h-16 w-16 object-cover" />
             <h1 className="mt-4 text-xl font-semibold">Sign in to EduTrack</h1>

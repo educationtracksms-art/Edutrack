@@ -77,10 +77,12 @@ type AssessmentsData = {
   terms: TermRow[];
   classes: ClassRow[];
   streams: StreamRow[];
+  coCurricular: CoCurricularRow[];
   allocations: TeacherAllocationView[];
   gradingScales: GradingScaleRow[];
   currentTermId: string;
   teacherInitials: string;
+  staffProfileMap: Map<string, string>;
 };
 
 type LearnerSortKey = "class" | "stream";
@@ -109,8 +111,18 @@ export const Route = createFileRoute("/_authenticated/assessments")({
       },
     ],
   }),
+  errorComponent: AssessmentsError,
   component: AssessmentsPage,
 });
+
+function AssessmentsError({ error, reset }: { error: Error; reset: () => void }) {
+  console.error(error);
+  useEffect(() => {
+    reset();
+    window.location.replace("/dashboard");
+  }, [reset]);
+  return null;
+}
 
 function AssessmentsPage() {
   const queryClient = useQueryClient();

@@ -2,11 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   createRootRouteWithContext,
-  useRouter,
   HeadContent,
+  useRouter,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -15,33 +15,38 @@ import { Toaster } from "@/components/ui/sonner";
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const lastInvalidatedError = useRef<string | null>(null);
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+    const signature = `${error.name}:${error.message}`;
+    if (lastInvalidatedError.current === signature) return;
+    lastInvalidatedError.current = signature;
+    router.invalidate();
+  }, [error, router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">We couldn't load this page</h1>
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+        <h1 className="text-xl font-semibold">Something went wrong</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. Please try again or return to the dashboard.
+          We hit an unexpected error while loading this page. Refreshing this route should not
+          loop anymore.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
           <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            type="button"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            onClick={() => reset()}
           >
-            Retry
+            Try again
           </button>
-          <a
-            href="/dashboard"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          <button
+            type="button"
+            className="rounded-md border border-border px-4 py-2 text-sm font-semibold"
+            onClick={() => router.navigate({ to: "/auth", replace: true })}
           >
-            Back to dashboard
-          </a>
+            Go to sign in
+          </button>
         </div>
       </div>
     </div>
