@@ -35,6 +35,7 @@ type AssessmentRow = {
   subject_id: string;
   term_id: string;
   submitted_by?: string | null;
+  submitted_by_name?: string | null;
   formative: number | null;
   summative: number | null;
   status: "draft" | "submitted" | "approved" | "rejected";
@@ -56,6 +57,7 @@ type TermRow = { id: string; name: string; is_current: boolean };
 type ClassRow = { id: string; name: string; class_teacher_id: string | null };
 type StreamRow = { id: string; name: string; class_id: string | null };
 type ProfileRow = { initials: string | null };
+type StaffProfileRow = { id: string; full_name: string };
 type CommentRow = {
   student_id: string;
   class_teacher_comment: string | null;
@@ -186,6 +188,7 @@ function AssessmentsPage() {
         streamsResult,
         allocationsResult,
         gradingScalesResult,
+        profilesResult,
         profileResult,
       ] = (await Promise.all([
         schoolQuery(supabase.from("assessments").select("*").order("created_at")),
@@ -218,6 +221,7 @@ function AssessmentsPage() {
             .select("grade, min_score, max_score, descriptor")
             .order("min_score", { ascending: false }),
         ),
+        schoolQuery(supabase.from("profiles").select("id, full_name")),
         me?.userId
           ? supabase.from("profiles").select("initials").eq("id", me.userId).maybeSingle()
           : Promise.resolve({ data: null as ProfileRow | null }),
@@ -235,6 +239,8 @@ function AssessmentsPage() {
         stream_id: string | null;
       }>;
       const gradingScaleRows = (gradingScalesResult.data ?? []) as GradingScaleRow[];
+      const staffProfiles = (profilesResult.data ?? []) as StaffProfileRow[];
+      const staffProfileMap = new Map(staffProfiles.map((profile) => [profile.id, profile.full_name]));
       const teacherInitials = (profileResult.data?.initials ?? "") as string;
       const currentTermId = termRows.find((term) => term.is_current)?.id ?? termRows[0]?.id ?? "";
       const { data: coCurricularData } = currentTermId
@@ -280,6 +286,7 @@ function AssessmentsPage() {
         gradingScales: gradingScaleRows,
         currentTermId,
         teacherInitials,
+        staffProfileMap,
       };
     },
   });
@@ -289,11 +296,12 @@ function AssessmentsPage() {
     subjects: SubjectRow[];
     terms: TermRow[];
     gradingScales: GradingScaleRow[];
+    staffProfileMap: Map<string, string>;
   }>({
     queryKey: ["assessment-table", schoolId],
     queryFn: async () => {
       const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
-      const [assessmentsResult, studentsResult, subjectsResult, termsResult, gradingScalesResult] =
+      const [assessmentsResult, studentsResult, subjectsResult, termsResult, gradingScalesResult, profilesResult] =
         (await Promise.all([
           schoolQuery(supabase.from("assessments").select("*").order("created_at")),
           schoolQuery(
@@ -316,7 +324,10 @@ function AssessmentsPage() {
               .select("grade, min_score, max_score, descriptor")
               .order("min_score", { ascending: false }),
           ),
+          schoolQuery(supabase.from("profiles").select("id, full_name")),
         ])) as any[];
+      const staffProfiles = (profilesResult.data ?? []) as StaffProfileRow[];
+      const staffProfileMap = new Map(staffProfiles.map((profile) => [profile.id, profile.full_name]));
 
       return {
         assessments: (assessmentsResult.data ?? []) as AssessmentRow[],
@@ -324,6 +335,7 @@ function AssessmentsPage() {
         subjects: (subjectsResult.data ?? []) as SubjectRow[],
         terms: (termsResult.data ?? []) as TermRow[],
         gradingScales: (gradingScalesResult.data ?? []) as GradingScaleRow[],
+        staffProfileMap,
       };
     },
   });
@@ -932,6 +944,9 @@ function AssessmentsPage() {
           "â€”",
         termName: tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "â€”",
         gradeDescriptor: assessment.grade_descriptor ?? "",
+        submitted_by_name: assessment.submitted_by
+          ? tableData.staffProfileMap.get(assessment.submitted_by) ?? "Unknown teacher"
+          : "Not submitted",
       }));
   }, [tableData]);
   const scopedPendingIds = useMemo(() => {
@@ -1747,6 +1762,7 @@ function AssessmentsPage() {
                 <th className="pb-2">Subject</th>
                 <th className="pb-2">Term</th>
                 <th className="pb-2">Grade descriptor</th>
+                <th className="pb-2">Submitted by</th>
                 <th className="pb-2">Formative (20)</th>
                 <th className="pb-2">Summative (80)</th>
                 <th className="pb-2">Total</th>
@@ -1762,6 +1778,7 @@ function AssessmentsPage() {
                     subjectName: string;
                     termName: string;
                     gradeDescriptor: string;
+                    submitted_by_name: string;
                   },
                 ) => {
                   const edit = edits[row.id] ?? {};
@@ -1783,6 +1800,7 @@ function AssessmentsPage() {
                       <td>
                         <Pill tone="muted">{gradeDescriptor || "—"}</Pill>
                       </td>
+                      <td>{row.submitted_by_name ?? "Not submitted"}</td>
                       <td>
                         <input
                           type="number"
@@ -1866,7 +1884,7 @@ function AssessmentsPage() {
               )}
               {visibleRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={10} className="py-6 text-center text-muted-foreground">
                     No assessment records match these filters.
                   </td>
                 </tr>
