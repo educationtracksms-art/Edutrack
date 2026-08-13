@@ -140,7 +140,7 @@ function AssessmentsError({ error, reset }: { error: Error; reset: () => void })
   return null;
 }
 
-function AssessmentsPage() {
+export function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
@@ -311,7 +311,9 @@ function AssessmentsPage() {
               subject_id: allocation.subject_id,
               class_id: allocation.class_id ?? null,
               stream_id: allocation.stream_id ?? null,
-              label: `${subjectName} Ãƒâ€šÃ‚Â· ${className}${allocation.stream_id ? ` Ãƒâ€šÃ‚Â· ${streamName}` : ""}`,
+              label: `Subject: ${subjectName} | Class: ${className}${
+                allocation.stream_id ? ` | Stream: ${streamName}` : ""
+              }`,
             };
           })
         : [];
@@ -404,11 +406,11 @@ function AssessmentsPage() {
 
   const className = (id: string | null) => {
     const item = data?.classes.find((row) => row.id === id);
-    if (!item) return "Ã¢â‚¬â€";
+    if (!item) return "-";
     return `${item.name}${item.education_level === "advanced" ? " (A-Level)" : " (O-Level)"}`;
   };
   const streamName = (id: string | null) =>
-    data?.streams.find((item) => item.id === id)?.name ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â";
+    data?.streams.find((item) => item.id === id)?.name ?? "-";
 
   const selectedStudentLevel = useMemo<"ordinary" | "advanced">(() => {
     if (!entryForm.studentId) return "ordinary";

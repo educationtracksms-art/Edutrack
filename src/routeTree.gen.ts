@@ -17,6 +17,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedAcademicsRouteImport } from './routes/_authenticated/academics'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as AuthenticatedAssessmentsRouteImport } from './routes/_authenticated/assessments'
+import { Route as AuthenticatedAssestmentRouteImport } from './routes/_authenticated/assestment'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authenticated/audit-logs'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
@@ -80,6 +81,11 @@ const AuthenticatedAssessmentsRoute =
     path: '/assessments',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAssestmentRoute = AuthenticatedAssestmentRouteImport.update({
+  id: '/assestment',
+  path: '/assestment',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
   id: '/attendance',
   path: '/attendance',
@@ -202,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/academics': typeof AuthenticatedAcademicsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/assessments': typeof AuthenticatedAssessmentsRoute
+  '/assestment': typeof AuthenticatedAssestmentRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
@@ -233,6 +240,7 @@ export interface FileRoutesByTo {
   '/academics': typeof AuthenticatedAcademicsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/assessments': typeof AuthenticatedAssessmentsRoute
+  '/assestment': typeof AuthenticatedAssestmentRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
@@ -266,6 +274,7 @@ export interface FileRoutesById {
   '/_authenticated/academics': typeof AuthenticatedAcademicsRoute
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
   '/_authenticated/assessments': typeof AuthenticatedAssessmentsRoute
+  '/_authenticated/assestment': typeof AuthenticatedAssestmentRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
@@ -299,6 +308,7 @@ export interface FileRouteTypes {
     | '/academics'
     | '/approvals'
     | '/assessments'
+    | '/assestment'
     | '/attendance'
     | '/audit-logs'
     | '/change-password'
@@ -330,6 +340,7 @@ export interface FileRouteTypes {
     | '/academics'
     | '/approvals'
     | '/assessments'
+    | '/assestment'
     | '/attendance'
     | '/audit-logs'
     | '/change-password'
@@ -362,6 +373,7 @@ export interface FileRouteTypes {
     | '/_authenticated/academics'
     | '/_authenticated/approvals'
     | '/_authenticated/assessments'
+    | '/_authenticated/assestment'
     | '/_authenticated/attendance'
     | '/_authenticated/audit-logs'
     | '/_authenticated/change-password'
@@ -455,6 +467,13 @@ declare module '@tanstack/react-router' {
       path: '/assessments'
       fullPath: '/assessments'
       preLoaderRoute: typeof AuthenticatedAssessmentsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/assestment': {
+      id: '/_authenticated/assestment'
+      path: '/assestment'
+      fullPath: '/assestment'
+      preLoaderRoute: typeof AuthenticatedAssestmentRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/attendance': {
@@ -629,6 +648,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAcademicsRoute: typeof AuthenticatedAcademicsRoute
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedAssessmentsRoute: typeof AuthenticatedAssessmentsRoute
+  AuthenticatedAssestmentRoute: typeof AuthenticatedAssestmentRoute
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedAuditLogsRoute: typeof AuthenticatedAuditLogsRoute
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
@@ -650,6 +670,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAcademicsRoute: AuthenticatedAcademicsRoute,
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
   AuthenticatedAssessmentsRoute: AuthenticatedAssessmentsRoute,
+  AuthenticatedAssestmentRoute: AuthenticatedAssestmentRoute,
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedAuditLogsRoute: AuthenticatedAuditLogsRoute,
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,

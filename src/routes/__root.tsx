@@ -312,7 +312,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       
       // Language & Localization
       { name: "language", content: "English" },
-      { "http-equiv": "content-language", content: "en-UG" },
+      { httpEquiv: "content-language", content: "en-UG" },
       
       // Verification Tags
       { name: "google-site-verification", content: "YOUR_GOOGLE_VERIFICATION_CODE" },
@@ -342,9 +342,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       
       // SEO Links
       { rel: "canonical", href: SEO_CONFIG.siteUrl },
-      { rel: "alternate", href: SEO_CONFIG.siteUrl, hreflang: "en" },
-      { rel: "alternate", href: SEO_CONFIG.siteUrl, hreflang: "en-UG" },
-      { rel: "alternate", href: SEO_CONFIG.siteUrl, hreflang: "x-default" },
+      { rel: "alternate", href: SEO_CONFIG.siteUrl, hrefLang: "en" },
+      { rel: "alternate", href: SEO_CONFIG.siteUrl, hrefLang: "en-UG" },
+      { rel: "alternate", href: SEO_CONFIG.siteUrl, hrefLang: "x-default" },
       { rel: "manifest", href: "/manifest.json" },
       { rel: "sitemap", href: "/sitemap.xml", type: "application/xml" },
       { rel: "sitemap", href: "/sitemap.xml", type: "application/rss+xml" },
@@ -447,7 +447,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   shellComponent: RootShell,
   component: RootComponent,
   errorComponent: ErrorComponent,
+  notFoundComponent: NotFoundComponent,
 });
+
+function NotFoundComponent() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+        <h1 className="text-xl font-semibold">Page not found</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          The page you requested does not exist or may have moved.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function RootShell({ children }: { children: ReactNode }) {
   return (

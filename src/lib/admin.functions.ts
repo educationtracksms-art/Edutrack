@@ -120,7 +120,7 @@ async function postBalancedJournal(
 
 export const createSchoolWithAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       name: string;
       code: string;
@@ -213,7 +213,7 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
 
 export const createStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       fullName: string;
       email: string;
@@ -276,7 +276,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
 
 export const updateStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       userId: string;
       fullName: string;
@@ -357,7 +357,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
 
 export const resetUserPassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { userId: string }) => data)
+  .validator((data: { userId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (!roles.some((r) => ["super_admin", "school_admin"].includes(r)))
@@ -394,7 +394,7 @@ export const resetUserPassword = createServerFn({ method: "POST" })
 
 export const setSchoolStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { schoolId: string; status: "active" | "suspended" }) => data)
+  .validator((data: { schoolId: string; status: "active" | "suspended" }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (!roles.includes("super_admin"))
@@ -419,7 +419,7 @@ export const setSchoolStatus = createServerFn({ method: "POST" })
 
 export const reviewAssessments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       ids: string[];
       action: "approve" | "reject";
@@ -568,7 +568,7 @@ export const reviewAssessments = createServerFn({ method: "POST" })
 
 export const updateAssessmentStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       assessmentId: string;
       status: "draft" | "submitted" | "approved" | "rejected";
@@ -629,7 +629,7 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
 
 export const upsertReportComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       studentId: string;
       termId: string;
@@ -776,7 +776,7 @@ export const upsertReportComment = createServerFn({ method: "POST" })
 
 export const upsertReportCommentRule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       id?: string | null;
       commentRole: "class_teacher" | "head_teacher";
@@ -825,7 +825,7 @@ export const upsertReportCommentRule = createServerFn({ method: "POST" })
 
 export const deleteReportCommentRule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { id: string; commentRole: "class_teacher" | "head_teacher" }) => data)
+  .validator((data: { id: string; commentRole: "class_teacher" | "head_teacher" }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     const allowedRoles =
@@ -857,7 +857,7 @@ export const deleteReportCommentRule = createServerFn({ method: "POST" })
 
 export const deleteReportComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: { studentId: string; termId: string; commentType: "class_teacher" | "head_teacher" }) =>
       data,
   )
@@ -976,7 +976,7 @@ export const deleteReportComment = createServerFn({ method: "POST" })
 
 export const upsertAssessmentEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       studentId: string;
       subjectId: string;
@@ -1130,7 +1130,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
 
 export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       assessmentId: string;
       examType?: string;
@@ -1215,7 +1215,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
 
 export const submitAssessmentEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       assessmentId: string;
       formative?: number | null;
@@ -1301,7 +1301,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
 
 export const submitAssessmentEntries = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { assessmentIds: string[]; teacherInitials?: string | null }) => data)
+  .validator((data: { assessmentIds: string[]; teacherInitials?: string | null }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -1388,7 +1388,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
 
 export const deleteAssessmentEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { assessmentId: string }) => data)
+  .validator((data: { assessmentId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -1444,7 +1444,7 @@ export const deleteAssessmentEntry = createServerFn({ method: "POST" })
 
 export const verifyStudent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { studentId: string }) => data)
+  .validator((data: { studentId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     const canVerifyAny = roles.some((r) =>
@@ -1506,7 +1506,7 @@ export const verifyStudent = createServerFn({ method: "POST" })
 
 export const updateStudentStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { studentId: string; status: "pending" | "active" | "inactive" }) => data)
+  .validator((data: { studentId: string; status: "pending" | "active" | "inactive" }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -1556,7 +1556,7 @@ export const updateStudentStatus = createServerFn({ method: "POST" })
 
 export const updateStudentFeesBalance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { studentId: string; feesBalance: number }) => data)
+  .validator((data: { studentId: string; feesBalance: number }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     const canEditAny = roles.some((r) =>
@@ -1607,7 +1607,7 @@ export const updateStudentFeesBalance = createServerFn({ method: "POST" })
 
 export const deleteAttendanceSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { studentId: string; termId: string }) => data)
+  .validator((data: { studentId: string; termId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -1674,7 +1674,7 @@ async function ensureCanManageSchool(context: any): Promise<string | null> {
 
 export const deleteClass = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { classId: string }) => data)
+  .validator((data: { classId: string }) => data)
   .handler(async ({ data, context }) => {
     const schoolId = await ensureCanManageSchool(context);
     const { data: cls } = await context.supabase
@@ -1696,7 +1696,7 @@ export const deleteClass = createServerFn({ method: "POST" })
 
 export const deleteStream = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { streamId: string }) => data)
+  .validator((data: { streamId: string }) => data)
   .handler(async ({ data, context }) => {
     const schoolId = await ensureCanManageSchool(context);
     const { data: stream } = await context.supabase
@@ -1723,7 +1723,7 @@ export const deleteStream = createServerFn({ method: "POST" })
 
 export const deleteStudent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { studentId: string }) => data)
+  .validator((data: { studentId: string }) => data)
   .handler(async ({ data, context }) => {
     const schoolId = await ensureCanManageSchool(context);
     const { data: student } = await context.supabase
@@ -1753,7 +1753,7 @@ export const deleteStudent = createServerFn({ method: "POST" })
 
 export const deleteStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { userId: string }) => data)
+  .validator((data: { userId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (!roles.some((r) => ["super_admin", "school_admin"].includes(r)))
@@ -1787,7 +1787,7 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
 
 export const createStudentInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       studentId: string;
       invoiceNumber: string;
@@ -1906,7 +1906,7 @@ export const createStudentInvoice = createServerFn({ method: "POST" })
 
 export const recordStudentPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       studentId: string;
       paymentNumber: string;
@@ -2034,7 +2034,7 @@ export const recordStudentPayment = createServerFn({ method: "POST" })
 
 export const createBudget = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       financialYearId: string;
       title: string;
@@ -2110,7 +2110,7 @@ export const createBudget = createServerFn({ method: "POST" })
 
 export const updateBudgetStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       budgetId: string;
       status:
@@ -2160,7 +2160,7 @@ export const updateBudgetStatus = createServerFn({ method: "POST" })
 
 export const submitBudgetRevision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       budgetId: string;
       note?: string | null;
@@ -2225,7 +2225,7 @@ export const submitBudgetRevision = createServerFn({ method: "POST" })
 
 export const createSupplier = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       supplierName: string;
       contactPerson?: string | null;
@@ -2269,7 +2269,7 @@ export const createSupplier = createServerFn({ method: "POST" })
 
 export const createPurchaseRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       requestNumber: string;
       budgetId?: string | null;
@@ -2342,7 +2342,7 @@ export const createPurchaseRequest = createServerFn({ method: "POST" })
 
 export const reviewPurchaseRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       requestId: string;
       status: "approved" | "rejected" | "returned_for_revision";
@@ -2400,7 +2400,7 @@ export const reviewPurchaseRequest = createServerFn({ method: "POST" })
 
 export const createDepartment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { name: string; description?: string | null }) => data)
+  .validator((data: { name: string; description?: string | null }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
@@ -2423,7 +2423,7 @@ export const createDepartment = createServerFn({ method: "POST" })
 
 export const assignDepartmentHod = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { departmentId: string; hodUserId: string | null }) => data)
+  .validator((data: { departmentId: string; hodUserId: string | null }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
@@ -2455,7 +2455,7 @@ export const assignDepartmentHod = createServerFn({ method: "POST" })
 
 export const updatePurchaseRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       requestId: string;
       requestNumber?: string;
@@ -2493,7 +2493,7 @@ export const updatePurchaseRequest = createServerFn({ method: "POST" })
 
 export const createPurchaseOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       orderNumber: string;
       purchaseRequestId?: string | null;
@@ -2557,7 +2557,7 @@ export const createPurchaseOrder = createServerFn({ method: "POST" })
 
 export const updatePurchaseOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       orderId: string;
       orderNumber?: string;
@@ -2594,7 +2594,7 @@ export const updatePurchaseOrder = createServerFn({ method: "POST" })
 
 export const recordGoodsReceipt = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       purchaseOrderId: string;
       receiptNumber: string;
@@ -2658,7 +2658,7 @@ export const recordGoodsReceipt = createServerFn({ method: "POST" })
 
 export const createSupplierInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       invoiceNumber: string;
       supplierId?: string | null;
@@ -2714,7 +2714,7 @@ export const createSupplierInvoice = createServerFn({ method: "POST" })
 
 export const updateSupplierInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       invoiceId: string;
       invoiceNumber?: string;
@@ -2750,7 +2750,7 @@ export const updateSupplierInvoice = createServerFn({ method: "POST" })
 
 export const updatePaymentVoucher = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       voucherId: string;
       voucherNumber?: string;
@@ -2788,7 +2788,7 @@ export const updatePaymentVoucher = createServerFn({ method: "POST" })
 
 export const reviewSupplierInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: { invoiceId: string; status: "approved" | "rejected"; note?: string | null }) => data,
   )
   .handler(async ({ data, context }) => {
@@ -2834,7 +2834,7 @@ export const reviewSupplierInvoice = createServerFn({ method: "POST" })
 
 export const createPaymentVoucher = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       voucherNumber: string;
       invoiceId?: string | null;
@@ -2896,7 +2896,7 @@ export const createPaymentVoucher = createServerFn({ method: "POST" })
 
 export const logReportPrint = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { count: number; scope: string }) => data)
+  .validator((data: { count: number; scope: string }) => data)
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase
       .from("profiles")
@@ -2916,7 +2916,7 @@ export const logReportPrint = createServerFn({ method: "POST" })
 
 export const upsertGradingScale = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       id?: string | null;
       schoolId?: string;
@@ -2978,7 +2978,7 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
 
 export const deleteGradingScale = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -3014,7 +3014,7 @@ export const deleteGradingScale = createServerFn({ method: "POST" })
 
 export const upsertIdentifierScale = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       id?: string | null;
       schoolId?: string;
@@ -3059,7 +3059,7 @@ export const upsertIdentifierScale = createServerFn({ method: "POST" })
 
 export const deleteIdentifierScale = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -3079,3 +3079,4 @@ export const deleteIdentifierScale = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
