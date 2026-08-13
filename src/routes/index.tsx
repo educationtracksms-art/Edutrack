@@ -9,7 +9,7 @@ import { PublicShell } from "@/components/layout/PublicShell";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Education Track SMS | Uganda School Management System" },
+      { title: "Education Track SMS | Uganda School Management System | Edutrack | Eductrack" },
       {
         name: "description",
         content:

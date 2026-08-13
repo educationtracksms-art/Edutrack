@@ -21,7 +21,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
             <img src={logoUrl} alt="Education Track SMS logo" className="h-10 w-10 object-cover" />
             <div className="min-w-0">
               <p className="text-sm font-semibold leading-tight">Education Track SMS</p>
-              <p className="text-xs text-muted-foreground">Uganda School Management System</p>
+              <p className="text-xs text-muted-foreground">Uganda School Management System | Edutrack | Eductrack</p>
             </div>
           </Link>
 
@@ -126,7 +126,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
               />
               <div>
                 <p className="text-sm font-semibold">Education Track SMS</p>
-                <p className="text-xs text-slate-400">Uganda School Management System</p>
+                <p className="text-xs text-slate-400">Uganda School Management System | Edutrack | Eductrack</p>
               </div>
             </Link>
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">

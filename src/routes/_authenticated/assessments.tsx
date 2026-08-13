@@ -311,9 +311,9 @@ export function AssessmentsPage() {
               subject_id: allocation.subject_id,
               class_id: allocation.class_id ?? null,
               stream_id: allocation.stream_id ?? null,
-              label: `Subject: ${subjectName} | Class: ${className}${
-                allocation.stream_id ? ` | Stream: ${streamName}` : ""
-              }`,
+              label: [subjectName, className, allocation.stream_id ? streamName : null]
+                .filter(Boolean)
+                .join(" - "),
             };
           })
         : [];
@@ -1154,7 +1154,7 @@ export function AssessmentsPage() {
             )}
             <div className="md:col-span-2 xl:col-span-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <Field label="Search learners" className="min-w-0 flex-1">
+                <Field label="Search learners on this page" className="min-w-0 flex-1">
                   <input
                     className={inputClass}
                     value={learnerSearch}
