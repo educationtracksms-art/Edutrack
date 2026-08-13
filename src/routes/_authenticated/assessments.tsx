@@ -134,6 +134,12 @@ function AssessmentsPage() {
   const schoolId = me?.profile?.school_id ?? null;
   const isAssignedTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos"]);
   const isTeacher = isAssignedTeacher;
+  const canViewAllAssessments = hasAny(me?.roles, [
+    "dos",
+    "school_admin",
+    "head_teacher",
+    "deputy_head_teacher",
+  ]);
   const canEnter =
     !!schoolId &&
     hasAny(me?.roles, [
@@ -401,6 +407,7 @@ function AssessmentsPage() {
 
   const teacherAssessmentRows = useMemo(() => {
     if (!isTeacher || !tableData) return tableData?.assessments ?? [];
+    if (canViewAllAssessments) return tableData.assessments;
 
     const studentById = new Map(tableData.students.map((student) => [student.id, student]));
     const currentTeacherId = me?.userId ?? "";
@@ -419,7 +426,7 @@ function AssessmentsPage() {
         return true;
       });
     });
-  }, [data?.allocations, isTeacher, me?.userId, tableData]);
+  }, [canViewAllAssessments, data?.allocations, isTeacher, me?.userId, tableData]);
 
   const loadAssessmentIntoForm = (assessmentId: string) => {
     const assessment = assessmentLookup.get(assessmentId);
