@@ -191,7 +191,9 @@ function AttendancePage() {
       deleteSummaryFn({ data: { studentId, termId: data?.term?.id ?? "" } }),
     onSuccess: () => {
       toast.success("Attendance summary deleted");
-      queryClient.invalidateQueries({ queryKey: ["attendance-summaries", schoolId, data?.term?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["attendance-summaries", schoolId, data?.term?.id],
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });

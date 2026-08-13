@@ -1,8 +1,18 @@
 import type { ReportCardData } from "@/lib/report-types";
 
 export function ReportCard({ data }: { data: ReportCardData }) {
-  const { school, student, attendance, rows, overall, approval, gradeKeys, coCurricular, comments, staff } =
-    data;
+  const {
+    school,
+    student,
+    attendance,
+    rows,
+    overall,
+    approval,
+    gradeKeys,
+    coCurricular,
+    comments,
+    staff,
+  } = data;
   const watermarkLabel = school.name || "School";
   const paymentLabel =
     school.reportPaymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
@@ -170,8 +180,6 @@ export function ReportCard({ data }: { data: ReportCardData }) {
         </tbody>
       </table>
 
-      
-
       <section className="definitions">
         <div className="keywords">
           <h3>KEY WORDS AND DEFINITION OF TERMS</h3>
@@ -238,10 +246,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
           <tr>
             <td className="label">
               Class Teacher&apos;s Comment
-              {staff.classTeacher && (
-                <>
-                </>
-              )}
+              {staff.classTeacher && <></>}
             </td>
             <td>{comments.classTeacher}</td>
           </tr>

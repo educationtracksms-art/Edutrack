@@ -23,7 +23,11 @@ export const Route = createFileRoute("/_authenticated/library")({
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) throw redirect({ to: "/auth" });
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id")
+      .eq("id", userId)
+      .maybeSingle();
     if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "library"))) {
       throw redirect({ to: "/dashboard" });
     }
@@ -224,7 +228,11 @@ function LibraryPage() {
     mutationFn: async (bookId: string) => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!canManage) throw new Error("You do not have permission to manage library stock");
-      const { error } = await supabase.from("library_books").delete().eq("id", bookId).eq("school_id", schoolId);
+      const { error } = await supabase
+        .from("library_books")
+        .delete()
+        .eq("id", bookId)
+        .eq("school_id", schoolId);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
@@ -296,7 +304,11 @@ function LibraryPage() {
         .maybeSingle();
       if (lookupError) throw new Error(lookupError.message);
       if (!loan) throw new Error("Loan not found");
-      const { error } = await supabase.from("library_loans").delete().eq("id", loanId).eq("school_id", schoolId);
+      const { error } = await supabase
+        .from("library_loans")
+        .delete()
+        .eq("id", loanId)
+        .eq("school_id", schoolId);
       if (error) throw new Error(error.message);
       if (!loan.returned_at) {
         const { data: book } = await supabase
@@ -309,8 +321,14 @@ function LibraryPage() {
           await supabase
             .from("library_books")
             .update({
-              available_copies: Math.min(Number(book.total_copies), Number(book.available_copies) + 1),
-              status: Math.min(Number(book.total_copies), Number(book.available_copies) + 1) > 0 ? "available" : "unavailable",
+              available_copies: Math.min(
+                Number(book.total_copies),
+                Number(book.available_copies) + 1,
+              ),
+              status:
+                Math.min(Number(book.total_copies), Number(book.available_copies) + 1) > 0
+                  ? "available"
+                  : "unavailable",
             })
             .eq("id", loan.book_id)
             .eq("school_id", schoolId);

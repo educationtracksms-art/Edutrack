@@ -4,17 +4,22 @@ export function PageHeader({
   title,
   description,
   actions,
+  eyebrow = "Overview",
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
+  eyebrow?: string;
 }) {
   return (
-    <div className="no-print mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
+    <div className="no-print mb-5 flex flex-col gap-3 rounded-3xl border border-border bg-[linear-gradient(180deg,var(--color-card),var(--color-secondary))] p-4 shadow-sm sm:mb-6 sm:gap-4 sm:p-6">
       <div className="min-w-0">
+        <p className="mb-2 inline-flex rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-primary">
+          {eyebrow}
+        </p>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
         {description && (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
         )}
       </div>
       {actions && <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">{actions}</div>}
@@ -33,9 +38,9 @@ export function Panel({
 }) {
   return (
     <section
-      className={`rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4 ${className}`}
+      className={`rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5 ${className}`}
     >
-      {title && <h2 className="mb-3 text-sm font-semibold text-foreground">{title}</h2>}
+      {title && <h2 className="mb-4 text-sm font-semibold text-foreground">{title}</h2>}
       {children}
     </section>
   );
@@ -51,7 +56,7 @@ export function Stat({
   hint?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-2 text-xl font-semibold sm:text-2xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
@@ -102,7 +107,7 @@ export function Btn({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-60 sm:w-auto ${styles[variant]}`}
+      className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors disabled:opacity-60 sm:w-auto ${styles[variant]}`}
     >
       {children}
     </button>
@@ -124,7 +129,11 @@ export const inputClass =
 export function ResponsiveTable({ desktop, mobile }: { desktop: ReactNode; mobile: ReactNode }) {
   return (
     <>
-      <div className="hidden md:block">{desktop}</div>
+      <div className="hidden md:block">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
+          {desktop}
+        </div>
+      </div>
       <div className="space-y-3 md:hidden">{mobile}</div>
     </>
   );

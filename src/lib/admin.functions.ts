@@ -511,7 +511,8 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
     const patch: Record<string, unknown> = {
       status: data.status,
       locked: data.status === "approved",
-      rejection_reason: data.status === "rejected" ? data.reason ?? "Returned for correction" : null,
+      rejection_reason:
+        data.status === "rejected" ? (data.reason ?? "Returned for correction") : null,
       submitted_by: data.status === "submitted" ? context.userId : null,
       submitted_at: data.status === "submitted" ? new Date().toISOString() : null,
       approved_by: data.status === "approved" ? context.userId : null,
@@ -525,10 +526,17 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_STATUS_CHANGED", "assessments", {
-      assessment_id: data.assessmentId,
-      status: data.status,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ASSESSMENT_STATUS_CHANGED",
+      "assessments",
+      {
+        assessment_id: data.assessmentId,
+        status: data.status,
+      },
+    );
 
     return { ok: true };
   });
@@ -694,7 +702,14 @@ export const upsertReportCommentRule = createServerFn({ method: "POST" })
     const roles = await rolesOf(context.supabase, context.userId);
     const allowedRoles =
       data.commentRole === "class_teacher"
-        ? ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]
+        ? [
+            "class_teacher",
+            "dos",
+            "school_admin",
+            "head_teacher",
+            "deputy_head_teacher",
+            "super_admin",
+          ]
         : ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"];
     if (!roles.some((role) => allowedRoles.includes(role))) {
       throw new Error("Not allowed to manage report comment rules");
@@ -724,17 +739,19 @@ export const upsertReportCommentRule = createServerFn({ method: "POST" })
 
 export const deleteReportCommentRule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (data: {
-      id: string;
-      commentRole: "class_teacher" | "head_teacher";
-    }) => data,
-  )
+  .inputValidator((data: { id: string; commentRole: "class_teacher" | "head_teacher" }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     const allowedRoles =
       data.commentRole === "class_teacher"
-        ? ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"]
+        ? [
+            "class_teacher",
+            "dos",
+            "school_admin",
+            "head_teacher",
+            "deputy_head_teacher",
+            "super_admin",
+          ]
         : ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"];
     if (!roles.some((role) => allowedRoles.includes(role))) {
       throw new Error("Not allowed to manage report comment rules");
@@ -755,11 +772,8 @@ export const deleteReportCommentRule = createServerFn({ method: "POST" })
 export const deleteReportComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (data: {
-      studentId: string;
-      termId: string;
-      commentType: "class_teacher" | "head_teacher";
-    }) => data,
+    (data: { studentId: string; termId: string; commentType: "class_teacher" | "head_teacher" }) =>
+      data,
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
@@ -835,7 +849,10 @@ export const deleteReportComment = createServerFn({ method: "POST" })
           .eq("id", existing.id);
         if (error) throw new Error(error.message);
       } else {
-        const { error } = await context.supabase.from("report_comments").delete().eq("id", existing.id);
+        const { error } = await context.supabase
+          .from("report_comments")
+          .delete()
+          .eq("id", existing.id);
         if (error) throw new Error(error.message);
       }
     } else {
@@ -847,7 +864,10 @@ export const deleteReportComment = createServerFn({ method: "POST" })
           .eq("id", existing.id);
         if (error) throw new Error(error.message);
       } else {
-        const { error } = await context.supabase.from("report_comments").delete().eq("id", existing.id);
+        const { error } = await context.supabase
+          .from("report_comments")
+          .delete()
+          .eq("id", existing.id);
         if (error) throw new Error(error.message);
       }
     }
@@ -981,7 +1001,9 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
     if (existingAssessment) {
-      throw new Error("An assessment already exists for this learner, subject and term. Existing marks were left unchanged.");
+      throw new Error(
+        "An assessment already exists for this learner, subject and term. Existing marks were left unchanged.",
+      );
     }
 
     const { error } = await context.supabase.from("assessments").insert({
@@ -1073,7 +1095,8 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     const totalScore = Number(data.formative ?? 0) + Number(data.summative ?? 0);
     const gradeMatch = (gradingScales ?? []).find(
-      (scale: any) => totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+      (scale: any) =>
+        totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
     );
 
     const { error } = await context.supabase
@@ -1090,9 +1113,16 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       .eq("id", data.assessmentId);
     if (error) throw new Error(error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_DRAFT_UPDATED", "assessments", {
-      assessment_id: data.assessmentId,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ASSESSMENT_DRAFT_UPDATED",
+      "assessments",
+      {
+        assessment_id: data.assessmentId,
+      },
+    );
 
     return { ok: true };
   });
@@ -1147,7 +1177,8 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     const totalScore = Number(data.formative ?? 0) + Number(data.summative ?? 0);
     const gradeMatch = (gradingScales ?? []).find(
-      (scale: any) => totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+      (scale: any) =>
+        totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
     );
 
     const teacherInitials = data.teacherInitials?.trim() || null;
@@ -1168,18 +1199,23 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
-      assessment_id: data.assessmentId,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ASSESSMENT_SUBMITTED",
+      "assessments",
+      {
+        assessment_id: data.assessmentId,
+      },
+    );
 
     return { ok: true };
   });
 
 export const submitAssessmentEntries = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (data: { assessmentIds: string[]; teacherInitials?: string | null }) => data,
-  )
+  .inputValidator((data: { assessmentIds: string[]; teacherInitials?: string | null }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -1229,7 +1265,8 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     const updates = assessments.map((assessment) => {
       const totalScore = Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
       const gradeMatch = (gradingScales ?? []).find(
-        (scale: any) => totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+        (scale: any) =>
+          totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
       );
       return context.supabase
         .from("assessments")
@@ -1249,18 +1286,23 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     const firstError = results.find((result) => result.error);
     if (firstError?.error) throw new Error(firstError.error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENTS_SUBMITTED", "assessments", {
-      assessment_ids: data.assessmentIds,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ASSESSMENTS_SUBMITTED",
+      "assessments",
+      {
+        assessment_ids: data.assessmentIds,
+      },
+    );
 
     return { ok: true };
   });
 
 export const deleteAssessmentEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (data: { assessmentId: string }) => data,
-  )
+  .inputValidator((data: { assessmentId: string }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -1297,12 +1339,19 @@ export const deleteAssessmentEntry = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_DELETED", "assessments", {
-      assessment_id: data.assessmentId,
-      student_id: existing.student_id,
-      subject_id: existing.subject_id,
-      term_id: existing.term_id,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ASSESSMENT_DELETED",
+      "assessments",
+      {
+        assessment_id: data.assessmentId,
+        student_id: existing.student_id,
+        subject_id: existing.subject_id,
+        term_id: existing.term_id,
+      },
+    );
 
     return { ok: true };
   });
@@ -1477,7 +1526,14 @@ export const deleteAttendanceSummary = createServerFn({ method: "POST" })
     const roles = await rolesOf(context.supabase, context.userId);
     if (
       !roles.some((r) =>
-        ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r),
+        [
+          "class_teacher",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(r),
       )
     ) {
       throw new Error("Not allowed to delete attendance summaries");
@@ -1503,10 +1559,17 @@ export const deleteAttendanceSummary = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);
 
-    await logAudit(context.supabase, context.userId, schoolId, "ATTENDANCE_SUMMARY_DELETED", "attendance_summaries", {
-      student_id: data.studentId,
-      term_id: data.termId,
-    });
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ATTENDANCE_SUMMARY_DELETED",
+      "attendance_summaries",
+      {
+        student_id: data.studentId,
+        term_id: data.termId,
+      },
+    );
     return { ok: true };
   });
 

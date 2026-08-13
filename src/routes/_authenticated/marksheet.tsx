@@ -12,7 +12,12 @@ import { supabase } from "@/integrations/supabase/client";
 type ClassRow = { id: string; name: string };
 type StreamRow = { id: string; name: string; class_id: string | null };
 type TermRow = { id: string; name: string; is_current: boolean; academic_year_id: string | null };
-type StudentRow = { id: string; full_name: string; class_id: string | null; stream_id: string | null };
+type StudentRow = {
+  id: string;
+  full_name: string;
+  class_id: string | null;
+  stream_id: string | null;
+};
 type SubjectRow = { id: string; name: string };
 type AssessmentRow = {
   student_id: string;
@@ -53,7 +58,8 @@ export const Route = createFileRoute("/_authenticated/marksheet")({
       { title: "Marksheet - EduTrack" },
       {
         name: "description",
-        content: "View learner marks by subject with formative, summative, total and grade columns.",
+        content:
+          "View learner marks by subject with formative, summative, total and grade columns.",
       },
     ],
   }),
@@ -78,7 +84,8 @@ function MarksheetPage() {
   const { data: streams } = useQuery<StreamRow[]>({
     queryKey: ["marksheet-streams", schoolId],
     queryFn: async () =>
-      (await schoolQuery(supabase.from("streams").select("id, name, class_id").order("name"))).data ?? [],
+      (await schoolQuery(supabase.from("streams").select("id, name, class_id").order("name")))
+        .data ?? [],
   });
 
   const { data: terms } = useQuery<TermRow[]>({
@@ -97,7 +104,8 @@ function MarksheetPage() {
   const { data: subjects } = useQuery<SubjectRow[]>({
     queryKey: ["marksheet-subjects", schoolId],
     queryFn: async () =>
-      (await schoolQuery(supabase.from("subjects").select("id, name").order("position"))).data ?? [],
+      (await schoolQuery(supabase.from("subjects").select("id, name").order("position"))).data ??
+      [],
   });
 
   const { data: students } = useQuery<StudentRow[]>({
@@ -384,7 +392,9 @@ function MarksheetPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">Filters</p>
-            <p className="text-xs text-muted-foreground">Narrow the sheet by term, class, and stream.</p>
+            <p className="text-xs text-muted-foreground">
+              Narrow the sheet by term, class, and stream.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Pill tone="muted">{scoreStats.learnerCount} learners</Pill>
@@ -492,7 +502,11 @@ function MarksheetPage() {
               <tr className="bg-card text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 <th className="sticky left-0 z-30 w-56 border-b border-border bg-card px-3 py-2" />
                 {(subjects ?? []).map((subject) => (
-                  <th key={`${subject.id}-subheads`} colSpan={4} className="border-b border-border px-3 py-2">
+                  <th
+                    key={`${subject.id}-subheads`}
+                    colSpan={4}
+                    className="border-b border-border px-3 py-2"
+                  >
                     <div className="grid grid-cols-4 gap-2 text-center">
                       <span>Formative</span>
                       <span>Summative</span>
@@ -535,7 +549,9 @@ function MarksheetPage() {
                           <span className="rounded-md bg-muted/40 px-2 py-1 font-semibold">
                             {total === "" ? "-" : total}
                           </span>
-                          <span className="rounded-md bg-muted/40 px-2 py-1 font-semibold">{grade || "-"}</span>
+                          <span className="rounded-md bg-muted/40 px-2 py-1 font-semibold">
+                            {grade || "-"}
+                          </span>
                         </div>
                       </td>
                     );

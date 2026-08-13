@@ -15,7 +15,12 @@ import { supabase } from "@/integrations/supabase/client";
 
 type ClassRow = { id: string; name: string };
 type StreamRow = { id: string; name: string; class_id: string | null };
-type StudentRow = { id: string; full_name: string; class_id: string | null; stream_id: string | null };
+type StudentRow = {
+  id: string;
+  full_name: string;
+  class_id: string | null;
+  stream_id: string | null;
+};
 type TermRow = { id: string; name: string; is_current: boolean; academic_year_id: string | null };
 type AcademicYearRow = { id: string; name: string; is_current: boolean };
 
@@ -24,7 +29,11 @@ export const Route = createFileRoute("/_authenticated/reports")({
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) throw redirect({ to: "/auth" });
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id")
+      .eq("id", userId)
+      .maybeSingle();
     if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "report_cards"))) {
       throw redirect({ to: "/dashboard" });
     }
@@ -122,7 +131,7 @@ function ReportsPage() {
           a.full_name.localeCompare(b.full_name)
         );
       });
-    }, [classId, classes, streamId, students, streams]);
+  }, [classId, classes, streamId, students, streams]);
 
   const visibleStudentIds = useMemo(() => visible.map((student) => student.id), [visible]);
 
@@ -246,11 +255,7 @@ function ReportsPage() {
             >
               Select all
             </Btn>
-            <Btn
-              variant="ghost"
-              onClick={() => setSelected([])}
-              disabled={selected.length === 0}
-            >
+            <Btn variant="ghost" onClick={() => setSelected([])} disabled={selected.length === 0}>
               Clear
             </Btn>
           </div>
@@ -291,4 +296,3 @@ function ReportsPage() {
     </div>
   );
 }
-

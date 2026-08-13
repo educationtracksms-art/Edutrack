@@ -46,7 +46,11 @@ export const Route = createFileRoute("/_authenticated/approvals")({
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) throw redirect({ to: "/auth" });
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id")
+      .eq("id", userId)
+      .maybeSingle();
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const roleNames = (roles ?? []).map((item) => item.role);
     if (!roleNames.includes("dos")) throw redirect({ to: "/dashboard" });
@@ -76,25 +80,33 @@ function ApprovalsPage() {
     queryKey: ["dos-approvals", schoolId],
     enabled: !!schoolId && isDos,
     queryFn: async () => {
-      const [assessments, students, classes, streams, subjects, terms, profiles] = await Promise.all([
-        supabase
-          .from("assessments")
-          .select(
-            "id, student_id, subject_id, term_id, formative, summative, status, locked, rejection_reason, created_at, submitted_by",
-          )
-          .eq("school_id", schoolId)
-          .order("created_at", { ascending: false }),
-        supabase.from("students").select("id, full_name, class_id, stream_id").eq("school_id", schoolId),
-        supabase.from("classes").select("id, name").eq("school_id", schoolId),
-        supabase.from("streams").select("id, name").eq("school_id", schoolId),
-        supabase.from("subjects").select("id, name").eq("school_id", schoolId),
-        supabase.from("terms").select("id, name").eq("school_id", schoolId),
-        supabase.from("profiles").select("id, full_name").eq("school_id", schoolId),
-      ]);
+      const [assessments, students, classes, streams, subjects, terms, profiles] =
+        await Promise.all([
+          supabase
+            .from("assessments")
+            .select(
+              "id, student_id, subject_id, term_id, formative, summative, status, locked, rejection_reason, created_at, submitted_by",
+            )
+            .eq("school_id", schoolId)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("students")
+            .select("id, full_name, class_id, stream_id")
+            .eq("school_id", schoolId),
+          supabase.from("classes").select("id, name").eq("school_id", schoolId),
+          supabase.from("streams").select("id, name").eq("school_id", schoolId),
+          supabase.from("subjects").select("id, name").eq("school_id", schoolId),
+          supabase.from("terms").select("id, name").eq("school_id", schoolId),
+          supabase.from("profiles").select("id, full_name").eq("school_id", schoolId),
+        ]);
 
       const studentMap = new Map((students.data ?? []).map((row: any) => [row.id, row.full_name]));
-      const studentClassMap = new Map((students.data ?? []).map((row: any) => [row.id, row.class_id]));
-      const studentStreamMap = new Map((students.data ?? []).map((row: any) => [row.id, row.stream_id]));
+      const studentClassMap = new Map(
+        (students.data ?? []).map((row: any) => [row.id, row.class_id]),
+      );
+      const studentStreamMap = new Map(
+        (students.data ?? []).map((row: any) => [row.id, row.stream_id]),
+      );
       const classMap = new Map((classes.data ?? []).map((row: any) => [row.id, row.name]));
       const streamMap = new Map((streams.data ?? []).map((row: any) => [row.id, row.name]));
       const subjectMap = new Map((subjects.data ?? []).map((row: any) => [row.id, row.name]));
@@ -111,7 +123,10 @@ function ApprovalsPage() {
           row.subject_id ?? "unknown-subject",
           row.term_id ?? "unknown-term",
         ].join(":");
-        scopeSubmitted.set(scopeKey, (scopeSubmitted.get(scopeKey) ?? 0) + (row.status === "submitted" ? 1 : 0));
+        scopeSubmitted.set(
+          scopeKey,
+          (scopeSubmitted.get(scopeKey) ?? 0) + (row.status === "submitted" ? 1 : 0),
+        );
       }
 
       return (assessments.data ?? []).map((row: any): ApprovalRow => ({
@@ -123,7 +138,9 @@ function ApprovalsPage() {
         stream_id: studentStreamMap.get(row.student_id) ?? null,
         class_name: classMap.get(studentClassMap.get(row.student_id)) ?? "Unknown class",
         stream_name: streamMap.get(studentStreamMap.get(row.student_id)) ?? "Unknown stream",
-        submitted_by_name: row.submitted_by ? profileMap.get(row.submitted_by) ?? "Unknown teacher" : "Not submitted",
+        submitted_by_name: row.submitted_by
+          ? (profileMap.get(row.submitted_by) ?? "Unknown teacher")
+          : "Not submitted",
       }));
     },
   });
@@ -249,7 +266,11 @@ function ApprovalsPage() {
   });
 
   const bulkApproveMutation = useMutation({
-    mutationFn: async (scope: { kind: "class" | "stream"; classId?: string; streamId?: string }) => {
+    mutationFn: async (scope: {
+      kind: "class" | "stream";
+      classId?: string;
+      streamId?: string;
+    }) => {
       const scopedRows = visibleData.filter((row) => {
         if (scope.kind === "class") return row.class_id === scope.classId;
         return row.stream_id === scope.streamId;
@@ -401,7 +422,9 @@ function ApprovalsPage() {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading approvals…</p>
         ) : !data?.length ? (
-          <p className="text-sm text-muted-foreground">No assessments were found for this school.</p>
+          <p className="text-sm text-muted-foreground">
+            No assessments were found for this school.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -420,7 +443,9 @@ function ApprovalsPage() {
               </thead>
               <tbody>
                 {groupedRows.map((group) => {
-                  const submittedCount = group.rows.filter((row) => row.status === "submitted").length;
+                  const submittedCount = group.rows.filter(
+                    (row) => row.status === "submitted",
+                  ).length;
                   const approveWholeGroup =
                     group.kind === "class" || group.kind === "stream" ? (
                       <button
@@ -429,7 +454,7 @@ function ApprovalsPage() {
                         disabled={
                           bulkApproveMutation.isPending ||
                           submittedCount === 0 ||
-                          !group.classId && !group.streamId
+                          (!group.classId && !group.streamId)
                         }
                         onClick={() =>
                           bulkApproveMutation.mutate({
@@ -467,7 +492,9 @@ function ApprovalsPage() {
                             <td className="py-3 pr-4">{row.stream_name}</td>
                             <td className="py-3 pr-4">{row.subject_name}</td>
                             <td className="py-3 pr-4">{row.term_name}</td>
-                            <td className="py-3 pr-4">{row.submitted_by_name ?? "Not submitted"}</td>
+                            <td className="py-3 pr-4">
+                              {row.submitted_by_name ?? "Not submitted"}
+                            </td>
                             <td className="py-3 pr-4">{total}</td>
                             <td className="py-3 pr-4">
                               <Pill
@@ -484,7 +511,9 @@ function ApprovalsPage() {
                                 {row.status}
                               </Pill>
                               {row.rejection_reason ? (
-                                <p className="mt-1 text-xs text-muted-foreground">{row.rejection_reason}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {row.rejection_reason}
+                                </p>
                               ) : null}
                             </td>
                             <td className="py-3 text-right">
@@ -493,19 +522,16 @@ function ApprovalsPage() {
                                   className={inputClass}
                                   value={row.status}
                                   onChange={(event) => {
-                              const nextStatus = event.target.value as
-                                | "draft"
-                                | "submitted"
-                                | "approved"
-                                | "rejected";
-                              if (nextStatus === row.status) return;
-                              actionMutation.mutate({
-                                assessmentId: row.id,
-                                status: nextStatus,
-                              });
-                            }}
-                            disabled={actionMutation.isPending}
-                          >
+                                    const nextStatus = event.target.value as
+                                      "draft" | "submitted" | "approved" | "rejected";
+                                    if (nextStatus === row.status) return;
+                                    actionMutation.mutate({
+                                      assessmentId: row.id,
+                                      status: nextStatus,
+                                    });
+                                  }}
+                                  disabled={actionMutation.isPending}
+                                >
                                   <option value="draft">Draft</option>
                                   <option value="submitted">Submitted</option>
                                   <option value="approved">Approved</option>

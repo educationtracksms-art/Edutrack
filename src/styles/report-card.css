@@ -605,7 +605,7 @@
     min-width: 30px;
     width: 4%;
   }
-.report-doc .student-info-table .value-lin {
+  .report-doc .student-info-table .value-lin {
     font-size: 12px;
     padding: 4px 3px;
     min-width: 40px;
@@ -882,4 +882,3 @@
     font-size: 12px;
   }
 }
-

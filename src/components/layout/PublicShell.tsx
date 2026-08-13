@@ -119,7 +119,11 @@ export function PublicShell({ children }: { children: ReactNode }) {
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.3fr_0.9fr_0.8fr]">
           <div>
             <Link to="/" className="flex items-center gap-3">
-              <img src={logoUrl} alt="Education Track SMS logo" className="h-10 w-10 object-cover" />
+              <img
+                src={logoUrl}
+                alt="Education Track SMS logo"
+                className="h-10 w-10 object-cover"
+              />
               <div>
                 <p className="text-sm font-semibold">Education Track SMS</p>
                 <p className="text-xs text-slate-400">Uganda School Management System</p>
@@ -166,7 +170,9 @@ export function PublicShell({ children }: { children: ReactNode }) {
           </div>
 
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-200">Stay connected</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-200">
+              Stay connected
+            </p>
             <div className="mt-4 flex gap-3">
               <a
                 href="https://www.facebook.com"

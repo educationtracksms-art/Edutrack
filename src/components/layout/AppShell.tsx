@@ -193,7 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!root) return;
 
     const decorateTables = () => {
-      root.querySelectorAll("table.w-full.text-sm").forEach((table) => {
+      root.querySelectorAll("table.w-full").forEach((table) => {
         table.setAttribute("data-responsive-table", "true");
 
         const headerLabels = Array.from(table.querySelectorAll("thead th")).map((header, index) => {
@@ -221,8 +221,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [isMobile, pathname]);
 
-  const items = NAV.filter((item) => hasAny(me?.roles, item.roles)).filter(
-    (item) => (item.module ? moduleMap?.get(item.module) ?? true : true),
+  const items = NAV.filter((item) => hasAny(me?.roles, item.roles)).filter((item) =>
+    item.module ? (moduleMap?.get(item.module) ?? true) : true,
   );
   const primaryRole = me?.roles?.[0];
   const sidebarWidth = labelsVisible ? "w-72" : "w-20";
@@ -244,7 +244,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-muted/40">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,oklch(0.98_0.02_255),var(--color-background)_45%)]">
       {!isMobile && (
         <aside
           className={cn(
@@ -412,7 +412,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           !isMobile && contentOffset,
         )}
       >
-        <header className="no-print sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+        <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/90 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-4 md:px-5">
             <div className="flex min-w-0 items-center gap-3">
               {isMobile ? (
@@ -441,7 +441,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-3 sm:p-4 md:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-3 sm:p-4 md:p-6">
+          <div className="mx-auto w-full max-w-[1800px]">{children}</div>
+        </main>
       </div>
     </div>
   );

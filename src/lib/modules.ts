@@ -37,4 +37,3 @@ export async function isModuleEnabled(
   const enabledModules = await getEnabledModuleMap(supabase, schoolId);
   return enabledModules.get(module) ?? true;
 }
-

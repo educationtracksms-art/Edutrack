@@ -29,8 +29,8 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
         <h1 className="text-xl font-semibold">Something went wrong</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          We hit an unexpected error while loading this page. Refreshing this route should not
-          loop anymore.
+          We hit an unexpected error while loading this page. Refreshing this route should not loop
+          anymore.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <button

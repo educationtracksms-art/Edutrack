@@ -37,10 +37,10 @@ function AboutPage() {
           place so staff can work faster and with fewer errors.
         </p>
         <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
-          The platform is designed to help schools move away from scattered paperwork and disconnected
-          spreadsheets. Instead, the people who manage the school can work from one system with
-          clearer records, better visibility, and a more organized workflow from admission through
-          reporting.
+          The platform is designed to help schools move away from scattered paperwork and
+          disconnected spreadsheets. Instead, the people who manage the school can work from one
+          system with clearer records, better visibility, and a more organized workflow from
+          admission through reporting.
         </p>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -62,8 +62,8 @@ function AboutPage() {
           <article className="rounded-2xl border border-border bg-card p-6">
             <h2 className="text-base font-semibold">Administration and oversight</h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Give school leaders a clearer view of what is happening across the institution so
-              they can follow progress, review activity, and make decisions with better information.
+              Give school leaders a clearer view of what is happening across the institution so they
+              can follow progress, review activity, and make decisions with better information.
             </p>
           </article>
         </div>
@@ -103,9 +103,9 @@ function AboutPage() {
             information needed for more detailed reporting.
           </p>
           <p className="mt-4 max-w-4xl text-sm leading-7 text-muted-foreground">
-            That means schools can better support Senior One to Senior Four learners, keep assessment
-            records more consistently, and stay aligned with modern teaching and reporting
-            expectations.
+            That means schools can better support Senior One to Senior Four learners, keep
+            assessment records more consistently, and stay aligned with modern teaching and
+            reporting expectations.
           </p>
         </div>
 
@@ -121,8 +121,8 @@ function AboutPage() {
             with the institution over time.
           </p>
           <p className="mt-4 max-w-4xl text-sm leading-7 text-muted-foreground">
-            The company&apos;s approach is to build tools that reduce repetitive work, support better
-            decision-making, and help schools keep pace with modern education requirements.
+            The company&apos;s approach is to build tools that reduce repetitive work, support
+            better decision-making, and help schools keep pace with modern education requirements.
           </p>
         </div>
 
@@ -131,7 +131,9 @@ function AboutPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">
               How schools use it
             </p>
-            <h2 className="mt-3 text-2xl font-bold tracking-tight">A workflow that fits the school year.</h2>
+            <h2 className="mt-3 text-2xl font-bold tracking-tight">
+              A workflow that fits the school year.
+            </h2>
             <p className="mt-4 text-sm leading-7 text-muted-foreground">
               Schools can use the system from the start of the academic year to the end of term:
               admit learners, place them into classes, manage subjects, record assessments, review
@@ -148,7 +150,9 @@ function AboutPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">
               Designed for growth
             </p>
-            <h2 className="mt-3 text-2xl font-bold tracking-tight">Flexible enough for single schools and multi-school groups.</h2>
+            <h2 className="mt-3 text-2xl font-bold tracking-tight">
+              Flexible enough for single schools and multi-school groups.
+            </h2>
             <p className="mt-4 text-sm leading-7 text-muted-foreground">
               Whether a school wants to organize one campus or a group of schools, the system is
               meant to scale with it. That makes it useful for heads, administrators, and educators

@@ -132,7 +132,9 @@ function StudentsPage() {
     if (isClassTeacher) {
       return filtered.filter((student) => {
         const inAssignedClass = assignedClass ? student.class_id === assignedClass.id : false;
-        const inAssignedStream = student.stream_id ? assignedStreamIds.has(student.stream_id) : false;
+        const inAssignedStream = student.stream_id
+          ? assignedStreamIds.has(student.stream_id)
+          : false;
         return inAssignedClass || inAssignedStream;
       });
     }
@@ -513,7 +515,9 @@ function StudentsPage() {
                       {canManageStudents ||
                       (isClassTeacher &&
                         (student.class_id === assignedClass?.id ||
-                          (student.stream_id ? assignedStreamIds.has(student.stream_id) : false))) ? (
+                          (student.stream_id
+                            ? assignedStreamIds.has(student.stream_id)
+                            : false))) ? (
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
@@ -606,7 +610,10 @@ function StudentsPage() {
               ))}
               {visibleStudents.length === 0 && (
                 <tr>
-                  <td colSpan={feesEnabled ? 8 : 7} className="py-6 text-center text-muted-foreground">
+                  <td
+                    colSpan={feesEnabled ? 8 : 7}
+                    className="py-6 text-center text-muted-foreground"
+                  >
                     No learners found.
                   </td>
                 </tr>

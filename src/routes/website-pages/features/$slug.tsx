@@ -40,7 +40,10 @@ function FeatureDetailPage() {
     <PublicShell>
       <section className="mx-auto max-w-4xl px-6 py-14">
         <div className="mb-6">
-          <Link to="/website-pages/features" className="text-sm font-medium text-accent hover:underline">
+          <Link
+            to="/website-pages/features"
+            className="text-sm font-medium text-accent hover:underline"
+          >
             Back to features
           </Link>
         </div>

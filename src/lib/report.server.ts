@@ -86,27 +86,30 @@ export async function buildReportCards(
 
   const termFilterId = term?.id ?? "00000000-0000-0000-0000-000000000000";
   const [{ data: assessments }, { data: attendance }, { data: activities }] = await Promise.all([
-      supabase
-        .from("assessments")
-        .select(
-          "student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
-        )
-        .in("student_id", ids)
-        .eq("term_id", termFilterId)
-        .eq("status", "approved"),
-      supabase
-        .from("attendance_summaries")
-        .select("*")
-        .in("student_id", ids)
-        .eq("term_id", termFilterId),
-      supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
-    ]);
+    supabase
+      .from("assessments")
+      .select(
+        "student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+      )
+      .in("student_id", ids)
+      .eq("term_id", termFilterId)
+      .eq("status", "approved"),
+    supabase
+      .from("attendance_summaries")
+      .select("*")
+      .in("student_id", ids)
+      .eq("term_id", termFilterId),
+    supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
+  ]);
 
-  const approvedAssessments = (assessments ?? []).filter((assessment: any) => assessment.status === "approved");
+  const approvedAssessments = (assessments ?? []).filter(
+    (assessment: any) => assessment.status === "approved",
+  );
 
   const feesEnabled = toggles?.find((t: any) => t.module === "fees")?.enabled ?? true;
   const attendanceEnabled = toggles?.find((t: any) => t.module === "attendance")?.enabled ?? true;
-  const reportCardsEnabled = toggles?.find((t: any) => t.module === "report_cards")?.enabled ?? true;
+  const reportCardsEnabled =
+    toggles?.find((t: any) => t.module === "report_cards")?.enabled ?? true;
   const coCurricularEnabled =
     toggles?.find((t: any) => t.module === "co_curricular")?.enabled ?? true;
 
@@ -141,7 +144,9 @@ export async function buildReportCards(
     const classTeacherName =
       (profiles ?? []).find((p: any) => p.id === cls?.class_teacher_id)?.full_name ?? "";
     const streamName = streams?.find((s: any) => s.id === student.stream_id)?.name ?? "";
-    const marks = approvedAssessments.filter((assessment: any) => assessment.student_id === student.id);
+    const marks = approvedAssessments.filter(
+      (assessment: any) => assessment.student_id === student.id,
+    );
     const assignedSubjectIds = new Set(
       (studentSubjects ?? [])
         .filter((assignment: any) => assignment.student_id === student.id)
@@ -194,10 +199,10 @@ export async function buildReportCards(
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
     const approvedAssessment = marks.find((mark: any) => mark.approved_by || mark.approved_at);
-    const approvedByName =
-      approvedAssessment?.approved_by
-        ? (profiles ?? []).find((p: any) => p.id === approvedAssessment.approved_by)?.full_name ?? ""
-        : "";
+    const approvedByName = approvedAssessment?.approved_by
+      ? ((profiles ?? []).find((p: any) => p.id === approvedAssessment.approved_by)?.full_name ??
+        "")
+      : "";
     const gradeCounts: Record<"A" | "B" | "C" | "D" | "E", number> = rows.reduce(
       (counts, row) => {
         const grade = row.grade.trim().toUpperCase() as keyof typeof counts;
@@ -212,10 +217,14 @@ export async function buildReportCards(
     const resolveComment = (role: "class_teacher" | "head_teacher") => {
       if (gradeCounts.A >= 6) return "Exceptional Performance.";
       if (role === "class_teacher") {
-        if (gradeCounts.A >= 4) return `${learnerName} demonstrates understanding of most competencies.`;
-        if (gradeCounts.C >= 4) return `${learnerName} is making good progress in grasping key competencies.`;
-        if (gradeCounts.B >= 3) return `${learnerName} has shown good performance but should consult to be exceptional.`;
-        if (gradeCounts.D >= 3) return `${learnerName} needs to improve on concentration in class and time management.`;
+        if (gradeCounts.A >= 4)
+          return `${learnerName} demonstrates understanding of most competencies.`;
+        if (gradeCounts.C >= 4)
+          return `${learnerName} is making good progress in grasping key competencies.`;
+        if (gradeCounts.B >= 3)
+          return `${learnerName} has shown good performance but should consult to be exceptional.`;
+        if (gradeCounts.D >= 3)
+          return `${learnerName} needs to improve on concentration in class and time management.`;
         if (gradeCounts.E >= 2) return `${learnerName} should consult teachers for better results.`;
         return "";
       }

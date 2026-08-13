@@ -148,8 +148,8 @@ function ContactPage() {
 
             <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
               Use this form to reach the team for support, onboarding, partnership questions, or
-              general product enquiries. This page uses the same form structure as the request access
-              page.
+              general product enquiries. This page uses the same form structure as the request
+              access page.
             </p>
 
             <form onSubmit={submit} className="mt-8 grid gap-4">

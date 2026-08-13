@@ -41,7 +41,9 @@ function SettingsPage() {
     if (me?.school) {
       supabase
         .from("schools")
-        .select("name, address, email, phone, motto, logo_url, report_payment_reference_type, report_account_number")
+        .select(
+          "name, address, email, phone, motto, logo_url, report_payment_reference_type, report_account_number",
+        )
         .eq("id", me.school.id)
         .maybeSingle()
         .then(({ data }) => {
@@ -53,10 +55,9 @@ function SettingsPage() {
               phone: data.phone ?? "",
               motto: data.motto ?? "",
               logo_url: data.logo_url ?? "",
-              report_payment_reference_type: (data.report_payment_reference_type as
-                | "schpay_code"
-                | "account_number"
-                | null) ?? "schpay_code",
+              report_payment_reference_type:
+                (data.report_payment_reference_type as "schpay_code" | "account_number" | null) ??
+                "schpay_code",
               report_account_number: data.report_account_number ?? "",
             });
         });
@@ -189,8 +190,7 @@ function SettingsPage() {
                   setForm({
                     ...form,
                     report_payment_reference_type: e.target.value as
-                      | "schpay_code"
-                      | "account_number",
+                      "schpay_code" | "account_number",
                   })
                 }
               >
@@ -203,9 +203,7 @@ function SettingsPage() {
                 <input
                   className={inputClass}
                   value={form.report_account_number}
-                  onChange={(e) =>
-                    setForm({ ...form, report_account_number: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, report_account_number: e.target.value })}
                   placeholder="Enter the account number to print on reports"
                 />
               </Field>

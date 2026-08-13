@@ -92,19 +92,23 @@ export const Route = createFileRoute("/_authenticated/assessments")({
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) throw redirect({ to: "/auth" });
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id")
+      .eq("id", userId)
+      .maybeSingle();
     if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "academics"))) {
       throw redirect({ to: "/dashboard" });
     }
   },
   head: () => ({
     meta: [
-      { title: "Assessments · EduTrack" },
+      { title: "Assessments - EduTrack" },
       {
         name: "description",
         content: "Capture formative and summative scores, submit for approval and lock results.",
       },
-      { property: "og:title", content: "Assessments · EduTrack" },
+      { property: "og:title", content: "Assessments - EduTrack" },
       {
         property: "og:description",
         content: "Teacher score entry with Director of Studies approval workflow.",
@@ -182,6 +186,7 @@ function AssessmentsPage() {
     formative: "",
     summative: "",
     teacherInitials: "",
+    missingMarks: false,
   });
   const [edits, setEdits] = useState<
     Record<string, { formative?: string; summative?: string; gradeDescriptor?: string }>
@@ -252,7 +257,9 @@ function AssessmentsPage() {
       }>;
       const gradingScaleRows = (gradingScalesResult.data ?? []) as GradingScaleRow[];
       const staffProfiles = (profilesResult.data ?? []) as StaffProfileRow[];
-      const staffProfileMap = new Map(staffProfiles.map((profile) => [profile.id, profile.full_name]));
+      const staffProfileMap = new Map(
+        staffProfiles.map((profile) => [profile.id, profile.full_name]),
+      );
       const teacherInitials = (profileResult.data?.initials ?? "") as string;
       const currentTermId = termRows.find((term) => term.is_current)?.id ?? termRows[0]?.id ?? "";
       const { data: coCurricularData } = currentTermId
@@ -313,33 +320,41 @@ function AssessmentsPage() {
     queryKey: ["assessment-table", schoolId],
     queryFn: async () => {
       const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
-      const [assessmentsResult, studentsResult, subjectsResult, termsResult, gradingScalesResult, profilesResult] =
-        (await Promise.all([
-          schoolQuery(supabase.from("assessments").select("*").order("created_at")),
-          schoolQuery(
-            supabase
-              .from("students")
-              .select("id, full_name, class_id, stream_id, status")
-              .eq("status", "active")
-              .order("full_name"),
-          ),
-          schoolQuery(supabase.from("subjects").select("id, name").order("position")),
-          schoolQuery(
-            supabase
-              .from("terms")
-              .select("id, name, is_current")
-              .order("start_date", { ascending: false }),
-          ),
-          schoolQuery(
-            supabase
-              .from("grading_scales")
-              .select("grade, min_score, max_score, descriptor")
-              .order("min_score", { ascending: false }),
-          ),
-          schoolQuery(supabase.from("profiles").select("id, full_name")),
-        ])) as any[];
+      const [
+        assessmentsResult,
+        studentsResult,
+        subjectsResult,
+        termsResult,
+        gradingScalesResult,
+        profilesResult,
+      ] = (await Promise.all([
+        schoolQuery(supabase.from("assessments").select("*").order("created_at")),
+        schoolQuery(
+          supabase
+            .from("students")
+            .select("id, full_name, class_id, stream_id, status")
+            .eq("status", "active")
+            .order("full_name"),
+        ),
+        schoolQuery(supabase.from("subjects").select("id, name").order("position")),
+        schoolQuery(
+          supabase
+            .from("terms")
+            .select("id, name, is_current")
+            .order("start_date", { ascending: false }),
+        ),
+        schoolQuery(
+          supabase
+            .from("grading_scales")
+            .select("grade, min_score, max_score, descriptor")
+            .order("min_score", { ascending: false }),
+        ),
+        schoolQuery(supabase.from("profiles").select("id, full_name")),
+      ])) as any[];
       const staffProfiles = (profilesResult.data ?? []) as StaffProfileRow[];
-      const staffProfileMap = new Map(staffProfiles.map((profile) => [profile.id, profile.full_name]));
+      const staffProfileMap = new Map(
+        staffProfiles.map((profile) => [profile.id, profile.full_name]),
+      );
 
       return {
         assessments: (assessmentsResult.data ?? []) as AssessmentRow[],
@@ -364,11 +379,13 @@ function AssessmentsPage() {
     return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
   }, [data, isClassTeacher, me?.userId]);
 
-  const className = (id: string | null) => data?.classes.find((item) => item.id === id)?.name ?? "—";
+  const className = (id: string | null) =>
+    data?.classes.find((item) => item.id === id)?.name ?? "—";
   const streamName = (id: string | null) =>
     data?.streams.find((item) => item.id === id)?.name ?? "—";
 
   const autoDescriptor = useMemo(() => {
+    if (entryForm.missingMarks) return "Missing marks";
     const total = Number(entryForm.formative || 0) + Number(entryForm.summative || 0);
     return (
       data?.gradingScales.find(
@@ -385,9 +402,7 @@ function AssessmentsPage() {
   const teacherAssessmentRows = useMemo(() => {
     if (!isTeacher || !tableData) return tableData?.assessments ?? [];
 
-    const studentById = new Map(
-      tableData.students.map((student) => [student.id, student]),
-    );
+    const studentById = new Map(tableData.students.map((student) => [student.id, student]));
     const currentTeacherId = me?.userId ?? "";
 
     return tableData.assessments.filter((assessment) => {
@@ -418,6 +433,7 @@ function AssessmentsPage() {
       formative: assessment.formative?.toString() ?? "",
       summative: assessment.summative?.toString() ?? "",
       teacherInitials: assessment.teacher_initials ?? "",
+      missingMarks: assessment.formative === null && assessment.summative === null,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -432,6 +448,7 @@ function AssessmentsPage() {
       summative: "",
       examType: "end_of_term",
       teacherInitials: "",
+      missingMarks: false,
     }));
   };
 
@@ -478,11 +495,7 @@ function AssessmentsPage() {
           const fullName = student.full_name.toLowerCase();
           const classLabel = className(student.class_id).toLowerCase();
           const streamLabel = streamName(student.stream_id).toLowerCase();
-          return (
-            fullName.includes(term) ||
-            classLabel.includes(term) ||
-            streamLabel.includes(term)
-          );
+          return fullName.includes(term) || classLabel.includes(term) || streamLabel.includes(term);
         })
       : teacherStudents;
 
@@ -617,7 +630,9 @@ function AssessmentsPage() {
   const rows = useMemo(() => {
     if (!tableData) return [];
     return teacherAssessmentRows
-      .filter((assessment) => (tableSubjectFilter ? assessment.subject_id === tableSubjectFilter : true))
+      .filter((assessment) =>
+        tableSubjectFilter ? assessment.subject_id === tableSubjectFilter : true,
+      )
       .filter((assessment) => (statusFilter ? assessment.status === statusFilter : true))
       .filter((assessment) => (termFilter ? assessment.term_id === termFilter : true))
       .map((assessment) => ({
@@ -626,9 +641,10 @@ function AssessmentsPage() {
           tableData.students.find((student: StudentRow) => student.id === assessment.student_id)
             ?.full_name ?? "—",
         subjectName:
-          tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
-          "—",
-        termName: tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
+          tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)
+            ?.name ?? "—",
+        termName:
+          tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
         gradeDescriptor: assessment.grade_descriptor ?? "",
       }));
   }, [statusFilter, tableData, tableSubjectFilter, teacherAssessmentRows, termFilter]);
@@ -697,13 +713,13 @@ function AssessmentsPage() {
               ? edit.formative === ""
                 ? null
                 : Number(edit.formative)
-              : existing?.formative ?? null,
+              : (existing?.formative ?? null),
           summative:
             edit.summative !== undefined
               ? edit.summative === ""
                 ? null
                 : Number(edit.summative)
-              : existing?.summative ?? null,
+              : (existing?.summative ?? null),
           teacherInitials: existing?.teacher_initials ?? null,
         },
       });
@@ -806,8 +822,10 @@ function AssessmentsPage() {
         termId: entryForm.termId || data?.currentTermId || "",
         examType: entryForm.examType,
         gradeDescriptor: autoDescriptor || null,
-        formative: entryForm.formative === "" ? null : Number(entryForm.formative),
-        summative: entryForm.summative === "" ? null : Number(entryForm.summative),
+        formative:
+          entryForm.missingMarks || entryForm.formative === "" ? null : Number(entryForm.formative),
+        summative:
+          entryForm.missingMarks || entryForm.summative === "" ? null : Number(entryForm.summative),
         teacherInitials: entryForm.teacherInitials || null,
       };
       if (editingAssessmentId) {
@@ -861,8 +879,14 @@ function AssessmentsPage() {
             termId,
             examType: entryForm.examType,
             gradeDescriptor: autoDescriptor || null,
-            formative: entryForm.formative === "" ? null : Number(entryForm.formative),
-            summative: entryForm.summative === "" ? null : Number(entryForm.summative),
+            formative:
+              entryForm.missingMarks || entryForm.formative === ""
+                ? null
+                : Number(entryForm.formative),
+            summative:
+              entryForm.missingMarks || entryForm.summative === ""
+                ? null
+                : Number(entryForm.summative),
             teacherInitials: entryForm.teacherInitials || null,
           },
         });
@@ -884,8 +908,14 @@ function AssessmentsPage() {
       await submitEntry({
         data: {
           assessmentId,
-          formative: entryForm.formative === "" ? null : Number(entryForm.formative),
-          summative: entryForm.summative === "" ? null : Number(entryForm.summative),
+          formative:
+            entryForm.missingMarks || entryForm.formative === ""
+              ? null
+              : Number(entryForm.formative),
+          summative:
+            entryForm.missingMarks || entryForm.summative === ""
+              ? null
+              : Number(entryForm.summative),
           teacherInitials: entryForm.teacherInitials || null,
         },
       });
@@ -900,6 +930,7 @@ function AssessmentsPage() {
         summative: "",
         examType: "end_of_term",
         teacherInitials: "",
+        missingMarks: false,
       }));
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -937,9 +968,7 @@ function AssessmentsPage() {
   const reviewClassOptions = data?.classes ?? [];
   const reviewStreamOptions = useMemo(
     () =>
-      (data?.streams ?? []).filter(
-        (stream) => !reviewClassId || stream.class_id === reviewClassId,
-      ),
+      (data?.streams ?? []).filter((stream) => !reviewClassId || stream.class_id === reviewClassId),
     [data?.streams, reviewClassId],
   );
   const dosSubmittedRows = useMemo(() => {
@@ -952,12 +981,13 @@ function AssessmentsPage() {
           tableData.students.find((student: StudentRow) => student.id === assessment.student_id)
             ?.full_name ?? "â€”",
         subjectName:
-          tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)?.name ??
-          "â€”",
-        termName: tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "â€”",
+          tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)
+            ?.name ?? "â€”",
+        termName:
+          tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "â€”",
         gradeDescriptor: assessment.grade_descriptor ?? "",
         submitted_by_name: assessment.submitted_by
-          ? tableData.staffProfileMap.get(assessment.submitted_by) ?? "Unknown teacher"
+          ? (tableData.staffProfileMap.get(assessment.submitted_by) ?? "Unknown teacher")
           : "Not submitted",
       }));
   }, [tableData]);
@@ -974,14 +1004,13 @@ function AssessmentsPage() {
       .map((row) => row.id);
   }, [data?.students, dosSubmittedRows, pendingIds, reviewClassId, reviewStreamId]);
   const scopedPendingRows = useMemo(() => {
-    return dosSubmittedRows
-      .filter((row) => {
-        const student = data?.students.find((item) => item.id === row.student_id);
-        if (!student) return false;
-        if (reviewClassId && student.class_id !== reviewClassId) return false;
-        if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
-        return true;
-      });
+    return dosSubmittedRows.filter((row) => {
+      const student = data?.students.find((item) => item.id === row.student_id);
+      if (!student) return false;
+      if (reviewClassId && student.class_id !== reviewClassId) return false;
+      if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
+      return true;
+    });
   }, [data?.students, dosSubmittedRows, reviewClassId, reviewStreamId]);
 
   const teacherBulkSubmitIds = useMemo(() => {
@@ -993,8 +1022,10 @@ function AssessmentsPage() {
       .filter((assessment) => {
         const student = data.students.find((item) => item.id === assessment.student_id);
         if (!student) return false;
-        if (selectedAllocation.class_id && student.class_id !== selectedAllocation.class_id) return false;
-        if (selectedAllocation.stream_id && student.stream_id !== selectedAllocation.stream_id) return false;
+        if (selectedAllocation.class_id && student.class_id !== selectedAllocation.class_id)
+          return false;
+        if (selectedAllocation.stream_id && student.stream_id !== selectedAllocation.stream_id)
+          return false;
         return true;
       })
       .map((assessment) => assessment.id);
@@ -1262,7 +1293,9 @@ function AssessmentsPage() {
                 max={20}
                 className={inputClass}
                 value={entryForm.formative}
-                onChange={(event) => setEntryForm({ ...entryForm, formative: event.target.value })}
+                onChange={(event) =>
+                  setEntryForm({ ...entryForm, formative: event.target.value, missingMarks: false })
+                }
               />
             </Field>
             <Field label="Summative / 80">
@@ -1273,13 +1306,38 @@ function AssessmentsPage() {
                 max={80}
                 className={inputClass}
                 value={entryForm.summative}
-                onChange={(event) => setEntryForm({ ...entryForm, summative: event.target.value })}
+                onChange={(event) =>
+                  setEntryForm({ ...entryForm, summative: event.target.value, missingMarks: false })
+                }
               />
+            </Field>
+            <Field label="Marks status">
+              <label className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={entryForm.missingMarks}
+                  onChange={(event) =>
+                    setEntryForm((current) => ({
+                      ...current,
+                      missingMarks: event.target.checked,
+                      formative: event.target.checked ? "" : current.formative,
+                      summative: event.target.checked ? "" : current.summative,
+                    }))
+                  }
+                />
+                <span className="text-sm">
+                  Mark as missing marks
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    Use this when the learner was selected but no score was available yet.
+                  </span>
+                </span>
+              </label>
             </Field>
             <Field label="Grade descriptor">
               <input className={inputClass} value={autoDescriptor} readOnly />
               <p className="mt-1 text-xs text-muted-foreground">
-                Auto-generated from the current score total.
+                Auto-generated from the current score total, or set to missing marks.
               </p>
             </Field>
             <Field label="Teacher initials">
@@ -1311,14 +1369,14 @@ function AssessmentsPage() {
                       : "Save draft"}
                 </Btn>
                 {editingAssessmentId ? (
-                <Btn
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setEditingAssessmentId("");
-                    resetEntryForm();
-                  }}
-                >
+                  <Btn
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingAssessmentId("");
+                      resetEntryForm();
+                    }}
+                  >
                     Cancel edit
                   </Btn>
                 ) : null}
@@ -1778,9 +1836,9 @@ function AssessmentsPage() {
                 <th className="pb-2">Formative (20)</th>
                 <th className="pb-2">Summative (80)</th>
                 <th className="pb-2">Total</th>
-                    <th className="pb-2">Status</th>
-                    <th className="pb-2" />
-                  </tr>
+                <th className="pb-2">Status</th>
+                <th className="pb-2" />
+              </tr>
             </thead>
             <tbody>
               {visibleRows.map(
@@ -1810,7 +1868,11 @@ function AssessmentsPage() {
                       <td>{row.subjectName}</td>
                       <td>{row.termName}</td>
                       <td>
-                        <Pill tone="muted">{gradeDescriptor || "—"}</Pill>
+                        <Pill tone={!row.formative && !row.summative ? "warning" : "muted"}>
+                          {!row.formative && !row.summative
+                            ? "Missing marks"
+                            : gradeDescriptor || "—"}
+                        </Pill>
                       </td>
                       <td>{row.submitted_by_name ?? "Not submitted"}</td>
                       <td>
@@ -1865,12 +1927,12 @@ function AssessmentsPage() {
                       </td>
                       <td className="text-right">
                         <div className="flex justify-end gap-2">
-                          {(!row.locked && (row.status === "draft" || row.status === "rejected")) ? (
+                          {!row.locked && (row.status === "draft" || row.status === "rejected") ? (
                             <Btn variant="ghost" onClick={() => loadAssessmentIntoForm(row.id)}>
                               Edit
                             </Btn>
                           ) : null}
-                          {(!row.locked && (row.status === "draft" || row.status === "rejected")) ? (
+                          {!row.locked && (row.status === "draft" || row.status === "rejected") ? (
                             <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
                               {row.status === "rejected" ? "Resubmit draft" : "Submit draft"}
                             </Btn>
@@ -1908,5 +1970,3 @@ function AssessmentsPage() {
     </div>
   );
 }
-
-

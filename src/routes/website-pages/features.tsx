@@ -361,7 +361,10 @@ export const Route = createFileRoute("/website-pages/features")({
           "Explore the core modules of Education Track SMS, including students, academics, assessments, attendance, reports, and school administration.",
       },
       { property: "og:title", content: "Features | Education Track SMS" },
-      { property: "og:description", content: "See the school modules and admin tools built into Education Track SMS." },
+      {
+        property: "og:description",
+        content: "See the school modules and admin tools built into Education Track SMS.",
+      },
     ],
   }),
   component: FeaturesPage,
@@ -400,7 +403,10 @@ function FeaturesPage() {
           ))}
         </div>
 
-        <Dialog open={activeFeature !== null} onOpenChange={(open) => !open && setActiveFeature(null)}>
+        <Dialog
+          open={activeFeature !== null}
+          onOpenChange={(open) => !open && setActiveFeature(null)}
+        >
           <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
             <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
               <X className="h-4 w-4" />

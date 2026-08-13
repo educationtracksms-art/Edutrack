@@ -27,7 +27,9 @@ function BlogsPage() {
     <PublicShell>
       <section className="mx-auto max-w-4xl px-6 py-14">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">Blogs</p>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight">Ideas and updates for better school systems.</h1>
+        <h1 className="mt-4 text-4xl font-bold tracking-tight">
+          Ideas and updates for better school systems.
+        </h1>
         <p className="mt-5 text-base leading-7 text-muted-foreground">
           This section can grow into your article hub for product updates, school workflow tips, and
           education technology insights.

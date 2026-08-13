@@ -1,7 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Bar,
@@ -21,7 +21,15 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
-import { Field, PageHeader, Panel, Pill, Stat, inputClass } from "@/components/ui-kit";
+import {
+  Field,
+  PageHeader,
+  Panel,
+  Pill,
+  ResponsiveTable,
+  Stat,
+  inputClass,
+} from "@/components/ui-kit";
 import {
   reviewAssessments,
   deleteReportCommentRule,
@@ -164,7 +172,12 @@ function Dashboard() {
   const isSuper = hasAny(me?.roles, ["super_admin"]);
 
   if (isUserLoading || dashboardLoading) {
-    return <DashboardLoadingState label="Loading dashboard" description="Preparing your account and school data." />;
+    return (
+      <DashboardLoadingState
+        label="Loading dashboard"
+        description="Preparing your account and school data."
+      />
+    );
   }
 
   if (isSuper) return <PlatformDashboard />;
@@ -173,13 +186,7 @@ function Dashboard() {
   );
 }
 
-function DashboardLoadingState({
-  label,
-  description,
-}: {
-  label: string;
-  description: string;
-}) {
+function DashboardLoadingState({ label, description }: { label: string; description: string }) {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
@@ -191,13 +198,7 @@ function DashboardLoadingState({
   );
 }
 
-function EmptyDashboardState({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
+function EmptyDashboardState({ title, description }: { title: string; description: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center">
       <h2 className="text-lg font-semibold">{title}</h2>
@@ -280,41 +281,79 @@ function PlatformDashboard() {
       </Panel>
 
       <Panel title="Tenants" className="mt-4">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">School</th>
-                <th className="pb-2">Code</th>
-                <th className="pb-2">Plan</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2">Staff</th>
-                <th className="pb-2">Learners</th>
-                <th className="pb-2">Logins (30d)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row) => (
-                <tr key={row.school_id} className="border-t border-border">
-                  <td className="py-2 font-medium">{row.school_name}</td>
-                  <td>{row.code}</td>
-                  <td className="capitalize">{row.subscription_plan}</td>
-                  <td className="capitalize">{row.status}</td>
-                  <td>{Number(row.user_count)}</td>
-                  <td>{Number(row.student_count)}</td>
-                  <td>{Number(row.logins_30d)}</td>
-                </tr>
-              ))}
-              {data.length === 0 && (
+        <ResponsiveTable
+          desktop={
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-muted-foreground">
-                    No schools yet.
-                  </td>
+                  <th className="pb-2">School</th>
+                  <th className="pb-2">Code</th>
+                  <th className="pb-2">Plan</th>
+                  <th className="pb-2">Status</th>
+                  <th className="pb-2">Staff</th>
+                  <th className="pb-2">Learners</th>
+                  <th className="pb-2">Logins (30d)</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {data.map((row) => (
+                  <tr key={row.school_id} className="border-t border-border">
+                    <td className="py-2 font-medium">{row.school_name}</td>
+                    <td>{row.code}</td>
+                    <td className="capitalize">{row.subscription_plan}</td>
+                    <td className="capitalize">{row.status}</td>
+                    <td>{Number(row.user_count)}</td>
+                    <td>{Number(row.student_count)}</td>
+                    <td>{Number(row.logins_30d)}</td>
+                  </tr>
+                ))}
+                {data.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                      No schools yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          }
+          mobile={
+            <>
+              {data.map((row) => (
+                <div
+                  key={row.school_id}
+                  className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{row.school_name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Code: {row.code}</p>
+                    </div>
+                    <Pill tone={row.status === "active" ? "success" : "muted"}>{row.status}</Pill>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-xl bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">Plan</p>
+                      <p className="mt-1 font-medium capitalize">{row.subscription_plan}</p>
+                    </div>
+                    <div className="rounded-xl bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">Staff</p>
+                      <p className="mt-1 font-medium">{Number(row.user_count)}</p>
+                    </div>
+                    <div className="rounded-xl bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">Learners</p>
+                      <p className="mt-1 font-medium">{Number(row.student_count)}</p>
+                    </div>
+                    <div className="rounded-xl bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">Logins</p>
+                      <p className="mt-1 font-medium">{Number(row.logins_30d)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          }
+        />
       </Panel>
     </div>
   );
@@ -329,7 +368,9 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   const subjectById = new Map(
     (data.subjects ?? []).map((subject: any) => [subject.id, subject.name as string]),
   );
-  const classById = new Map((data.classes ?? []).map((item: any) => [item.id, item.name as string]));
+  const classById = new Map(
+    (data.classes ?? []).map((item: any) => [item.id, item.name as string]),
+  );
   const streamById = new Map(
     (data.streams ?? []).map((item: any) => [
       item.id,
@@ -374,24 +415,26 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
       const rightStream = streamById.get(right.stream_id)?.name ?? "";
       if (leftStream !== rightStream) return leftStream.localeCompare(rightStream);
 
-      const leftSubject = scopeAllocations
-        .filter(
-          (allocation) =>
-            (!allocation.class_id || allocation.class_id === left.class_id) &&
-            (!allocation.stream_id || allocation.stream_id === left.stream_id),
-        )
-        .map((allocation) => subjectById.get(allocation.subject_id) ?? "")
-        .filter(Boolean)
-        .sort()[0] ?? "";
-      const rightSubject = scopeAllocations
-        .filter(
-          (allocation) =>
-            (!allocation.class_id || allocation.class_id === right.class_id) &&
-            (!allocation.stream_id || allocation.stream_id === right.stream_id),
-        )
-        .map((allocation) => subjectById.get(allocation.subject_id) ?? "")
-        .filter(Boolean)
-        .sort()[0] ?? "";
+      const leftSubject =
+        scopeAllocations
+          .filter(
+            (allocation) =>
+              (!allocation.class_id || allocation.class_id === left.class_id) &&
+              (!allocation.stream_id || allocation.stream_id === left.stream_id),
+          )
+          .map((allocation) => subjectById.get(allocation.subject_id) ?? "")
+          .filter(Boolean)
+          .sort()[0] ?? "";
+      const rightSubject =
+        scopeAllocations
+          .filter(
+            (allocation) =>
+              (!allocation.class_id || allocation.class_id === right.class_id) &&
+              (!allocation.stream_id || allocation.stream_id === right.stream_id),
+          )
+          .map((allocation) => subjectById.get(allocation.subject_id) ?? "")
+          .filter(Boolean)
+          .sort()[0] ?? "";
       if (leftSubject !== rightSubject) return leftSubject.localeCompare(rightSubject);
 
       return left.full_name.localeCompare(right.full_name);
@@ -409,10 +452,10 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   const assignedLabels = scopeAllocations.map((allocation) => {
     const subjectName = subjectById.get(allocation.subject_id) ?? "Subject";
     const allocationClassName = allocation.class_id
-      ? classById.get(allocation.class_id) ?? "Any class"
+      ? (classById.get(allocation.class_id) ?? "Any class")
       : "Any class";
     const allocationStreamName = allocation.stream_id
-      ? streamById.get(allocation.stream_id)?.name ?? "Any stream"
+      ? (streamById.get(allocation.stream_id)?.name ?? "Any stream")
       : "Any stream";
     return `${subjectName} - ${allocationClassName}${allocation.stream_id ? ` - ${allocationStreamName}` : ""}`;
   });
@@ -722,7 +765,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["enabled-modules", schoolId] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard", schoolId, false, isTeacher, me?.userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", schoolId, false, isTeacher, me?.userId],
+      });
       toast.success("Module setting updated");
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -736,7 +781,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const timetableEnabled = moduleMap?.get("timetable") ?? true;
-  const classById = new Map((data?.classes ?? []).map((item: any) => [item.id, item.name as string]));
+  const classById = new Map(
+    (data?.classes ?? []).map((item: any) => [item.id, item.name as string]),
+  );
   const streamById = new Map(
     (data?.streams ?? []).map((item: any) => [
       item.id,
@@ -838,33 +885,28 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     : 0;
   const pendingStudents = data.students.filter((student) => student.status === "pending");
   const assessmentsTable = data.assessments.map((assessment) => ({
-      ...assessment,
-      studentName:
-        data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "Unknown",
-      subjectName:
-        data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "Unknown",
-      termName: data.terms.find((term) => term.id === assessment.term_id)?.name ?? "Unknown",
-      gradeDescriptor: assessment.grade_descriptor ?? "Unknown",
-      total: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
-    }));
+    ...assessment,
+    studentName:
+      data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "Unknown",
+    subjectName:
+      data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "Unknown",
+    termName: data.terms.find((term) => term.id === assessment.term_id)?.name ?? "Unknown",
+    gradeDescriptor: assessment.grade_descriptor ?? "Unknown",
+    total: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
+  }));
   const reviewClassOptions = data.classes ?? [];
-  const reviewStreamOptions = useMemo(
-    () =>
-      (data.streams ?? []).filter((stream) => !reviewClassId || stream.class_id === reviewClassId),
-    [data.streams, reviewClassId],
+  const reviewStreamOptions = (data.streams ?? []).filter(
+    (stream) => !reviewClassId || stream.class_id === reviewClassId,
   );
-  const reviewedAssessments = useMemo(() => {
-    return assessmentsTable.filter((assessment) => {
-      const student = data.students.find((item) => item.id === assessment.student_id);
-      if (!student) return false;
-      if (reviewClassId && student.class_id !== reviewClassId) return false;
-      if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
-      return true;
-    });
-  }, [assessmentsTable, data.students, reviewClassId, reviewStreamId]);
-  const submittedAssessments = useMemo(
-    () => reviewedAssessments.filter((assessment) => assessment.status === "submitted"),
-    [reviewedAssessments],
+  const reviewedAssessments = assessmentsTable.filter((assessment) => {
+    const student = data.students.find((item) => item.id === assessment.student_id);
+    if (!student) return false;
+    if (reviewClassId && student.class_id !== reviewClassId) return false;
+    if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
+    return true;
+  });
+  const submittedAssessments = reviewedAssessments.filter(
+    (assessment) => assessment.status === "submitted",
   );
 
   const trend = ["Term I", "Term II", "Term III"].map((term, index) => ({
@@ -872,9 +914,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     average: Math.round(Math.max(0, average - (2 - index) * 3) * 10) / 10,
   }));
   const resolveClassName = (classId: string | null | undefined) =>
-    classId ? classById.get(classId) ?? "Unknown" : "Unknown";
+    classId ? (classById.get(classId) ?? "Unknown") : "Unknown";
   const resolveStreamName = (streamId: string | null | undefined) =>
-    streamId ? streamById.get(streamId)?.name ?? "Unknown" : "Unknown";
+    streamId ? (streamById.get(streamId)?.name ?? "Unknown") : "Unknown";
   const moduleOptions = [
     { key: "academics", label: "Academics" },
     { key: "attendance", label: "Attendance" },
@@ -952,14 +994,24 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
             />
             <Stat
               label="Draft"
-              value={timetableSummary ? timetableSummary.entries.filter((entry) => !entry.is_published).length : 0}
+              value={
+                timetableSummary
+                  ? timetableSummary.entries.filter((entry) => !entry.is_published).length
+                  : 0
+              }
             />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/timetable" className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-accent-foreground">
+            <Link
+              to="/timetable"
+              className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-accent-foreground"
+            >
               Open timetable builder
             </Link>
-            <Link to="/academics" className="rounded-md border border-border px-3.5 py-2 text-sm font-medium hover:bg-muted">
+            <Link
+              to="/academics"
+              className="rounded-md border border-border px-3.5 py-2 text-sm font-medium hover:bg-muted"
+            >
               Review teaching allocations
             </Link>
           </div>
@@ -1045,83 +1097,155 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
             Review submitted marks only. Rejected marks return to teachers for correction and
             approved marks stay locked.
           </p>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4">
             {submittedAssessments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No student marks are available.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="pb-2">Learner</th>
-                    <th className="pb-2">Class</th>
-                    <th className="pb-2">Stream</th>
-                    <th className="pb-2">Subject</th>
-                    <th className="pb-2">Term</th>
-                    <th className="pb-2">Grade descriptor</th>
-                    <th className="pb-2">Formative</th>
-                    <th className="pb-2">Summative</th>
-                    <th className="pb-2">Total</th>
-                    <th className="pb-2">Status</th>
-                    <th className="pb-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {(reviewClassId || reviewStreamId ? submittedAssessments : submittedAssessments).map(
-                    (assessment) => (
-                      <tr key={assessment.id} className="border-t border-border">
-                      <td className="py-2 pr-4 font-medium">{assessment.studentName}</td>
-                      <td className="py-2 pr-4">
-                        {resolveClassName(
-                          data.students.find((item) => item.id === assessment.student_id)?.class_id ??
-                            null,
-                        )}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {resolveStreamName(
-                          data.students.find((item) => item.id === assessment.student_id)?.stream_id ??
-                            null,
-                        )}
-                      </td>
-                      <td className="py-2 pr-4">{assessment.subjectName}</td>
-                      <td className="py-2 pr-4">{assessment.termName}</td>
-                      <td className="py-2 pr-4">{assessment.gradeDescriptor}</td>
-                      <td className="py-2 pr-4">{Number(assessment.formative ?? 0)}</td>
-                      <td className="py-2 pr-4">{Number(assessment.summative ?? 0)}</td>
-                      <td className="py-2 pr-4 font-semibold">{assessment.total}</td>
-                      <td className="py-2 pr-4">
-                        <Pill tone="warning">{assessment.status}</Pill>
-                      </td>
-                      <td className="py-2 text-right">
-                        <select
-                          className={inputClass}
-                          value={assessment.status}
-                          onChange={(event) => {
-                            const nextStatus = event.target.value as
-                              | "draft"
-                              | "submitted"
-                              | "approved"
-                              | "rejected";
-                            if (nextStatus === assessment.status) return;
-                            updateStatus.mutate({
-                              assessmentId: assessment.id,
-                              status: nextStatus,
-                              reason:
-                                nextStatus === "rejected" ? "Returned for correction" : undefined,
-                            });
-                          }}
-                          disabled={updateStatus.isPending}
-                        >
-                          <option value="draft">Draft</option>
-                          <option value="submitted">Submitted</option>
-                          <option value="approved">Approved</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
-                        </td>
+              <ResponsiveTable
+                desktop={
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="pb-2">Learner</th>
+                        <th className="pb-2">Class</th>
+                        <th className="pb-2">Stream</th>
+                        <th className="pb-2">Subject</th>
+                        <th className="pb-2">Term</th>
+                        <th className="pb-2">Grade descriptor</th>
+                        <th className="pb-2">Formative</th>
+                        <th className="pb-2">Summative</th>
+                        <th className="pb-2">Total</th>
+                        <th className="pb-2">Status</th>
+                        <th className="pb-2" />
                       </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {submittedAssessments.map((assessment) => (
+                        <tr key={assessment.id} className="border-t border-border">
+                          <td className="py-2 pr-4 font-medium">{assessment.studentName}</td>
+                          <td className="py-2 pr-4">
+                            {resolveClassName(
+                              data.students.find((item) => item.id === assessment.student_id)
+                                ?.class_id ?? null,
+                            )}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {resolveStreamName(
+                              data.students.find((item) => item.id === assessment.student_id)
+                                ?.stream_id ?? null,
+                            )}
+                          </td>
+                          <td className="py-2 pr-4">{assessment.subjectName}</td>
+                          <td className="py-2 pr-4">{assessment.termName}</td>
+                          <td className="py-2 pr-4">{assessment.gradeDescriptor}</td>
+                          <td className="py-2 pr-4">{Number(assessment.formative ?? 0)}</td>
+                          <td className="py-2 pr-4">{Number(assessment.summative ?? 0)}</td>
+                          <td className="py-2 pr-4 font-semibold">{assessment.total}</td>
+                          <td className="py-2 pr-4">
+                            <Pill tone="warning">{assessment.status}</Pill>
+                          </td>
+                          <td className="py-2 text-right">
+                            <select
+                              className={inputClass}
+                              value={assessment.status}
+                              onChange={(event) => {
+                                const nextStatus = event.target.value as
+                                  "draft" | "submitted" | "approved" | "rejected";
+                                if (nextStatus === assessment.status) return;
+                                updateStatus.mutate({
+                                  assessmentId: assessment.id,
+                                  status: nextStatus,
+                                  reason:
+                                    nextStatus === "rejected"
+                                      ? "Returned for correction"
+                                      : undefined,
+                                });
+                              }}
+                              disabled={updateStatus.isPending}
+                            >
+                              <option value="draft">Draft</option>
+                              <option value="submitted">Submitted</option>
+                              <option value="approved">Approved</option>
+                              <option value="rejected">Rejected</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                }
+                mobile={
+                  <>
+                    {submittedAssessments.map((assessment) => (
+                      <div
+                        key={assessment.id}
+                        className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{assessment.studentName}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {assessment.subjectName} · {assessment.termName}
+                            </p>
+                          </div>
+                          <Pill tone="warning">{assessment.status}</Pill>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                          <div className="rounded-xl bg-muted/50 p-3">
+                            <p className="text-xs text-muted-foreground">Class</p>
+                            <p className="mt-1 font-medium">
+                              {resolveClassName(
+                                data.students.find((item) => item.id === assessment.student_id)
+                                  ?.class_id ?? null,
+                              )}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-muted/50 p-3">
+                            <p className="text-xs text-muted-foreground">Stream</p>
+                            <p className="mt-1 font-medium">
+                              {resolveStreamName(
+                                data.students.find((item) => item.id === assessment.student_id)
+                                  ?.stream_id ?? null,
+                              )}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-muted/50 p-3">
+                            <p className="text-xs text-muted-foreground">Total</p>
+                            <p className="mt-1 font-medium">{assessment.total}</p>
+                          </div>
+                          <div className="rounded-xl bg-muted/50 p-3">
+                            <p className="text-xs text-muted-foreground">Grade</p>
+                            <p className="mt-1 font-medium">{assessment.gradeDescriptor}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <select
+                            className={inputClass}
+                            value={assessment.status}
+                            onChange={(event) => {
+                              const nextStatus = event.target.value as
+                                "draft" | "submitted" | "approved" | "rejected";
+                              if (nextStatus === assessment.status) return;
+                              updateStatus.mutate({
+                                assessmentId: assessment.id,
+                                status: nextStatus,
+                                reason:
+                                  nextStatus === "rejected" ? "Returned for correction" : undefined,
+                              });
+                            }}
+                            disabled={updateStatus.isPending}
+                          >
+                            <option value="draft">Draft</option>
+                            <option value="submitted">Submitted</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                }
+              />
             )}
           </div>
         </Panel>
@@ -1214,8 +1338,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                   className="flex justify-between gap-4 border-b border-border pb-2 last:border-none"
                 >
                   <span>
-                    <span className="font-medium">{item.user_name ?? "System"}</span> - 
-                    {item.action}
+                    <span className="font-medium">{item.user_name ?? "System"}</span> -{item.action}
                   </span>
                   <span className="text-muted-foreground">
                     {new Date(item.created_at).toLocaleString()}
@@ -1229,4 +1352,3 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     </div>
   );
 }
-
