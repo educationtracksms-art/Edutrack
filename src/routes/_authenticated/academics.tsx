@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
@@ -33,12 +33,12 @@ export const Route = createFileRoute("/_authenticated/academics")({
   },
   head: () => ({
     meta: [
-      { title: "Academic setup · EduTrack" },
+      { title: "Academic setup Â· EduTrack" },
       {
         name: "description",
         content: "Create classes, streams and subjects, then allocate teachers to each stream.",
       },
-      { property: "og:title", content: "Academic setup · EduTrack" },
+      { property: "og:title", content: "Academic setup Â· EduTrack" },
       {
         property: "og:description",
         content: "Director of Studies control over classes, streams, subjects and teaching loads.",
@@ -59,8 +59,35 @@ function AcademicsPage() {
   const deleteGradingScaleFn = useServerFn(deleteGradingScale);
   const saveIdentifierScaleFn = useServerFn(upsertIdentifierScale);
   const deleteIdentifierScaleFn = useServerFn(deleteIdentifierScale);
+  const canEditNextTermDate = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
 
-  const [classForm, setClassForm] = useState({ name: "", level: "", class_teacher_id: "" });
+  type AcademicClass = {
+    id: string;
+    name: string;
+    level: number | null;
+    education_level: string | null;
+    class_teacher_id: string | null;
+  };
+  type AcademicStream = {
+    id: string;
+    name: string;
+    class_id: string;
+    stream_teacher_id: string | null;
+  };
+  type AcademicSubject = {
+    id: string;
+    name: string;
+    code: string | null;
+    category: string | null;
+    position: number | null;
+  };
+
+  const [classForm, setClassForm] = useState({
+    name: "",
+    level: "",
+    education_level: "ordinary",
+    class_teacher_id: "",
+  });
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "", stream_teacher_id: "" });
   const [subjectForm, setSubjectForm] = useState({
     name: "",
@@ -84,11 +111,39 @@ function AcademicsPage() {
     start_date: "",
     end_date: "",
   });
+  const [nextTermBeginsOn, setNextTermBeginsOn] = useState("");
+
+  type QueryResult<T> = {
+    data: T | null;
+    error: { message: string } | null;
+  };
 
   const { data } = useQuery({
     queryKey: ["academics", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
+      const schoolQuery = <T extends { eq(column: string, value: string): T }>(query: T) =>
+        schoolId ? query.eq("school_id", schoolId) : query;
+      const safeLoad = async <T,>(promise: Promise<QueryResult<T>>, fallback: T) => {
+        const result = await promise;
+        if (result.error) return fallback;
+        return (result.data ?? fallback) as T;
+      };
+      const loadIdentifierScales = async () => {
+        const primary = await schoolQuery(
+          supabase
+            .from("grading_identifier_scales")
+            .select("*")
+            .order("identifier", { ascending: false }),
+        );
+        if (!primary.error) return primary.data ?? [];
+
+        const fallback = await schoolQuery(
+          supabase.from("identifier_scales").select("*").order("identifier", { ascending: false }),
+        );
+        return fallback.error ? [] : (fallback.data ?? []);
+      };
+
       const [
         classes,
         streams,
@@ -100,33 +155,58 @@ function AcademicsPage() {
         terms,
         scales,
         identifierScales,
+        school,
       ] = await Promise.all([
-        supabase.from("classes").select("*").order("level", { ascending: true }).order("name"),
-        supabase.from("streams").select("*").order("name"),
-        supabase.from("subjects").select("*").order("position"),
-        supabase.from("teacher_allocations").select("*"),
-        supabase.from("profiles").select("id, full_name, initials").order("full_name"),
-        supabase.from("user_roles").select("user_id, role"),
-        supabase.from("academic_years").select("*").eq("school_id", schoolId!).order("name"),
-        supabase
-          .from("terms")
-          .select("*")
-          .eq("school_id", schoolId!)
-          .order("start_date", { ascending: true })
-          .order("name"),
-        supabase
-          .from("grading_scales")
-          .select("*")
-          .eq("school_id", schoolId!)
-          .order("min_score", { ascending: false }),
-        supabase
-          .from("grading_identifier_scales")
-          .select("*")
-          .eq("school_id", schoolId!)
-          .order("identifier", { ascending: false }),
+        safeLoad(
+          schoolQuery(
+            supabase
+              .from("classes")
+              .select("*")
+              .order("education_level", { ascending: false })
+              .order("level", { ascending: true })
+              .order("name"),
+          ),
+          [],
+        ),
+        safeLoad(schoolQuery(supabase.from("streams").select("*").order("name")), []),
+        safeLoad(schoolQuery(supabase.from("subjects").select("*").order("position")), []),
+        safeLoad(schoolQuery(supabase.from("teacher_allocations").select("*")), []),
+        safeLoad(
+          schoolQuery(
+            supabase.from("profiles").select("id, full_name, initials").order("full_name"),
+          ),
+          [],
+        ),
+        safeLoad(schoolQuery(supabase.from("user_roles").select("user_id, role")), []),
+        safeLoad(schoolQuery(supabase.from("academic_years").select("*").order("name")), []),
+        safeLoad(
+          schoolQuery(
+            supabase
+              .from("terms")
+              .select("*")
+              .order("start_date", { ascending: true })
+              .order("name"),
+          ),
+          [],
+        ),
+        safeLoad(
+          schoolQuery(
+            supabase.from("grading_scales").select("*").order("min_score", { ascending: false }),
+          ),
+          [],
+        ),
+        loadIdentifierScales(),
+        safeLoad(
+          supabase
+            .from("schools")
+            .select("report_next_term_begins_on")
+            .eq("id", schoolId!)
+            .maybeSingle(),
+          null,
+        ),
       ]);
       const teachingRoles = new Set(
-        (roles.data ?? [])
+        roles
           .filter((r) =>
             [
               "class_teacher",
@@ -139,25 +219,58 @@ function AcademicsPage() {
           .map((r) => r.user_id),
       );
       return {
-        classes: classes.data ?? [],
-        streams: streams.data ?? [],
-        subjects: subjects.data ?? [],
-        allocations: allocations.data ?? [],
-        teachers: (teachers.data ?? []).filter((t) => teachingRoles.has(t.id)),
-        academicYears: academicYears.data ?? [],
-        terms: terms.data ?? [],
-        gradingScales: scales.data ?? [],
-        identifierScales: identifierScales.data ?? [],
+        classes,
+        streams,
+        subjects,
+        allocations,
+        teachers: teachers.filter((t) => teachingRoles.has(t.id)),
+        academicYears,
+        terms,
+        gradingScales: scales,
+        identifierScales,
+        school,
       };
     },
   });
+
+  useEffect(() => {
+    setNextTermBeginsOn(data?.school?.report_next_term_begins_on ?? "");
+  }, [data?.school?.report_next_term_begins_on]);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["academics", schoolId] });
   }
 
+  const saveNextTermDate = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!canEditNextTermDate) throw new Error("You are not allowed to update this date");
+      const { error: updateError } = await supabase
+        .from("schools")
+        .update({ report_next_term_begins_on: nextTermBeginsOn || null })
+        .eq("id", schoolId);
+      if (updateError) throw new Error(updateError.message);
+
+      const { data: savedRow, error: readError } = await supabase
+        .from("schools")
+        .select("report_next_term_begins_on")
+        .eq("id", schoolId)
+        .maybeSingle();
+      if (readError) throw new Error(readError.message);
+      if ((savedRow?.report_next_term_begins_on ?? null) !== (nextTermBeginsOn || null)) {
+        throw new Error("The next term date was not saved");
+      }
+    },
+    onSuccess: () => {
+      toast.success("Next term date updated");
+      queryClient.invalidateQueries({ queryKey: ["current-user"] });
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   function resetClassForm() {
-    setClassForm({ name: "", level: "", class_teacher_id: "" });
+    setClassForm({ name: "", level: "", education_level: "ordinary", class_teacher_id: "" });
     setEditingClassId(null);
   }
 
@@ -229,6 +342,7 @@ function AcademicsPage() {
         school_id: schoolId,
         name: classForm.name.trim(),
         level: classForm.level ? Number(classForm.level) : null,
+        education_level: classForm.education_level,
         class_teacher_id: classForm.class_teacher_id || null,
       });
       if (error) throw new Error(error.message);
@@ -250,6 +364,7 @@ function AcademicsPage() {
         .update({
           name: classForm.name.trim(),
           level: classForm.level ? Number(classForm.level) : null,
+          education_level: classForm.education_level,
           class_teacher_id: classForm.class_teacher_id || null,
         })
         .eq("id", editingClassId)
@@ -493,12 +608,19 @@ function AcademicsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const [gradingForm, setGradingForm] = useState({
+  const [oLevelGradingForm, setOLevelGradingForm] = useState({
     id: "",
     grade: "",
     min_score: "",
     max_score: "",
     grade_descriptor: "",
+  });
+  const [aLevelGradingForm, setALevelGradingForm] = useState({
+    id: "",
+    grade: "",
+    min_score: "",
+    max_score: "",
+    points: "",
   });
   const [identifierForm, setIdentifierForm] = useState({
     id: "",
@@ -508,36 +630,75 @@ function AcademicsPage() {
     descriptor: "",
   });
 
-  const saveGradingScale = useMutation({
+  const saveOLevelGradingScale = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
-      const minScore = Number(gradingForm.min_score);
-      const maxScore = Number(gradingForm.max_score);
-      if (!gradingForm.grade.trim()) throw new Error("Enter a grade label");
-      if (!gradingForm.grade_descriptor.trim()) throw new Error("Enter a grade descriptor");
+      const minScore = Number(oLevelGradingForm.min_score);
+      const maxScore = Number(oLevelGradingForm.max_score);
+      if (!oLevelGradingForm.grade.trim()) throw new Error("Enter a grade label");
+      if (!oLevelGradingForm.grade_descriptor.trim()) throw new Error("Enter a grade descriptor");
       if (Number.isNaN(minScore) || Number.isNaN(maxScore))
         throw new Error("Enter valid score boundaries");
       if (maxScore < minScore) throw new Error("Maximum score must be greater than minimum score");
       await saveGradingScaleFn({
         data: {
-          id: gradingForm.id || null,
+          id: oLevelGradingForm.id || null,
           schoolId,
-          grade: gradingForm.grade,
+          educationLevel: "ordinary",
+          grade: oLevelGradingForm.grade,
           minScore,
           maxScore,
-          gradeDescriptor: gradingForm.grade_descriptor ?? "",
+          gradeDescriptor: oLevelGradingForm.grade_descriptor ?? "",
+          points: null,
         },
       });
     },
     onSuccess: () => {
-      setGradingForm({
+      setOLevelGradingForm({
         id: "",
         grade: "",
         min_score: "",
         max_score: "",
         grade_descriptor: "",
       });
-      toast.success("Grading criteria saved");
+      toast.success("O-level grading criteria saved");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const saveALevelGradingScale = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      const minScore = Number(aLevelGradingForm.min_score);
+      const maxScore = Number(aLevelGradingForm.max_score);
+      const points = Number(aLevelGradingForm.points);
+      if (!aLevelGradingForm.grade.trim()) throw new Error("Enter a grade label");
+      if (Number.isNaN(minScore) || Number.isNaN(maxScore) || Number.isNaN(points))
+        throw new Error("Enter valid score boundaries and points");
+      if (maxScore < minScore) throw new Error("Maximum score must be greater than minimum score");
+      await saveGradingScaleFn({
+        data: {
+          id: aLevelGradingForm.id || null,
+          schoolId,
+          educationLevel: "advanced",
+          grade: aLevelGradingForm.grade,
+          minScore,
+          maxScore,
+          gradeDescriptor: "",
+          points,
+        },
+      });
+    },
+    onSuccess: () => {
+      setALevelGradingForm({
+        id: "",
+        grade: "",
+        min_score: "",
+        max_score: "",
+        points: "",
+      });
+      toast.success("A-level grading criteria saved");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -591,25 +752,39 @@ function AcademicsPage() {
     );
   }
 
-  const className = (id: string | null) =>
-    data?.classes.find((c) => c.id === id)?.name ?? "All classes";
+  const className = (id: string | null) => {
+    const item = data?.classes.find((c) => c.id === id);
+    return item ? classLabel(item) : "All classes";
+  };
   const streamName = (id: string | null) =>
     data?.streams.find((s) => s.id === id)?.name ?? "All streams";
   const classTeacherName = (id: string | null) =>
     data?.teachers.find((t) => t.id === id)?.full_name ?? "Not assigned";
-  const subjectName = (id: string) => data?.subjects.find((s) => s.id === id)?.name ?? "—";
-  const teacherName = (id: string) => data?.teachers.find((t) => t.id === id)?.full_name ?? "—";
+  const subjectName = (id: string) => data?.subjects.find((s) => s.id === id)?.name ?? "â€”";
+  const teacherName = (id: string) => data?.teachers.find((t) => t.id === id)?.full_name ?? "â€”";
 
-  function startEditingClass(item: any) {
+  function startEditingClass(item: AcademicClass) {
     setEditingClassId(item.id);
     setClassForm({
       name: item.name ?? "",
       level: item.level?.toString() ?? "",
+      education_level: item.education_level ?? "ordinary",
       class_teacher_id: item.class_teacher_id ?? "",
     });
   }
 
-  function startEditingStream(item: any) {
+  const levelLabel = (value: string | null | undefined) =>
+    value === "advanced" ? "Advanced Level" : "Ordinary Level";
+
+  const classLabel = (item: AcademicClass) => {
+    const parts = [item.name, levelLabel(item.education_level)];
+    if (item.level !== null && item.level !== undefined && item.level !== "") {
+      parts.push(`Order ${item.level}`);
+    }
+    return parts.join(" · ");
+  };
+
+  function startEditingStream(item: AcademicStream) {
     setEditingStreamId(item.id);
     setStreamForm({
       name: item.name ?? "",
@@ -618,7 +793,7 @@ function AcademicsPage() {
     });
   }
 
-  function startEditingSubject(item: any) {
+  function startEditingSubject(item: AcademicSubject) {
     setEditingSubjectId(item.id);
     setSubjectForm({
       name: item.name ?? "",
@@ -634,6 +809,38 @@ function AcademicsPage() {
         title="Academic setup"
         description="Classes, streams, subjects and teaching allocations for the current academic year."
       />
+
+      <Panel title="Next term date" className="mb-4">
+        <form
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveNextTermDate.mutate();
+          }}
+        >
+          <Field label="Next term begins on">
+            <input
+              type="date"
+              className={inputClass}
+              value={nextTermBeginsOn}
+              disabled={!canEditNextTermDate}
+              onChange={(e) => setNextTermBeginsOn(e.target.value)}
+            />
+          </Field>
+          <Btn
+            type="submit"
+            variant="accent"
+            disabled={!canEditNextTermDate || saveNextTermDate.isPending}
+          >
+            Save date
+          </Btn>
+        </form>
+        {!canEditNextTermDate && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Only the Director of Studies, Head Teacher, or Deputy Head Teacher can edit this date.
+          </p>
+        )}
+      </Panel>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Classes">
@@ -653,7 +860,17 @@ function AcademicsPage() {
                 onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
               />
             </Field>
-            <Field label="Level (order)">
+            <Field label="Level type">
+              <select
+                className={inputClass}
+                value={classForm.education_level}
+                onChange={(e) => setClassForm({ ...classForm, education_level: e.target.value })}
+              >
+                <option value="ordinary">Ordinary Level</option>
+                <option value="advanced">Advanced Level</option>
+              </select>
+            </Field>
+            <Field label="Class order">
               <input
                 type="number"
                 className={inputClass}
@@ -697,7 +914,7 @@ function AcademicsPage() {
                 className="flex items-center justify-between rounded-md border border-border px-3 py-2"
               >
                 <span>
-                  <span className="font-medium">{item.name}</span>
+                  <span className="font-medium">{classLabel(item)}</span>
                   <span className="ml-2 text-xs text-muted-foreground">
                     Class teacher: {classTeacherName(item.class_teacher_id)}
                   </span>
@@ -747,7 +964,7 @@ function AcademicsPage() {
                 <option value="">Select class</option>
                 {(data?.classes ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {classLabel(c)}
                   </option>
                 ))}
               </select>
@@ -798,7 +1015,7 @@ function AcademicsPage() {
                 className="flex items-center justify-between rounded-md border border-border px-3 py-2"
               >
                 <span>
-                  {className(item.class_id)} · <span className="font-medium">{item.name}</span>
+                  {className(item.class_id)} Â· <span className="font-medium">{item.name}</span>
                 </span>
                 <div className="flex items-center gap-2">
                   <Btn variant="ghost" onClick={() => startEditingStream(item)}>
@@ -1020,20 +1237,22 @@ function AcademicsPage() {
         </Panel>
       </div>
 
-      <Panel title="Grading criteria" className="mt-4">
+      <Panel title="O-level grading criteria" className="mt-4">
         <form
           className="mb-4 grid gap-3 lg:grid-cols-4"
           onSubmit={(e) => {
             e.preventDefault();
-            saveGradingScale.mutate();
+            saveOLevelGradingScale.mutate();
           }}
         >
           <Field label="Grade">
             <input
               required
               className={inputClass}
-              value={gradingForm.grade}
-              onChange={(e) => setGradingForm({ ...gradingForm, grade: e.target.value })}
+              value={oLevelGradingForm.grade}
+              onChange={(e) =>
+                setOLevelGradingForm({ ...oLevelGradingForm, grade: e.target.value })
+              }
               placeholder="A"
             />
           </Field>
@@ -1042,8 +1261,10 @@ function AcademicsPage() {
               required
               type="number"
               className={inputClass}
-              value={gradingForm.min_score}
-              onChange={(e) => setGradingForm({ ...gradingForm, min_score: e.target.value })}
+              value={oLevelGradingForm.min_score}
+              onChange={(e) =>
+                setOLevelGradingForm({ ...oLevelGradingForm, min_score: e.target.value })
+              }
               placeholder="80"
             />
           </Field>
@@ -1052,8 +1273,10 @@ function AcademicsPage() {
               required
               type="number"
               className={inputClass}
-              value={gradingForm.max_score}
-              onChange={(e) => setGradingForm({ ...gradingForm, max_score: e.target.value })}
+              value={oLevelGradingForm.max_score}
+              onChange={(e) =>
+                setOLevelGradingForm({ ...oLevelGradingForm, max_score: e.target.value })
+              }
               placeholder="100"
             />
           </Field>
@@ -1062,23 +1285,26 @@ function AcademicsPage() {
               <input
                 required
                 className={inputClass}
-                value={gradingForm.grade_descriptor}
+                value={oLevelGradingForm.grade_descriptor}
                 onChange={(e) =>
-                  setGradingForm({ ...gradingForm, grade_descriptor: e.target.value })
+                  setOLevelGradingForm({
+                    ...oLevelGradingForm,
+                    grade_descriptor: e.target.value,
+                  })
                 }
                 placeholder="Achieved MOST or ALL competencies exceedingly well."
               />
             </Field>
           </div>
           <div className="flex items-end gap-2 lg:col-span-4">
-            <Btn type="submit" variant="accent" disabled={saveGradingScale.isPending}>
-              {gradingForm.id ? "Save changes" : "Add grade"}
+            <Btn type="submit" variant="accent" disabled={saveOLevelGradingScale.isPending}>
+              {oLevelGradingForm.id ? "Save changes" : "Add O-level grade"}
             </Btn>
-            {gradingForm.id && (
+            {oLevelGradingForm.id && (
               <Btn
                 variant="ghost"
                 onClick={() =>
-                  setGradingForm({
+                  setOLevelGradingForm({
                     id: "",
                     grade: "",
                     min_score: "",
@@ -1103,7 +1329,10 @@ function AcademicsPage() {
               </tr>
             </thead>
             <tbody>
-              {(data?.gradingScales ?? []).map((item) => (
+              {(
+                (data?.gradingScales ?? []).filter((item) => item.education_level !== "advanced") ??
+                []
+              ).map((item) => (
                 <tr key={item.id} className="border-t border-border align-top">
                   <td className="py-2 font-medium">{item.grade}</td>
                   <td>
@@ -1115,7 +1344,7 @@ function AcademicsPage() {
                       <Btn
                         variant="ghost"
                         onClick={() =>
-                          setGradingForm({
+                          setOLevelGradingForm({
                             id: item.id,
                             grade: item.grade,
                             min_score: String(item.min_score),
@@ -1133,10 +1362,149 @@ function AcademicsPage() {
                   </td>
                 </tr>
               ))}
-              {(data?.gradingScales ?? []).length === 0 && (
+              {(
+                (data?.gradingScales ?? []).filter((item) => item.education_level !== "advanced") ??
+                []
+              ).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                    No grading criteria set yet.
+                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                    No O-level grading criteria set yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <Panel title="A-level grading criteria" className="mt-4">
+        <form
+          className="mb-4 grid gap-3 lg:grid-cols-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveALevelGradingScale.mutate();
+          }}
+        >
+          <Field label="Grade">
+            <input
+              required
+              className={inputClass}
+              value={aLevelGradingForm.grade}
+              onChange={(e) =>
+                setALevelGradingForm({ ...aLevelGradingForm, grade: e.target.value })
+              }
+              placeholder="B"
+            />
+          </Field>
+          <Field label="Min score">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={aLevelGradingForm.min_score}
+              onChange={(e) =>
+                setALevelGradingForm({ ...aLevelGradingForm, min_score: e.target.value })
+              }
+              placeholder="70"
+            />
+          </Field>
+          <Field label="Max score">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={aLevelGradingForm.max_score}
+              onChange={(e) =>
+                setALevelGradingForm({ ...aLevelGradingForm, max_score: e.target.value })
+              }
+              placeholder="79"
+            />
+          </Field>
+          <Field label="Points">
+            <input
+              required
+              type="number"
+              className={inputClass}
+              value={aLevelGradingForm.points}
+              onChange={(e) =>
+                setALevelGradingForm({ ...aLevelGradingForm, points: e.target.value })
+              }
+              placeholder="4"
+            />
+          </Field>
+          <div className="flex items-end gap-2 lg:col-span-4">
+            <Btn type="submit" variant="accent" disabled={saveALevelGradingScale.isPending}>
+              {aLevelGradingForm.id ? "Save changes" : "Add A-level grade"}
+            </Btn>
+            {aLevelGradingForm.id && (
+              <Btn
+                variant="ghost"
+                onClick={() =>
+                  setALevelGradingForm({
+                    id: "",
+                    grade: "",
+                    min_score: "",
+                    max_score: "",
+                    points: "",
+                  })
+                }
+              >
+                Cancel
+              </Btn>
+            )}
+          </div>
+        </form>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="pb-2">Grade</th>
+                <th className="pb-2">Score range</th>
+                <th className="pb-2">Points</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                (data?.gradingScales ?? []).filter((item) => item.education_level === "advanced") ??
+                []
+              ).map((item) => (
+                <tr key={item.id} className="border-t border-border align-top">
+                  <td className="py-2 font-medium">{item.grade}</td>
+                  <td>
+                    {item.min_score} - {item.max_score}
+                  </td>
+                  <td>{item.points ?? "—"}</td>
+                  <td className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Btn
+                        variant="ghost"
+                        onClick={() =>
+                          setALevelGradingForm({
+                            id: item.id,
+                            grade: item.grade,
+                            min_score: String(item.min_score),
+                            max_score: String(item.max_score),
+                            points: String(item.points ?? ""),
+                          })
+                        }
+                      >
+                        Edit
+                      </Btn>
+                      <Btn variant="ghost" onClick={() => removeScale.mutate(item.id)}>
+                        Delete
+                      </Btn>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {(
+                (data?.gradingScales ?? []).filter((item) => item.education_level === "advanced") ??
+                []
+              ).length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                    No A-level grading criteria set yet.
                   </td>
                 </tr>
               )}

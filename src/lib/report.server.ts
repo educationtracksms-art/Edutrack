@@ -38,7 +38,10 @@ export async function buildReportCards(
     { data: terms },
   ] = await Promise.all([
     supabase.from("schools").select("*").eq("id", schoolId).maybeSingle(),
-    supabase.from("classes").select("id, name, class_teacher_id").eq("school_id", schoolId),
+    supabase
+      .from("classes")
+      .select("id, name, class_teacher_id, education_level")
+      .eq("school_id", schoolId),
     supabase.from("profiles").select("id, full_name, school_id").eq("school_id", schoolId),
     supabase.from("user_roles").select("user_id, role"),
     supabase.from("streams").select("id, name").eq("school_id", schoolId),
@@ -54,7 +57,7 @@ export async function buildReportCards(
       .eq("school_id", schoolId),
     supabase
       .from("grading_scales")
-      .select("*")
+      .select("grade, min_score, max_score, grade_descriptor, education_level, points")
       .eq("school_id", schoolId)
       .order("min_score", { ascending: false }),
     supabase
@@ -117,17 +120,20 @@ export async function buildReportCards(
     throw new Error("Report cards module is disabled");
   }
 
-  const gradeFor = (total: number) => {
+  const gradeFor = (total: number, educationLevel: "ordinary" | "advanced") => {
     const hit = (scales ?? []).find(
-      (s: any) => total >= Number(s.min_score) && total <= Number(s.max_score),
+      (s: any) =>
+        (s.education_level ?? "ordinary") === educationLevel &&
+        total >= Number(s.min_score) &&
+        total <= Number(s.max_score),
     );
     return hit
       ? {
           grade: hit.grade as string,
           descriptor: hit.grade_descriptor as string,
-          identifier: Number(hit.identifier),
+          points: Number(hit.points ?? 0),
         }
-      : { grade: "", descriptor: "", identifier: 0 };
+      : { grade: "", descriptor: "", points: 0 };
   };
 
   const schoolInitials =
@@ -140,6 +146,7 @@ export async function buildReportCards(
 
   return students.map((student: any) => {
     const cls = classes?.find((c: any) => c.id === student.class_id);
+    const educationLevel = (cls?.education_level ?? "ordinary") as "ordinary" | "advanced";
     const className = cls?.name ?? "";
     const classTeacherName =
       (profiles ?? []).find((p: any) => p.id === cls?.class_teacher_id)?.full_name ?? "";
@@ -168,14 +175,14 @@ export async function buildReportCards(
             summative: "",
             total: "",
             grade: "",
-            descriptor: "",
+            gradeDetail: "",
             teacher: mark?.teacher_initials ?? "",
           };
         }
         const formative = Number(mark.formative ?? 0);
         const summative = Number(mark.summative ?? 0);
         const total = Math.round((formative + summative) * 10) / 10;
-        const g = gradeFor(total);
+        const g = gradeFor(total, educationLevel);
         totals.push(total);
         return {
           subject: subject.name,
@@ -183,7 +190,12 @@ export async function buildReportCards(
           summative: fmt(summative),
           total: fmt(total),
           grade: g.grade,
-          gradeDescriptor: g.descriptor,
+          gradeDetail:
+            educationLevel === "advanced"
+              ? g.points > 0
+                ? String(g.points)
+                : g.descriptor
+              : g.descriptor,
           teacher: mark.teacher_initials ?? "",
         };
       });
@@ -191,10 +203,16 @@ export async function buildReportCards(
     const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
     const identifierAvg = (average / 100) * 3;
     const identifierDescriptor =
-      (identifierScales ?? []).find(
-        (scale: any) =>
-          identifierAvg >= Number(scale.min_score) && identifierAvg <= Number(scale.max_score),
-      )?.descriptor ?? descriptorFromIdentifier(identifierAvg);
+      educationLevel === "advanced"
+        ? ""
+        : ((identifierScales ?? []).find(
+            (scale: any) =>
+              identifierAvg >= Number(scale.min_score) && identifierAvg <= Number(scale.max_score),
+          )?.descriptor ?? descriptorFromIdentifier(identifierAvg));
+    const totalPoints =
+      educationLevel === "advanced"
+        ? rows.reduce((sum, row) => sum + (Number(row.gradeDetail) || 0), 0)
+        : 0;
 
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
@@ -250,7 +268,9 @@ export async function buildReportCards(
           (school?.report_payment_reference_type as "schpay_code" | "account_number" | null) ??
           "schpay_code",
         reportAccountNumber: school?.report_account_number ?? null,
+        reportNextTermBeginsOn: school?.report_next_term_begins_on ?? null,
       },
+      gradingLevel: educationLevel,
       title: `LEARNER'S END OF ${term?.name ?? ""} REPORT CARD ${yearName}`
         .replace(/\s+/g, " ")
         .trim(),
@@ -276,7 +296,8 @@ export async function buildReportCards(
       rows,
       overall: {
         average: `${average.toFixed(1)}%`,
-        identifier: identifierAvg.toFixed(2),
+        metricLabel: educationLevel === "advanced" ? "Points" : "Identifier out of three",
+        metric: educationLevel === "advanced" ? String(totalPoints) : identifierAvg.toFixed(2),
         descriptor: identifierDescriptor,
       },
       approval: approvedAssessment
@@ -292,11 +313,20 @@ export async function buildReportCards(
               : "",
           }
         : null,
-      gradeKeys: (identifierScales ?? []).map((scale: any) => ({
-        identifier: String(scale.identifier),
-        range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,
-        descriptor: scale.descriptor as string,
-      })),
+      gradeKeys:
+        educationLevel === "advanced"
+          ? (scales ?? [])
+              .filter((scale: any) => (scale.education_level ?? "ordinary") === "advanced")
+              .map((scale: any) => ({
+                identifier: scale.grade as string,
+                range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,
+                detail: String(Number(scale.points ?? 0)),
+              }))
+          : (identifierScales ?? []).map((scale: any) => ({
+              identifier: String(scale.identifier),
+              range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,
+              detail: scale.descriptor as string,
+            })),
       coCurricular: {
         games: coCurricularEnabled ? (activity?.games ?? "") : "",
         clubs: coCurricularEnabled ? (activity?.clubs ?? "") : "",

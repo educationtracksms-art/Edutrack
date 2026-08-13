@@ -44,19 +44,19 @@ ALTER TABLE public.library_loans ENABLE ROW LEVEL SECURITY;
 CREATE POLICY library_books_read ON public.library_books FOR SELECT TO authenticated
   USING (school_id = public.current_school_id());
 CREATE POLICY library_books_write ON public.library_books FOR INSERT TO authenticated
-  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_school());
+  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_library());
 CREATE POLICY library_books_update ON public.library_books FOR UPDATE TO authenticated
-  USING (school_id = public.current_school_id() AND public.can_manage_school())
-  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_school());
+  USING (school_id = public.current_school_id() AND public.can_manage_library())
+  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_library());
 CREATE POLICY library_books_delete ON public.library_books FOR DELETE TO authenticated
-  USING (school_id = public.current_school_id() AND public.can_manage_school());
+  USING (school_id = public.current_school_id() AND public.can_manage_library());
 
 CREATE POLICY library_loans_read ON public.library_loans FOR SELECT TO authenticated
   USING (school_id = public.current_school_id());
 CREATE POLICY library_loans_write ON public.library_loans FOR INSERT TO authenticated
-  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_school());
+  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_library());
 CREATE POLICY library_loans_update ON public.library_loans FOR UPDATE TO authenticated
-  USING (school_id = public.current_school_id() AND public.can_manage_school())
-  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_school());
+  USING (school_id = public.current_school_id() AND public.can_manage_library())
+  WITH CHECK (school_id = public.current_school_id() AND public.can_manage_library());
 CREATE POLICY library_loans_delete ON public.library_loans FOR DELETE TO authenticated
-  USING (school_id = public.current_school_id() AND public.can_manage_school());
+  USING (school_id = public.current_school_id() AND public.can_manage_library());

@@ -5,6 +5,8 @@ export type AppRole =
   | "super_admin"
   | "school_admin"
   | "head_teacher"
+  | "bursar"
+  | "hod"
   | "deputy_head_teacher"
   | "dos"
   | "class_teacher"
@@ -15,6 +17,8 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "Super Admin",
   school_admin: "School Administrator",
   head_teacher: "Head Teacher",
+  bursar: "Bursar",
+  hod: "Head of Department",
   deputy_head_teacher: "Deputy Head Teacher",
   dos: "Director of Studies",
   class_teacher: "Class Teacher",

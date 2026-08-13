@@ -9,7 +9,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { isModuleEnabled } from "@/lib/modules";
 import { supabase } from "@/integrations/supabase/client";
 
-type ClassRow = { id: string; name: string };
+type ClassRow = { id: string; name: string; education_level: string | null };
 type StreamRow = { id: string; name: string; class_id: string | null };
 type TermRow = { id: string; name: string; is_current: boolean; academic_year_id: string | null };
 type StudentRow = {
@@ -29,6 +29,9 @@ type GradingScaleRow = {
   grade: string;
   min_score: number;
   max_score: number;
+  descriptor: string;
+  education_level: string | null;
+  points: number | null;
 };
 
 const ALLOWED_ROLES = ["head_teacher", "deputy_head_teacher", "dos", "class_teacher"] as const;
@@ -78,7 +81,11 @@ function MarksheetPage() {
   const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["marksheet-classes", schoolId],
     queryFn: async () =>
-      (await schoolQuery(supabase.from("classes").select("id, name").order("name"))).data ?? [],
+      (
+        await schoolQuery(
+          supabase.from("classes").select("id, name, education_level").order("name"),
+        )
+      ).data ?? [],
   });
 
   const { data: streams } = useQuery<StreamRow[]>({
@@ -149,7 +156,7 @@ function MarksheetPage() {
         await schoolQuery(
           supabase
             .from("grading_scales")
-            .select("grade, min_score, max_score")
+            .select("grade, min_score, max_score, descriptor, education_level, points")
             .eq("school_id", schoolId)
             .order("min_score", { ascending: false }),
         )
@@ -170,8 +177,16 @@ function MarksheetPage() {
     [classId, streams],
   );
 
-  const selectedClassName = useMemo(
-    () => classes?.find((item) => item.id === classId)?.name ?? "",
+  const selectedClassLevel = useMemo<"ordinary" | "advanced">(() => {
+    const item = classes?.find((row) => row.id === classId);
+    return item?.education_level === "advanced" ? "advanced" : "ordinary";
+  }, [classId, classes]);
+  const classLabel = (item: ClassRow | undefined) => {
+    if (!item) return "";
+    return `${item.name}${item.education_level === "advanced" ? " (A-Level)" : " (O-Level)"}`;
+  };
+  const selectedClassLabel = useMemo(
+    () => classLabel(classes?.find((item) => item.id === classId)) ?? "",
     [classId, classes],
   );
   const selectedStreamName = useMemo(
@@ -180,11 +195,11 @@ function MarksheetPage() {
   );
   const title = useMemo(() => {
     const parts = [];
-    if (selectedClassName) parts.push(selectedClassName);
+    if (selectedClassLabel) parts.push(selectedClassLabel);
     if (selectedStreamName) parts.push(selectedStreamName);
     const base = parts.length ? `${parts.join(" ")} Mark Sheet` : "Mark Sheet";
     return base.replace(/\s+/g, " ").trim();
-  }, [selectedClassName, selectedStreamName]);
+  }, [selectedClassLabel, selectedStreamName]);
 
   const assessmentLookup = useMemo(() => {
     const map = new Map<string, AssessmentRow>();
@@ -194,11 +209,16 @@ function MarksheetPage() {
     return map;
   }, [assessments]);
 
-  const gradeFor = (total: number) => {
+  const gradeFor = (total: number, level: "ordinary" | "advanced") => {
     const hit = (gradingScales ?? []).find(
-      (scale) => total >= Number(scale.min_score) && total <= Number(scale.max_score),
+      (scale) =>
+        (scale.education_level ?? "ordinary") === level &&
+        total >= Number(scale.min_score) &&
+        total <= Number(scale.max_score),
     );
-    return hit?.grade ?? "";
+    return level === "advanced"
+      ? (hit?.points?.toString() ?? hit?.grade ?? "")
+      : (hit?.grade ?? "");
   };
 
   const scoreStats = useMemo(() => {
@@ -225,9 +245,10 @@ function MarksheetPage() {
     workbook.title = title;
     const titleText = title;
     const scopeText =
-      selectedClassName && selectedStreamName
-        ? `${selectedClassName} / ${selectedStreamName}`
-        : selectedClassName || selectedStreamName;
+      selectedClassLabel && selectedStreamName
+        ? `${selectedClassLabel} / ${selectedStreamName}`
+        : selectedClassLabel || selectedStreamName;
+    const gradeHeader = selectedClassLevel === "advanced" ? "Points" : "Grade";
     const infoText = [
       `Term: ${terms?.find((term) => term.id === selectedTermId)?.name ?? "N/A"}`,
       scopeText ? `Scope: ${scopeText}` : "",
@@ -241,7 +262,7 @@ function MarksheetPage() {
     const headerRow2: string[] = ["Learner"];
     for (const subject of subjects) {
       headerRow1.push(subject.name, "", "", "");
-      headerRow2.push("Formative", "Summative", "Total", "Grade");
+      headerRow2.push("Formative", "Summative", "Total", gradeHeader);
     }
 
     const sheet = workbook.addWorksheet("Marksheet", {
@@ -437,7 +458,7 @@ function MarksheetPage() {
               <option value="">All classes</option>
               {(classes ?? []).map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name}
+                  {classLabel(item)}
                 </option>
               ))}
             </select>
@@ -511,7 +532,7 @@ function MarksheetPage() {
                       <span>Formative</span>
                       <span>Summative</span>
                       <span>Total</span>
-                      <span>Grade</span>
+                      <span>{selectedClassLevel === "advanced" ? "Points" : "Grade"}</span>
                     </div>
                   </th>
                 ))}
@@ -528,7 +549,7 @@ function MarksheetPage() {
                     const formative = record?.formative ?? "";
                     const summative = record?.summative ?? "";
                     const gradeTotal = Number(formative || 0) + Number(summative || 0);
-                    const grade = gradeFor(gradeTotal);
+                    const grade = gradeFor(gradeTotal, selectedClassLevel);
                     const total =
                       record?.formative != null || record?.summative != null
                         ? Number(record.formative ?? 0) + Number(record.summative ?? 0)

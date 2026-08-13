@@ -52,9 +52,21 @@ type StudentRow = {
 };
 
 type SubjectRow = { id: string; name: string };
-type GradingScaleRow = { grade: string; min_score: number; max_score: number; descriptor: string };
+type GradingScaleRow = {
+  grade: string;
+  min_score: number;
+  max_score: number;
+  descriptor: string;
+  education_level: string | null;
+  points: number | null;
+};
 type TermRow = { id: string; name: string; is_current: boolean };
-type ClassRow = { id: string; name: string; class_teacher_id: string | null };
+type ClassRow = {
+  id: string;
+  name: string;
+  class_teacher_id: string | null;
+  education_level: string | null;
+};
 type StreamRow = { id: string; name: string; class_id: string | null };
 type ProfileRow = { initials: string | null };
 type StaffProfileRow = { id: string; full_name: string };
@@ -229,7 +241,12 @@ function AssessmentsPage() {
             .select("id, name, is_current")
             .order("start_date", { ascending: false }),
         ),
-        schoolQuery(supabase.from("classes").select("id, name, class_teacher_id").order("name")),
+        schoolQuery(
+          supabase
+            .from("classes")
+            .select("id, name, class_teacher_id, education_level")
+            .order("name"),
+        ),
         schoolQuery(supabase.from("streams").select("id, name, class_id").order("name")),
         schoolId && me?.userId
           ? supabase
@@ -241,7 +258,7 @@ function AssessmentsPage() {
         schoolQuery(
           supabase
             .from("grading_scales")
-            .select("grade, min_score, max_score, descriptor")
+            .select("grade, min_score, max_score, descriptor, education_level, points")
             .order("min_score", { ascending: false }),
         ),
         schoolQuery(supabase.from("profiles").select("id, full_name")),
@@ -294,7 +311,7 @@ function AssessmentsPage() {
               subject_id: allocation.subject_id,
               class_id: allocation.class_id ?? null,
               stream_id: allocation.stream_id ?? null,
-              label: `${subjectName} · ${className}${allocation.stream_id ? ` · ${streamName}` : ""}`,
+              label: `${subjectName} Ãƒâ€šÃ‚Â· ${className}${allocation.stream_id ? ` Ãƒâ€šÃ‚Â· ${streamName}` : ""}`,
             };
           })
         : [];
@@ -385,20 +402,35 @@ function AssessmentsPage() {
     return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
   }, [data, isClassTeacher, me?.userId]);
 
-  const className = (id: string | null) =>
-    data?.classes.find((item) => item.id === id)?.name ?? "—";
+  const className = (id: string | null) => {
+    const item = data?.classes.find((row) => row.id === id);
+    if (!item) return "Ã¢â‚¬â€";
+    return `${item.name}${item.education_level === "advanced" ? " (A-Level)" : " (O-Level)"}`;
+  };
   const streamName = (id: string | null) =>
-    data?.streams.find((item) => item.id === id)?.name ?? "—";
+    data?.streams.find((item) => item.id === id)?.name ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â";
+
+  const selectedStudentLevel = useMemo<"ordinary" | "advanced">(() => {
+    if (!entryForm.studentId) return "ordinary";
+    const student = data?.students.find((item) => item.id === entryForm.studentId);
+    const studentClass = data?.classes.find((item) => item.id === student?.class_id);
+    return studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
+  }, [data?.classes, data?.students, entryForm.studentId]);
 
   const autoDescriptor = useMemo(() => {
     if (entryForm.missingMarks) return "Missing marks";
     const total = Number(entryForm.formative || 0) + Number(entryForm.summative || 0);
-    return (
-      data?.gradingScales.find(
-        (scale) => total >= Number(scale.min_score) && total <= Number(scale.max_score),
-      )?.descriptor ?? ""
+    const hit = data?.gradingScales.find(
+      (scale) =>
+        (scale.education_level ?? "ordinary") === selectedStudentLevel &&
+        total >= Number(scale.min_score) &&
+        total <= Number(scale.max_score),
     );
-  }, [data?.gradingScales, entryForm.formative, entryForm.summative]);
+    if (selectedStudentLevel === "advanced") {
+      return hit?.points != null ? String(hit.points) : (hit?.descriptor ?? "");
+    }
+    return hit?.descriptor ?? "";
+  }, [data?.gradingScales, entryForm.formative, entryForm.summative, selectedStudentLevel]);
 
   const assessmentLookup = useMemo(
     () => new Map(tableData?.assessments.map((assessment) => [assessment.id, assessment]) ?? []),
@@ -642,18 +674,38 @@ function AssessmentsPage() {
       )
       .filter((assessment) => (statusFilter ? assessment.status === statusFilter : true))
       .filter((assessment) => (termFilter ? assessment.term_id === termFilter : true))
-      .map((assessment) => ({
-        ...assessment,
-        studentName:
-          tableData.students.find((student: StudentRow) => student.id === assessment.student_id)
-            ?.full_name ?? "—",
-        subjectName:
-          tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)
-            ?.name ?? "—",
-        termName:
-          tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "—",
-        gradeDescriptor: assessment.grade_descriptor ?? "",
-      }));
+      .map((assessment) => {
+        const student = tableData.students.find(
+          (item: StudentRow) => item.id === assessment.student_id,
+        );
+        const studentClass = tableData.classes.find(
+          (item: ClassRow) => item.id === student?.class_id,
+        );
+        const studentLevel = studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
+        const total = Number(assessment.formative || 0) + Number(assessment.summative || 0);
+        const hit = tableData.gradingScales.find(
+          (scale) =>
+            (scale.education_level ?? "ordinary") === studentLevel &&
+            total >= Number(scale.min_score) &&
+            total <= Number(scale.max_score),
+        );
+        return {
+          ...assessment,
+          studentName: student?.full_name ?? "Ã¢â‚¬â€",
+          subjectName:
+            tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)
+              ?.name ?? "Ã¢â‚¬â€",
+          termName:
+            tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ??
+            "Ã¢â‚¬â€",
+          gradeDescriptor:
+            studentLevel === "advanced"
+              ? hit?.points != null
+                ? String(hit.points)
+                : (assessment.grade_descriptor ?? "")
+              : (hit?.descriptor ?? assessment.grade_descriptor ?? ""),
+        };
+      });
   }, [statusFilter, tableData, tableSubjectFilter, teacherAssessmentRows, termFilter]);
 
   const visibleRows = useMemo(() => {
@@ -986,12 +1038,13 @@ function AssessmentsPage() {
         ...assessment,
         studentName:
           tableData.students.find((student: StudentRow) => student.id === assessment.student_id)
-            ?.full_name ?? "â€”",
+            ?.full_name ?? "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â",
         subjectName:
           tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)
-            ?.name ?? "â€”",
+            ?.name ?? "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â",
         termName:
-          tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ?? "â€”",
+          tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ??
+          "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â",
         gradeDescriptor: assessment.grade_descriptor ?? "",
         submitted_by_name: assessment.submitted_by
           ? (tableData.staffProfileMap.get(assessment.submitted_by) ?? "Unknown teacher")
@@ -1615,12 +1668,18 @@ function AssessmentsPage() {
                           return (
                             <tr key={student.id} className="border-t border-border align-top">
                               <td className="py-3 pr-4 font-medium">{student.full_name}</td>
-                              <td className="py-3 pr-4">{savedCoCurricular.games || "—"}</td>
-                              <td className="py-3 pr-4">{savedCoCurricular.clubs || "—"}</td>
-                              <td className="py-3 pr-4">{savedCoCurricular.projects || "—"}</td>
+                              <td className="py-3 pr-4">
+                                {savedCoCurricular.games || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                              </td>
+                              <td className="py-3 pr-4">
+                                {savedCoCurricular.clubs || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                              </td>
+                              <td className="py-3 pr-4">
+                                {savedCoCurricular.projects || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                              </td>
                               <td className="py-3 pr-4">
                                 <div className="space-y-2">
-                                  <p>{savedComment.classTeacherComment || "—"}</p>
+                                  <p>{savedComment.classTeacherComment || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}</p>
                                   {savedComment.classTeacherComment && (
                                     <div className="flex flex-wrap gap-2">
                                       <Btn
@@ -1861,14 +1920,22 @@ function AssessmentsPage() {
                   const edit = edits[row.id] ?? {};
                   const formative = edit.formative ?? (row.formative ?? "").toString();
                   const summative = edit.summative ?? (row.summative ?? "").toString();
+                  const student = data?.students.find((item) => item.id === row.student_id);
+                  const studentClass = data?.classes.find((item) => item.id === student?.class_id);
+                  const studentLevel =
+                    studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
+                  const total = Number(formative || 0) + Number(summative || 0);
                   const gradeDescriptor =
                     data?.gradingScales.find((scale) => {
-                      const total = Number(formative || 0) + Number(summative || 0);
-                      return total >= Number(scale.min_score) && total <= Number(scale.max_score);
-                    })?.descriptor ||
+                      return (
+                        (scale.education_level ?? "ordinary") === studentLevel &&
+                        total >= Number(scale.min_score) &&
+                        total <= Number(scale.max_score)
+                      );
+                    })?.[studentLevel === "advanced" ? "points" : "descriptor"] ||
                     row.gradeDescriptor ||
                     "";
-                  const total = (Number(formative || 0) + Number(summative || 0)).toFixed(1);
+                  const totalDisplay = total.toFixed(1);
                   return (
                     <tr key={row.id} className="border-t border-border">
                       <td className="py-2 font-medium">{row.studentName}</td>
@@ -1878,7 +1945,7 @@ function AssessmentsPage() {
                         <Pill tone={!row.formative && !row.summative ? "warning" : "muted"}>
                           {!row.formative && !row.summative
                             ? "Missing marks"
-                            : gradeDescriptor || "—"}
+                            : gradeDescriptor || "â€”"}
                         </Pill>
                       </td>
                       <td>{row.submitted_by_name ?? "Not submitted"}</td>
@@ -1916,7 +1983,7 @@ function AssessmentsPage() {
                           }
                         />
                       </td>
-                      <td className="font-semibold">{total}</td>
+                      <td className="font-semibold">{totalDisplay}</td>
                       <td>
                         <Pill
                           tone={

@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createStaffUser,
+  createDepartment,
+  assignDepartmentHod,
   deleteStaffUser,
   resetUserPassword,
   updateStaffUser,
@@ -55,6 +57,8 @@ function UsersPage() {
   const updateUser = useServerFn(updateStaffUser);
   const resetPassword = useServerFn(resetUserPassword);
   const deleteUserFn = useServerFn(deleteStaffUser);
+  const createDepartmentFn = useServerFn(createDepartment);
+  const assignDepartmentHodFn = useServerFn(assignDepartmentHod);
   const [form, setForm] = useState({
     fullName: "",
     email: "",
@@ -64,6 +68,8 @@ function UsersPage() {
   });
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [departmentForm, setDepartmentForm] = useState({ name: "", description: "" });
+  const [departmentAssign, setDepartmentAssign] = useState({ departmentId: "", hodUserId: "" });
 
   const { data: schools } = useQuery({
     queryKey: ["schools-list"],
@@ -86,6 +92,12 @@ function UsersPage() {
         roles: (roles ?? []).filter((r) => r.user_id === profile.id).map((r) => r.role as AppRole),
       }));
     },
+  });
+
+  const { data: departments } = useQuery({
+    queryKey: ["departments"],
+    queryFn: async () =>
+      (await supabase.from("departments").select("id, name, hod_user_id").order("name")).data ?? [],
   });
 
   const createMutation = useMutation({
@@ -168,6 +180,38 @@ function UsersPage() {
       ),
   });
 
+  const departmentMutation = useMutation({
+    mutationFn: () =>
+      createDepartmentFn({
+        data: {
+          name: departmentForm.name,
+          description: departmentForm.description || null,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Department created");
+      setDepartmentForm({ name: "", description: "" });
+      queryClient.invalidateQueries({ queryKey: ["departments"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const assignHodMutation = useMutation({
+    mutationFn: () =>
+      assignDepartmentHodFn({
+        data: {
+          departmentId: departmentAssign.departmentId,
+          hodUserId: departmentAssign.hodUserId || null,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("HOD assigned");
+      queryClient.invalidateQueries({ queryKey: ["departments"] });
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   return (
     <div>
       <PageHeader
@@ -176,6 +220,85 @@ function UsersPage() {
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        <Panel title="Departments">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Department name">
+              <input
+                className={inputClass}
+                value={departmentForm.name}
+                onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })}
+              />
+            </Field>
+            <Field label="Description">
+              <input
+                className={inputClass}
+                value={departmentForm.description}
+                onChange={(e) =>
+                  setDepartmentForm({ ...departmentForm, description: e.target.value })
+                }
+              />
+            </Field>
+          </div>
+          <div className="mt-3">
+            <Btn variant="accent" onClick={() => departmentMutation.mutate()}>
+              Create department
+            </Btn>
+          </div>
+          <div className="mt-4 space-y-2">
+            {(departments ?? []).map((dept: any) => (
+              <div key={dept.id} className="rounded-xl border border-border px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium">{dept.name}</p>
+                  <Pill tone={dept.hod_user_id ? "success" : "warning"}>
+                    {dept.hod_user_id ? "HOD assigned" : "No HOD"}
+                  </Pill>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <Field label="Assign department">
+              <select
+                className={inputClass}
+                value={departmentAssign.departmentId}
+                onChange={(e) =>
+                  setDepartmentAssign({ ...departmentAssign, departmentId: e.target.value })
+                }
+              >
+                <option value="">Select department</option>
+                {(departments ?? []).map((dept: any) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Assign HOD">
+              <select
+                className={inputClass}
+                value={departmentAssign.hodUserId}
+                onChange={(e) =>
+                  setDepartmentAssign({ ...departmentAssign, hodUserId: e.target.value })
+                }
+              >
+                <option value="">Select teacher</option>
+                {(people ?? [])
+                  .filter((person) => person.roles.includes("subject_teacher") || person.roles.includes("class_teacher"))
+                  .map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.full_name || person.email}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+          </div>
+          <div className="mt-3">
+            <Btn variant="accent" onClick={() => assignHodMutation.mutate()}>
+              Assign HOD
+            </Btn>
+          </div>
+        </Panel>
+
         <Panel title="Accounts">
           <ResponsiveTable
             desktop={

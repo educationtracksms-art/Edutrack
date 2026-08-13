@@ -22,6 +22,7 @@ import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedEnvDebugRouteImport } from './routes/_authenticated/env-debug'
+import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedMarksheetRouteImport } from './routes/_authenticated/marksheet'
 import { Route as AuthenticatedPromotionsRouteImport } from './routes/_authenticated/promotions'
@@ -37,6 +38,7 @@ import { Route as WebsitePagesBlogsRouteImport } from './routes/website-pages/bl
 import { Route as WebsitePagesContactUsRouteImport } from './routes/website-pages/contact-us'
 import { Route as WebsitePagesFeaturesRouteImport } from './routes/website-pages/features'
 import { Route as WebsitePagesFeaturesSlugRouteImport } from './routes/website-pages/features/$slug'
+import { Route as AuthenticatedFinanceKindIdRouteImport } from './routes/_authenticated/finance.$kind.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -102,6 +104,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
 const AuthenticatedEnvDebugRoute = AuthenticatedEnvDebugRouteImport.update({
   id: '/env-debug',
   path: '/env-debug',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFinanceRoute = AuthenticatedFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedLibraryRoute = AuthenticatedLibraryRouteImport.update({
@@ -180,6 +187,12 @@ const WebsitePagesFeaturesSlugRoute =
     path: '/$slug',
     getParentRoute: () => WebsitePagesFeaturesRoute,
   } as any)
+const AuthenticatedFinanceKindIdRoute =
+  AuthenticatedFinanceKindIdRouteImport.update({
+    id: '/$kind/$id',
+    path: '/$kind/$id',
+    getParentRoute: () => AuthenticatedFinanceRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -194,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/env-debug': typeof AuthenticatedEnvDebugRoute
+  '/finance': typeof AuthenticatedFinanceRouteWithChildren
   '/library': typeof AuthenticatedLibraryRoute
   '/marksheet': typeof AuthenticatedMarksheetRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
@@ -209,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
   '/website-pages/': typeof WebsitePagesIndexRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
+  '/finance/$kind/$id': typeof AuthenticatedFinanceKindIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -223,6 +238,7 @@ export interface FileRoutesByTo {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/env-debug': typeof AuthenticatedEnvDebugRoute
+  '/finance': typeof AuthenticatedFinanceRouteWithChildren
   '/library': typeof AuthenticatedLibraryRoute
   '/marksheet': typeof AuthenticatedMarksheetRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
@@ -238,6 +254,7 @@ export interface FileRoutesByTo {
   '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
   '/website-pages': typeof WebsitePagesIndexRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
+  '/finance/$kind/$id': typeof AuthenticatedFinanceKindIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -254,6 +271,7 @@ export interface FileRoutesById {
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/env-debug': typeof AuthenticatedEnvDebugRoute
+  '/_authenticated/finance': typeof AuthenticatedFinanceRouteWithChildren
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/marksheet': typeof AuthenticatedMarksheetRoute
   '/_authenticated/promotions': typeof AuthenticatedPromotionsRoute
@@ -269,6 +287,7 @@ export interface FileRoutesById {
   '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
   '/website-pages/': typeof WebsitePagesIndexRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
+  '/_authenticated/finance/$kind/$id': typeof AuthenticatedFinanceKindIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -285,6 +304,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/dashboard'
     | '/env-debug'
+    | '/finance'
     | '/library'
     | '/marksheet'
     | '/promotions'
@@ -300,6 +320,7 @@ export interface FileRouteTypes {
     | '/website-pages/features'
     | '/website-pages/'
     | '/website-pages/features/$slug'
+    | '/finance/$kind/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -314,6 +335,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/dashboard'
     | '/env-debug'
+    | '/finance'
     | '/library'
     | '/marksheet'
     | '/promotions'
@@ -329,6 +351,7 @@ export interface FileRouteTypes {
     | '/website-pages/features'
     | '/website-pages'
     | '/website-pages/features/$slug'
+    | '/finance/$kind/$id'
   id:
     | '__root__'
     | '/'
@@ -344,6 +367,7 @@ export interface FileRouteTypes {
     | '/_authenticated/change-password'
     | '/_authenticated/dashboard'
     | '/_authenticated/env-debug'
+    | '/_authenticated/finance'
     | '/_authenticated/library'
     | '/_authenticated/marksheet'
     | '/_authenticated/promotions'
@@ -359,6 +383,7 @@ export interface FileRouteTypes {
     | '/website-pages/features'
     | '/website-pages/'
     | '/website-pages/features/$slug'
+    | '/_authenticated/finance/$kind/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -467,6 +492,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEnvDebugRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/finance': {
+      id: '/_authenticated/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof AuthenticatedFinanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/library': {
       id: '/_authenticated/library'
       path: '/library'
@@ -572,8 +604,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WebsitePagesFeaturesSlugRouteImport
       parentRoute: typeof WebsitePagesFeaturesRoute
     }
+    '/_authenticated/finance/$kind/$id': {
+      id: '/_authenticated/finance/$kind/$id'
+      path: '/$kind/$id'
+      fullPath: '/finance/$kind/$id'
+      preLoaderRoute: typeof AuthenticatedFinanceKindIdRouteImport
+      parentRoute: typeof AuthenticatedFinanceRoute
+    }
   }
 }
+
+interface AuthenticatedFinanceRouteChildren {
+  AuthenticatedFinanceKindIdRoute: typeof AuthenticatedFinanceKindIdRoute
+}
+
+const AuthenticatedFinanceRouteChildren: AuthenticatedFinanceRouteChildren = {
+  AuthenticatedFinanceKindIdRoute: AuthenticatedFinanceKindIdRoute,
+}
+
+const AuthenticatedFinanceRouteWithChildren =
+  AuthenticatedFinanceRoute._addFileChildren(AuthenticatedFinanceRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAcademicsRoute: typeof AuthenticatedAcademicsRoute
@@ -584,6 +634,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEnvDebugRoute: typeof AuthenticatedEnvDebugRoute
+  AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRouteWithChildren
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedMarksheetRoute: typeof AuthenticatedMarksheetRoute
   AuthenticatedPromotionsRoute: typeof AuthenticatedPromotionsRoute
@@ -604,6 +655,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEnvDebugRoute: AuthenticatedEnvDebugRoute,
+  AuthenticatedFinanceRoute: AuthenticatedFinanceRouteWithChildren,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedMarksheetRoute: AuthenticatedMarksheetRoute,
   AuthenticatedPromotionsRoute: AuthenticatedPromotionsRoute,

@@ -4,6 +4,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
   const {
     school,
     student,
+    gradingLevel,
     attendance,
     rows,
     overall,
@@ -13,6 +14,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
     comments,
     staff,
   } = data;
+  const isAdvanced = gradingLevel === "advanced";
   const watermarkLabel = school.name || "School";
   const paymentLabel =
     school.reportPaymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
@@ -20,6 +22,35 @@ export function ReportCard({ data }: { data: ReportCardData }) {
     school.reportPaymentReferenceType === "account_number"
       ? school.reportAccountNumber || "_____________________"
       : student.schpayCode || "_____________________";
+  const nextTermBeginsOn = (() => {
+    const value = school.reportNextTermBeginsOn?.trim();
+    if (!value) return "";
+
+    const parts = value.split("-");
+    if (parts.length !== 3) return value;
+
+    const [year, month, day] = parts;
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const monthIndex = Number(month) - 1;
+    if (!Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex >= monthNames.length) {
+      return value;
+    }
+
+    return `${day.padStart(2, "0")} ${monthNames[monthIndex]} ${year}`;
+  })();
 
   return (
     <div className="report-doc">
@@ -140,7 +171,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
             </th>
             <th>Total</th>
             <th>Grade</th>
-            <th>Grade Descriptor</th>
+            <th>{isAdvanced ? "Points" : "Grade Descriptor"}</th>
             <th>Teacher</th>
           </tr>
         </thead>
@@ -152,7 +183,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
               <td>{row.summative}</td>
               <td>{row.total}</td>
               <td>{row.grade}</td>
-              <td>{row.gradeDescriptor}</td>
+              <td>{row.gradeDetail}</td>
               <td>{row.teacher}</td>
             </tr>
           ))}
@@ -169,11 +200,13 @@ export function ReportCard({ data }: { data: ReportCardData }) {
                   <span className="avg-score">{overall.average}</span>
                 </span>
                 <span className="identifier-block">
-                  <strong>Identifier out of three:</strong> {overall.identifier}
+                  <strong>{overall.metricLabel}:</strong> {overall.metric}
                 </span>
-                <span className="descriptor-block">
-                  <strong>Descriptor:</strong> {overall.descriptor}
-                </span>
+                {overall.descriptor && (
+                  <span className="descriptor-block">
+                    <strong>Descriptor:</strong> {overall.descriptor}
+                  </span>
+                )}
               </div>
             </td>
           </tr>
@@ -186,15 +219,15 @@ export function ReportCard({ data }: { data: ReportCardData }) {
           <table>
             <tbody>
               <tr>
-                <th>Identifier</th>
-                <th>Score Range</th>
-                <th>Descriptor</th>
+                <th>{isAdvanced ? "Grade" : "Identifier"}</th>
+                <th>{isAdvanced ? "Score Range" : "Score Range"}</th>
+                <th>{isAdvanced ? "Points" : "Descriptor"}</th>
               </tr>
               {gradeKeys.map((key) => (
                 <tr key={key.identifier}>
                   <td>{key.identifier}</td>
                   <td>{key.range}</td>
-                  <td>{key.descriptor}</td>
+                  <td>{key.detail}</td>
                 </tr>
               ))}
             </tbody>
@@ -251,8 +284,12 @@ export function ReportCard({ data }: { data: ReportCardData }) {
             <td>{comments.classTeacher}</td>
           </tr>
           <tr>
-            <td className="label">Head Teacher's Comment</td>
+            <td className="label">Head Teacher&apos;s Comment</td>
             <td>{comments.headTeacher}</td>
+          </tr>
+          <tr>
+            <td className="label">Next term begins on</td>
+            <td>{nextTermBeginsOn || "_____________________"}</td>
           </tr>
         </tbody>
       </table>

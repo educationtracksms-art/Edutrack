@@ -6,6 +6,7 @@ import {
   CalendarCheck,
   CalendarClock,
   ClipboardCheck,
+  Landmark,
   FileBadge,
   GraduationCap,
   LayoutDashboard,
@@ -71,6 +72,13 @@ const NAV: NavItem[] = [
     label: "Students",
     icon: GraduationCap,
     roles: ["super_admin", ...SCHOOL_ROLES],
+  },
+  {
+    to: "/finance",
+    label: "Finance",
+    icon: Landmark,
+    roles: ["super_admin", "school_admin", "head_teacher", "bursar", "hod"],
+    module: "finance",
   },
   {
     to: "/academics",

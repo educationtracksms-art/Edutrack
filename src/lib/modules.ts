@@ -14,6 +14,7 @@ export type ModuleKey =
   | "co_curricular"
   | "academics"
   | "students"
+  | "finance"
   | "timetable";
 
 type AnyClient = SupabaseClient<any, any, any>;

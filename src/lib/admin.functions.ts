@@ -35,6 +35,89 @@ async function logAudit(
   });
 }
 
+async function ensureFinanceAccounts(supabase: any, schoolId: string) {
+  const defaults = [
+    { code: "1000", name: "Cash", category: "Assets", account_type: "asset" },
+    { code: "1010", name: "Bank", category: "Assets", account_type: "asset" },
+    { code: "1100", name: "Accounts Receivable", category: "Assets", account_type: "asset" },
+    { code: "4000", name: "Tuition Fees", category: "Income", account_type: "income" },
+    { code: "4001", name: "Other Income", category: "Income", account_type: "income" },
+    { code: "5000", name: "School Expenses", category: "Expenses", account_type: "expense" },
+  ];
+  const { data: existing } = await supabase
+    .from("chart_of_accounts")
+    .select("id, code")
+    .eq("school_id", schoolId);
+  const existingCodes = new Set((existing ?? []).map((row: any) => row.code));
+  const missing = defaults
+    .filter((account) => !existingCodes.has(account.code))
+    .map((account) => ({
+      school_id: schoolId,
+      code: account.code,
+      name: account.name,
+      category: account.category,
+      account_type: account.account_type,
+      is_system_account: true,
+    }));
+  if (missing.length) {
+    const { error } = await supabase.from("chart_of_accounts").insert(missing);
+    if (error) throw new Error(error.message);
+  }
+  const { data: accounts } = await supabase
+    .from("chart_of_accounts")
+    .select("id, code")
+    .eq("school_id", schoolId);
+  const byCode = new Map(
+    (accounts ?? []).map((row: any) => [row.code as string, row.id as string]),
+  );
+  return byCode;
+}
+
+async function postBalancedJournal(
+  supabase: any,
+  payload: {
+    schoolId: string;
+    transactionId: string;
+    entryNumber: string;
+    description: string;
+    lines: Array<{ accountId: string; debit?: number; credit?: number; narration?: string }>;
+    userId: string;
+  },
+) {
+  const debitTotal = payload.lines.reduce((sum, line) => sum + Number(line.debit ?? 0), 0);
+  const creditTotal = payload.lines.reduce((sum, line) => sum + Number(line.credit ?? 0), 0);
+  if (Math.abs(debitTotal - creditTotal) > 0.01) {
+    throw new Error("Journal entry must balance");
+  }
+
+  const { data: journal, error: journalError } = await supabase
+    .from("journal_entries")
+    .insert({
+      school_id: payload.schoolId,
+      transaction_id: payload.transactionId,
+      entry_number: payload.entryNumber,
+      description: payload.description,
+      status: "posted",
+      created_by: payload.userId,
+    })
+    .select("id")
+    .single();
+  if (journalError) throw new Error(journalError.message);
+
+  const { error: lineError } = await supabase.from("journal_entry_lines").insert(
+    payload.lines.map((line) => ({
+      school_id: payload.schoolId,
+      journal_entry_id: journal.id,
+      account_id: line.accountId,
+      debit: Number(line.debit ?? 0),
+      credit: Number(line.credit ?? 0),
+      narration: line.narration ?? null,
+    })),
+  );
+  if (lineError) throw new Error(lineError.message);
+  return journal.id;
+}
+
 export const createSchoolWithAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
@@ -137,6 +220,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
       role: string;
       initials?: string;
       schoolId?: string;
+      departmentId?: string;
     }) => data,
   )
   .handler(async ({ data, context }) => {
@@ -200,6 +284,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       role: string;
       initials?: string;
       schoolId?: string;
+      departmentId?: string | null;
     }) => data,
   )
   .handler(async ({ data, context }) => {
@@ -235,6 +320,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
         full_name: data.fullName,
         email: data.email,
         initials: data.initials ?? null,
+        department_id: data.departmentId ?? null,
       })
       .eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
@@ -1699,6 +1785,1115 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const createStudentInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      studentId: string;
+      invoiceNumber: string;
+      amount: number;
+      termId?: string | null;
+      financialYearId?: string | null;
+      dueDate?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to create invoices");
+    }
+
+    const { data: student } = await context.supabase
+      .from("students")
+      .select("id, school_id, fees_balance")
+      .eq("id", data.studentId)
+      .maybeSingle();
+    if (!student) throw new Error("Student not found");
+
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invoice amount must be positive");
+    const accounts = await ensureFinanceAccounts(context.supabase, student.school_id);
+    const receivableAccountId = accounts.get("1100");
+    const tuitionAccountId = accounts.get("4000");
+    if (!receivableAccountId || !tuitionAccountId)
+      throw new Error("Default finance accounts are missing");
+
+    const { data: invoice, error: invoiceError } = await context.supabase
+      .from("student_invoices")
+      .insert({
+        school_id: student.school_id,
+        student_id: data.studentId,
+        financial_year_id: data.financialYearId ?? null,
+        term_id: data.termId ?? null,
+        invoice_number: data.invoiceNumber,
+        invoice_date: new Date().toISOString().slice(0, 10),
+        due_date: data.dueDate ?? null,
+        status: "issued",
+        total_amount: amount,
+        amount_paid: 0,
+        balance_due: amount,
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (invoiceError) throw new Error(invoiceError.message);
+
+    const { error: itemError } = await context.supabase.from("student_invoice_items").insert({
+      school_id: student.school_id,
+      invoice_id: invoice.id,
+      fee_type: "Tuition",
+      description: "Student fee invoice",
+      quantity: 1,
+      unit_amount: amount,
+      line_total: amount,
+    });
+    if (itemError) throw new Error(itemError.message);
+
+    const { error: studentUpdateError } = await context.supabase
+      .from("students")
+      .update({ fees_balance: Number(student.fees_balance ?? 0) + amount })
+      .eq("id", data.studentId);
+    if (studentUpdateError) throw new Error(studentUpdateError.message);
+
+    const { data: transaction, error: transactionError } = await context.supabase
+      .from("transactions")
+      .insert({
+        school_id: student.school_id,
+        transaction_number: `TXN-${data.invoiceNumber}`,
+        transaction_date: new Date().toISOString().slice(0, 10),
+        source_module: "fees",
+        source_record_id: invoice.id,
+        transaction_type: "income",
+        narration: `Student invoice ${data.invoiceNumber}`,
+        total_amount: amount,
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (transactionError) throw new Error(transactionError.message);
+
+    await postBalancedJournal(context.supabase, {
+      schoolId: student.school_id,
+      transactionId: transaction.id,
+      entryNumber: `JE-${data.invoiceNumber}`,
+      description: `Invoice ${data.invoiceNumber}`,
+      userId: context.userId,
+      lines: [
+        {
+          accountId: receivableAccountId,
+          debit: amount,
+          credit: 0,
+          narration: "Student receivable",
+        },
+        { accountId: tuitionAccountId, debit: 0, credit: amount, narration: "Tuition income" },
+      ],
+    });
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      student.school_id,
+      "STUDENT_INVOICE_CREATED",
+      "student_invoices",
+      {
+        student_id: data.studentId,
+        invoice_id: invoice.id,
+        amount,
+      },
+    );
+    return { invoiceId: invoice.id };
+  });
+
+export const recordStudentPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      studentId: string;
+      paymentNumber: string;
+      amount: number;
+      paymentMethod: string;
+      paymentDate?: string | null;
+      referenceNumber?: string | null;
+      narration?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to record payments");
+    }
+
+    const { data: student } = await context.supabase
+      .from("students")
+      .select("id, school_id, fees_balance")
+      .eq("id", data.studentId)
+      .maybeSingle();
+    if (!student) throw new Error("Student not found");
+
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Payment amount must be positive");
+    const accounts = await ensureFinanceAccounts(context.supabase, student.school_id);
+    const cashAccountId = accounts.get(data.paymentMethod === "bank" ? "1010" : "1000");
+    const receivableAccountId = accounts.get("1100");
+    if (!cashAccountId || !receivableAccountId)
+      throw new Error("Default finance accounts are missing");
+
+    const { data: payment, error: paymentError } = await context.supabase
+      .from("payments")
+      .insert({
+        school_id: student.school_id,
+        student_id: data.studentId,
+        payment_number: data.paymentNumber,
+        payment_date: data.paymentDate ?? new Date().toISOString().slice(0, 10),
+        amount,
+        payment_method: data.paymentMethod,
+        reference_number: data.referenceNumber ?? null,
+        narration: data.narration ?? null,
+        status: "posted",
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (paymentError) throw new Error(paymentError.message);
+
+    const receiptNumber = `RCT-${data.paymentNumber}`;
+    const { data: receipt, error: receiptError } = await context.supabase
+      .from("receipts")
+      .insert({
+        school_id: student.school_id,
+        payment_id: payment.id,
+        receipt_number: receiptNumber,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (receiptError) throw new Error(receiptError.message);
+
+    const { error: paymentUpdateError } = await context.supabase
+      .from("payments")
+      .update({ receipt_id: receipt.id })
+      .eq("id", payment.id);
+    if (paymentUpdateError) throw new Error(paymentUpdateError.message);
+
+    const { error: balanceUpdateError } = await context.supabase
+      .from("students")
+      .update({ fees_balance: Math.max(0, Number(student.fees_balance ?? 0) - amount) })
+      .eq("id", data.studentId);
+    if (balanceUpdateError) throw new Error(balanceUpdateError.message);
+
+    const { data: transaction, error: transactionError } = await context.supabase
+      .from("transactions")
+      .insert({
+        school_id: student.school_id,
+        transaction_number: data.paymentNumber,
+        transaction_date: data.paymentDate ?? new Date().toISOString().slice(0, 10),
+        source_module: "fees",
+        source_record_id: payment.id,
+        transaction_type: "income",
+        reference_number: data.referenceNumber ?? null,
+        narration: data.narration ?? `Payment for student ${data.studentId}`,
+        total_amount: amount,
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (transactionError) throw new Error(transactionError.message);
+
+    await postBalancedJournal(context.supabase, {
+      schoolId: student.school_id,
+      transactionId: transaction.id,
+      entryNumber: `JE-${data.paymentNumber}`,
+      description: `Payment ${data.paymentNumber}`,
+      userId: context.userId,
+      lines: [
+        { accountId: cashAccountId, debit: amount, credit: 0, narration: "Cash received" },
+        {
+          accountId: receivableAccountId,
+          debit: 0,
+          credit: amount,
+          narration: "Reduce receivable",
+        },
+      ],
+    });
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      student.school_id,
+      "STUDENT_PAYMENT_RECORDED",
+      "payments",
+      {
+        student_id: data.studentId,
+        payment_id: payment.id,
+        amount,
+        receipt_number: receiptNumber,
+      },
+    );
+    return { paymentId: payment.id, receiptId: receipt.id };
+  });
+
+export const createBudget = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      financialYearId: string;
+      title: string;
+      departmentName?: string | null;
+      budgetLines: Array<{
+        budgetCategory: string;
+        accountId?: string | null;
+        periodName?: string | null;
+        proposedAmount: number;
+        notes?: string | null;
+      }>;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["super_admin", "school_admin", "head_teacher", "bursar", "hod"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to create budgets");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const { data: year } = await context.supabase
+      .from("financial_years")
+      .select("id, school_id")
+      .eq("id", data.financialYearId)
+      .maybeSingle();
+    if (!year || year.school_id !== schoolId) throw new Error("Financial year not found");
+
+    const { data: budget, error: budgetError } = await context.supabase
+      .from("budgets")
+      .insert({
+        school_id: schoolId,
+        financial_year_id: data.financialYearId,
+        title: data.title,
+        department_name: data.departmentName ?? null,
+        status: "draft",
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (budgetError) throw new Error(budgetError.message);
+
+    const total = data.budgetLines.reduce((sum, line) => sum + Number(line.proposedAmount ?? 0), 0);
+    const { error: lineError } = await context.supabase.from("budget_lines").insert(
+      data.budgetLines.map((line) => ({
+        school_id: schoolId,
+        budget_id: budget.id,
+        account_id: line.accountId ?? null,
+        budget_category: line.budgetCategory,
+        period_name: line.periodName ?? null,
+        proposed_amount: Number(line.proposedAmount ?? 0),
+        approved_amount: 0,
+        revised_amount: Number(line.proposedAmount ?? 0),
+        actual_amount: 0,
+        committed_amount: 0,
+        notes: line.notes ?? null,
+      })),
+    );
+    if (lineError) throw new Error(lineError.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "BUDGET_CREATED", "budgets", {
+      budget_id: budget.id,
+      title: data.title,
+      total,
+    });
+
+    return { budgetId: budget.id };
+  });
+
+export const updateBudgetStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      budgetId: string;
+      status:
+        | "submitted"
+        | "under_review"
+        | "returned_for_revision"
+        | "approved"
+        | "rejected"
+        | "active"
+        | "closed";
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["super_admin", "school_admin", "head_teacher", "bursar", "hod"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to update budgets");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: budget } = await context.supabase
+      .from("budgets")
+      .select("id, school_id")
+      .eq("id", data.budgetId)
+      .maybeSingle();
+    if (!budget || budget.school_id !== schoolId) throw new Error("Budget not found");
+
+    const patch: Record<string, unknown> = { status: data.status };
+    if (data.status === "approved" || data.status === "active") {
+      patch.approved_at = new Date().toISOString();
+      patch.approved_by = context.userId;
+    }
+
+    const { error } = await context.supabase.from("budgets").update(patch).eq("id", data.budgetId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "BUDGET_STATUS_CHANGED", "budgets", {
+      budget_id: data.budgetId,
+      status: data.status,
+    });
+    return { ok: true };
+  });
+
+export const submitBudgetRevision = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      budgetId: string;
+      note?: string | null;
+      revisedAmounts: Array<{ lineId: string; revisedAmount: number }>;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["super_admin", "school_admin", "head_teacher", "bursar", "hod"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to revise budgets");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: budget } = await context.supabase
+      .from("budgets")
+      .select("id, school_id, status")
+      .eq("id", data.budgetId)
+      .maybeSingle();
+    if (!budget || budget.school_id !== schoolId) throw new Error("Budget not found");
+
+    const { data: lines } = await context.supabase
+      .from("budget_lines")
+      .select("id, revised_amount, approved_amount")
+      .eq("budget_id", data.budgetId);
+    const byId = new Map((lines ?? []).map((line: any) => [line.id, line]));
+    for (const line of data.revisedAmounts) {
+      const existing = byId.get(line.lineId);
+      if (!existing) throw new Error("Budget line not found");
+      const nextAmount = Number(line.revisedAmount);
+      if (!Number.isFinite(nextAmount) || nextAmount < 0) {
+        throw new Error("Revised amount must be zero or positive");
+      }
+      const { error } = await context.supabase
+        .from("budget_lines")
+        .update({ revised_amount: nextAmount })
+        .eq("id", line.lineId)
+        .eq("budget_id", data.budgetId);
+      if (error) throw new Error(error.message);
+    }
+
+    const { error: budgetError } = await context.supabase
+      .from("budgets")
+      .update({
+        status: "returned_for_revision",
+      })
+      .eq("id", data.budgetId)
+      .eq("school_id", schoolId);
+    if (budgetError) throw new Error(budgetError.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "BUDGET_REVISED", "budgets", {
+      budget_id: data.budgetId,
+      note: data.note ?? null,
+      line_count: data.revisedAmounts.length,
+    });
+    return { ok: true };
+  });
+
+export const createSupplier = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      supplierName: string;
+      contactPerson?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      address?: string | null;
+      taxNumber?: string | null;
+      paymentDetails?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to create suppliers");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: supplier, error } = await context.supabase
+      .from("suppliers")
+      .insert({
+        school_id: schoolId,
+        supplier_name: data.supplierName.trim(),
+        contact_person: data.contactPerson ?? null,
+        phone: data.phone ?? null,
+        email: data.email ?? null,
+        address: data.address ?? null,
+        tax_number: data.taxNumber ?? null,
+        payment_details: data.paymentDetails ?? null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "SUPPLIER_CREATED", "suppliers", {
+      supplier_id: supplier.id,
+      supplier_name: data.supplierName,
+    });
+    return { supplierId: supplier.id };
+  });
+
+export const createPurchaseRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      requestNumber: string;
+      budgetId?: string | null;
+      supplierId?: string | null;
+      departmentName?: string | null;
+      itemDescription: string;
+      requestedAmount: number;
+      remarks?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["super_admin", "school_admin", "head_teacher", "bursar", "hod"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to create purchase requests");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const amount = Number(data.requestedAmount);
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw new Error("Requested amount must be positive");
+
+    if (data.budgetId) {
+      const { data: budget } = await context.supabase
+        .from("budgets")
+        .select("id, school_id, status")
+        .eq("id", data.budgetId)
+        .maybeSingle();
+      if (!budget || budget.school_id !== schoolId) throw new Error("Budget not found");
+    }
+
+    const { data: request, error } = await context.supabase
+      .from("purchase_requests")
+      .insert({
+        school_id: schoolId,
+        budget_id: data.budgetId ?? null,
+        supplier_id: data.supplierId ?? null,
+        request_number: data.requestNumber,
+        requested_by: context.userId,
+        department_name: data.departmentName ?? null,
+        item_description: data.itemDescription.trim(),
+        requested_amount: amount,
+        approved_amount: 0,
+        status: "submitted",
+        approval_status: "pending",
+        remarks: data.remarks ?? null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "PURCHASE_REQUEST_CREATED",
+      "purchase_requests",
+      {
+        request_id: request.id,
+        request_number: data.requestNumber,
+        amount,
+      },
+    );
+    return { requestId: request.id };
+  });
+
+export const reviewPurchaseRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      requestId: string;
+      status: "approved" | "rejected" | "returned_for_revision";
+      remarks?: string | null;
+      approvedAmount?: number | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "head_teacher"].includes(r))) {
+      throw new Error("Not allowed to review purchase requests");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: request } = await context.supabase
+      .from("purchase_requests")
+      .select("id, school_id")
+      .eq("id", data.requestId)
+      .maybeSingle();
+    if (!request || request.school_id !== schoolId) throw new Error("Purchase request not found");
+
+    const patch: Record<string, unknown> = {
+      approval_status: data.status,
+      status:
+        data.status === "approved"
+          ? "approved"
+          : data.status === "rejected"
+            ? "rejected"
+            : "returned",
+      remarks: data.remarks ?? null,
+      approved_amount: data.status === "approved" ? Number(data.approvedAmount ?? 0) : 0,
+    };
+
+    const { error } = await context.supabase
+      .from("purchase_requests")
+      .update(patch)
+      .eq("id", data.requestId);
+    if (error) throw new Error(error.message);
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "PURCHASE_REQUEST_REVIEWED",
+      "purchase_requests",
+      {
+        request_id: data.requestId,
+        status: data.status,
+        approved_amount: patch.approved_amount,
+      },
+    );
+    return { ok: true };
+  });
+
+export const createDepartment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { name: string; description?: string | null }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
+      throw new Error("Not allowed to create departments");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const { data: dept, error } = await context.supabase
+      .from("departments")
+      .insert({
+        school_id: schoolId,
+        name: data.name.trim(),
+        description: data.description ?? null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { departmentId: dept.id };
+  });
+
+export const assignDepartmentHod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { departmentId: string; hodUserId: string | null }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
+      throw new Error("Not allowed to assign department heads");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const { error } = await context.supabase
+      .from("departments")
+      .update({ hod_user_id: data.hodUserId })
+      .eq("id", data.departmentId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+    if (data.hodUserId) {
+      await context.supabase
+        .from("profiles")
+        .update({ department_id: data.departmentId })
+        .eq("id", data.hodUserId)
+        .eq("school_id", schoolId);
+      await context.supabase
+        .from("user_roles")
+        .upsert(
+          { user_id: data.hodUserId, role: "hod", school_id: schoolId },
+          { onConflict: "user_id,role" },
+        );
+    }
+    return { ok: true };
+  });
+
+export const updatePurchaseRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      requestId: string;
+      requestNumber?: string;
+      departmentName?: string | null;
+      itemDescription?: string;
+      requestedAmount?: number;
+      remarks?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((r) =>
+        ["super_admin", "school_admin", "head_teacher", "bursar", "hod"].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to update purchase requests");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const patch: Record<string, unknown> = {};
+    if (data.requestNumber) patch.request_number = data.requestNumber.trim();
+    if (data.departmentName !== undefined) patch.department_name = data.departmentName;
+    if (data.itemDescription) patch.item_description = data.itemDescription.trim();
+    if (data.requestedAmount !== undefined) patch.requested_amount = Number(data.requestedAmount);
+    if (data.remarks !== undefined) patch.remarks = data.remarks;
+    const { error } = await context.supabase
+      .from("purchase_requests")
+      .update(patch)
+      .eq("id", data.requestId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const createPurchaseOrder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      orderNumber: string;
+      purchaseRequestId?: string | null;
+      supplierId?: string | null;
+      departmentName?: string | null;
+      totalAmount: number;
+      expectedDeliveryDate?: string | null;
+      remarks?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to create purchase orders");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const amount = Number(data.totalAmount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Total amount must be positive");
+
+    const { data: order, error } = await context.supabase
+      .from("purchase_orders")
+      .insert({
+        school_id: schoolId,
+        purchase_request_id: data.purchaseRequestId ?? null,
+        supplier_id: data.supplierId ?? null,
+        order_number: data.orderNumber,
+        ordered_by: context.userId,
+        department_name: data.departmentName ?? null,
+        total_amount: amount,
+        expected_delivery_date: data.expectedDeliveryDate ?? null,
+        status: "approved",
+        remarks: data.remarks ?? null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    if (data.purchaseRequestId) {
+      await context.supabase
+        .from("purchase_requests")
+        .update({ status: "approved", approval_status: "approved", approved_amount: amount })
+        .eq("id", data.purchaseRequestId)
+        .eq("school_id", schoolId);
+    }
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "PURCHASE_ORDER_CREATED",
+      "purchase_orders",
+      {
+        order_id: order.id,
+        order_number: data.orderNumber,
+        total_amount: amount,
+      },
+    );
+    return { purchaseOrderId: order.id };
+  });
+
+export const updatePurchaseOrder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      orderId: string;
+      orderNumber?: string;
+      status?: string;
+      departmentName?: string | null;
+      expectedDeliveryDate?: string | null;
+      totalAmount?: number;
+      remarks?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to update purchase orders");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const patch: Record<string, unknown> = {};
+    if (data.orderNumber) patch.order_number = data.orderNumber.trim();
+    if (data.status) patch.status = data.status;
+    if (data.departmentName !== undefined) patch.department_name = data.departmentName;
+    if (data.expectedDeliveryDate !== undefined)
+      patch.expected_delivery_date = data.expectedDeliveryDate;
+    if (data.totalAmount !== undefined) patch.total_amount = Number(data.totalAmount);
+    if (data.remarks !== undefined) patch.remarks = data.remarks;
+    const { error } = await context.supabase
+      .from("purchase_orders")
+      .update(patch)
+      .eq("id", data.orderId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const recordGoodsReceipt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      purchaseOrderId: string;
+      receiptNumber: string;
+      itemsReceived: number;
+      remarks?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to record goods receipts");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const amount = Number(data.itemsReceived);
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw new Error("Received quantity must be positive");
+
+    const { data: po } = await context.supabase
+      .from("purchase_orders")
+      .select("id, school_id")
+      .eq("id", data.purchaseOrderId)
+      .maybeSingle();
+    if (!po || po.school_id !== schoolId) throw new Error("Purchase order not found");
+
+    const { data: receipt, error } = await context.supabase
+      .from("goods_receipts")
+      .insert({
+        school_id: schoolId,
+        purchase_order_id: data.purchaseOrderId,
+        receipt_number: data.receiptNumber,
+        received_by: context.userId,
+        items_received: amount,
+        remarks: data.remarks ?? null,
+        status: "received",
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await context.supabase
+      .from("purchase_orders")
+      .update({ status: "received" })
+      .eq("id", data.purchaseOrderId)
+      .eq("school_id", schoolId);
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "GOODS_RECEIPT_RECORDED",
+      "goods_receipts",
+      {
+        receipt_id: receipt.id,
+        purchase_order_id: data.purchaseOrderId,
+        items_received: amount,
+      },
+    );
+    return { goodsReceiptId: receipt.id };
+  });
+
+export const createSupplierInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      invoiceNumber: string;
+      supplierId?: string | null;
+      purchaseOrderId?: string | null;
+      departmentName?: string | null;
+      invoiceDate?: string | null;
+      dueDate?: string | null;
+      amount: number;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to create supplier invoices");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invoice amount must be positive");
+
+    const { data: invoice, error } = await context.supabase
+      .from("approved_invoices")
+      .insert({
+        school_id: schoolId,
+        supplier_id: data.supplierId ?? null,
+        purchase_order_id: data.purchaseOrderId ?? null,
+        invoice_number: data.invoiceNumber,
+        department_name: data.departmentName ?? null,
+        invoice_date: data.invoiceDate ?? new Date().toISOString().slice(0, 10),
+        due_date: data.dueDate ?? null,
+        amount,
+        status: "draft",
+        approval_status: "pending",
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "SUPPLIER_INVOICE_CREATED",
+      "approved_invoices",
+      {
+        invoice_id: invoice.id,
+        invoice_number: data.invoiceNumber,
+        amount,
+      },
+    );
+    return { invoiceId: invoice.id };
+  });
+
+export const updateSupplierInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      invoiceId: string;
+      invoiceNumber?: string;
+      approvalStatus?: "pending" | "approved" | "rejected";
+      approvalNote?: string | null;
+      departmentName?: string | null;
+      amount?: number;
+      dueDate?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to update supplier invoices");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const patch: Record<string, unknown> = {};
+    if (data.invoiceNumber) patch.invoice_number = data.invoiceNumber.trim();
+    if (data.approvalStatus) patch.approval_status = data.approvalStatus;
+    if (data.approvalNote !== undefined) patch.approval_note = data.approvalNote;
+    if (data.departmentName !== undefined) patch.department_name = data.departmentName;
+    if (data.amount !== undefined) patch.amount = Number(data.amount);
+    if (data.dueDate !== undefined) patch.due_date = data.dueDate;
+    const { error } = await context.supabase
+      .from("approved_invoices")
+      .update(patch)
+      .eq("id", data.invoiceId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const updatePaymentVoucher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      voucherId: string;
+      voucherNumber?: string;
+      status?: string;
+      payeeName?: string;
+      departmentName?: string | null;
+      amount?: number;
+      paymentMethod?: string;
+      remarks?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to update payment vouchers");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const patch: Record<string, unknown> = {};
+    if (data.voucherNumber) patch.voucher_number = data.voucherNumber.trim();
+    if (data.status) patch.status = data.status;
+    if (data.payeeName) patch.payee_name = data.payeeName.trim();
+    if (data.departmentName !== undefined) patch.department_name = data.departmentName;
+    if (data.amount !== undefined) patch.amount = Number(data.amount);
+    if (data.paymentMethod) patch.payment_method = data.paymentMethod;
+    if (data.remarks !== undefined) patch.remarks = data.remarks;
+    const { error } = await context.supabase
+      .from("payment_vouchers")
+      .update(patch)
+      .eq("id", data.voucherId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reviewSupplierInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: { invoiceId: string; status: "approved" | "rejected"; note?: string | null }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "head_teacher"].includes(r))) {
+      throw new Error("Not allowed to review invoices");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const patch =
+      data.status === "approved"
+        ? {
+            approval_status: "approved",
+            status: "approved",
+            approved_by: context.userId,
+            approved_at: new Date().toISOString(),
+            approval_note: data.note ?? null,
+          }
+        : {
+            approval_status: "rejected",
+            status: "rejected",
+            approval_note: data.note ?? null,
+          };
+    const { error } = await context.supabase
+      .from("approved_invoices")
+      .update(patch)
+      .eq("id", data.invoiceId)
+      .eq("school_id", schoolId);
+    if (error) throw new Error(error.message);
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "SUPPLIER_INVOICE_REVIEWED",
+      "approved_invoices",
+      {
+        invoice_id: data.invoiceId,
+        status: data.status,
+      },
+    );
+    return { ok: true };
+  });
+
+export const createPaymentVoucher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      voucherNumber: string;
+      invoiceId?: string | null;
+      payeeName: string;
+      amount: number;
+      paymentMethod: string;
+      remarks?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "bursar"].includes(r))) {
+      throw new Error("Not allowed to create payment vouchers");
+    }
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Voucher amount must be positive");
+
+    const { data: voucher, error } = await context.supabase
+      .from("payment_vouchers")
+      .insert({
+        school_id: schoolId,
+        approved_invoice_id: data.invoiceId ?? null,
+        voucher_number: data.voucherNumber,
+        payee_name: data.payeeName,
+        amount,
+        payment_method: data.paymentMethod,
+        prepared_by: context.userId,
+        status: "draft",
+        remarks: data.remarks ?? null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    if (data.invoiceId) {
+      await context.supabase
+        .from("approved_invoices")
+        .update({ payment_voucher_id: voucher.id })
+        .eq("id", data.invoiceId)
+        .eq("school_id", schoolId);
+    }
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "PAYMENT_VOUCHER_CREATED",
+      "payment_vouchers",
+      {
+        voucher_id: voucher.id,
+        voucher_number: data.voucherNumber,
+        amount,
+      },
+    );
+    return { paymentVoucherId: voucher.id };
+  });
+
 export const logReportPrint = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { count: number; scope: string }) => data)
@@ -1725,10 +2920,12 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
     (data: {
       id?: string | null;
       schoolId?: string;
+      educationLevel?: "ordinary" | "advanced";
       grade: string;
       minScore: number;
       maxScore: number;
       gradeDescriptor: string;
+      points?: number | null;
     }) => data,
   )
   .handler(async ({ data, context }) => {
@@ -1746,10 +2943,12 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
 
     const payload = {
       school_id: schoolId,
+      education_level: data.educationLevel ?? "ordinary",
       grade: data.grade.trim().toUpperCase(),
       min_score: data.minScore,
       max_score: data.maxScore,
       grade_descriptor: data.gradeDescriptor.trim(),
+      points: data.points ?? null,
     };
 
     const query = data.id

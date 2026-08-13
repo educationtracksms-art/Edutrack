@@ -4,7 +4,7 @@ export type SubjectRow = {
   summative: string;
   total: string;
   grade: string;
-  gradeDescriptor: string;
+  gradeDetail: string;
   teacher: string;
 };
 
@@ -17,11 +17,12 @@ export type ReportApproval = {
 export type GradeKey = {
   identifier: string;
   range: string;
-  descriptor: string;
+  detail: string;
 };
 
 export type ReportCardData = {
   studentId: string;
+  gradingLevel: "ordinary" | "advanced";
   school: {
     name: string;
     motto: string | null;
@@ -32,6 +33,7 @@ export type ReportCardData = {
     initials: string;
     reportPaymentReferenceType: "schpay_code" | "account_number";
     reportAccountNumber: string | null;
+    reportNextTermBeginsOn: string | null;
   };
   title: string;
   student: {
@@ -45,7 +47,7 @@ export type ReportCardData = {
   };
   attendance: { present: number; absent: number; total: number } | null;
   rows: SubjectRow[];
-  overall: { average: string; identifier: string; descriptor: string };
+  overall: { average: string; metricLabel: string; metric: string; descriptor: string };
   approval: ReportApproval | null;
   gradeKeys: GradeKey[];
   coCurricular: { games: string; clubs: string; projects: string };

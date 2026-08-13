@@ -350,6 +350,7 @@ export type Database = {
         Row: {
           class_teacher_id: string | null;
           created_at: string;
+          education_level: string;
           id: string;
           level: number | null;
           name: string;
@@ -358,6 +359,7 @@ export type Database = {
         Insert: {
           class_teacher_id?: string | null;
           created_at?: string;
+          education_level?: string;
           id?: string;
           level?: number | null;
           name: string;
@@ -366,6 +368,7 @@ export type Database = {
         Update: {
           class_teacher_id?: string | null;
           created_at?: string;
+          education_level?: string;
           id?: string;
           level?: number | null;
           name?: string;
@@ -473,31 +476,37 @@ export type Database = {
         Row: {
           created_at: string;
           descriptor: string;
+          education_level: string;
           grade: string;
           id: string;
           identifier: number;
           max_score: number;
           min_score: number;
+          points: number | null;
           school_id: string;
         };
         Insert: {
           created_at?: string;
           descriptor: string;
+          education_level?: string;
           grade: string;
           id?: string;
           identifier?: number;
           max_score: number;
           min_score: number;
+          points?: number | null;
           school_id: string;
         };
         Update: {
           created_at?: string;
           descriptor?: string;
+          education_level?: string;
           grade?: string;
           id?: string;
           identifier?: number;
           max_score?: number;
           min_score?: number;
+          points?: number | null;
           school_id?: string;
         };
         Relationships: [
@@ -813,6 +822,7 @@ export type Database = {
           phone?: string | null;
           report_account_number?: string | null;
           report_header?: string | null;
+          report_next_term_begins_on?: string | null;
           report_payment_reference_type?: string;
           signatories?: Json;
           stamp_url?: string | null;
