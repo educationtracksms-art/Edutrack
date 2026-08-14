@@ -140,7 +140,7 @@ function AssessmentsError({ error, reset }: { error: Error; reset: () => void })
   return null;
 }
 
-function AssessmentsPage() {
+export function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
