@@ -77,6 +77,14 @@ export function PublicShell({ children }: { children: ReactNode }) {
                 Features
               </Link>
               <Link
+                to="/website-pages/report-card-samples"
+                preload="intent"
+                onClick={() => setMenuOpen(false)}
+                className="rounded-md px-3 py-2 text-center font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-left"
+              >
+                Report card samples
+              </Link>
+              <Link
                 to="/website-pages/blogs"
                 preload="intent"
                 onClick={() => setMenuOpen(false)}
@@ -159,6 +167,12 @@ export function PublicShell({ children }: { children: ReactNode }) {
               </Link>
               <Link to="/website-pages/features" className="transition-colors hover:text-white">
                 Features
+              </Link>
+              <Link
+                to="/website-pages/report-card-samples"
+                className="transition-colors hover:text-white"
+              >
+                Report card samples
               </Link>
               <Link to="/website-pages/blogs" className="transition-colors hover:text-white">
                 Blogs

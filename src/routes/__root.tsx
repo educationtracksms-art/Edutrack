@@ -81,7 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "keywords",
         content:
-          "education track sms, edutrack, school management system uganda, school ERP uganda, report cards, attendance, assessments, finance, student records",
+          "education track sms, edutrack, school management system uganda, school management system uganda login, school management system uganda free download, school management system uganda download, free school management system uganda, free offline school management system, school ERP uganda, report cards, attendance, assessments, finance, student records",
       },
       { property: "og:title", content: SEO_CONFIG.defaultTitle },
       { property: "og:description", content: SEO_CONFIG.defaultDescription },

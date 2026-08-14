@@ -38,6 +38,7 @@ import { Route as WebsitePagesAboutRouteImport } from './routes/website-pages/ab
 import { Route as WebsitePagesBlogsRouteImport } from './routes/website-pages/blogs'
 import { Route as WebsitePagesContactUsRouteImport } from './routes/website-pages/contact-us'
 import { Route as WebsitePagesFeaturesRouteImport } from './routes/website-pages/features'
+import { Route as WebsitePagesReportCardSamplesRouteImport } from './routes/website-pages/report-card-samples'
 import { Route as WebsitePagesFeaturesSlugRouteImport } from './routes/website-pages/features/$slug'
 import { Route as AuthenticatedFinanceKindIdRouteImport } from './routes/_authenticated/finance.$kind.$id'
 
@@ -187,6 +188,12 @@ const WebsitePagesFeaturesRoute = WebsitePagesFeaturesRouteImport.update({
   path: '/website-pages/features',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WebsitePagesReportCardSamplesRoute =
+  WebsitePagesReportCardSamplesRouteImport.update({
+    id: '/website-pages/report-card-samples',
+    path: '/website-pages/report-card-samples',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const WebsitePagesFeaturesSlugRoute =
   WebsitePagesFeaturesSlugRouteImport.update({
     id: '/$slug',
@@ -228,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
   '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
+  '/website-pages/report-card-samples': typeof WebsitePagesReportCardSamplesRoute
   '/website-pages/': typeof WebsitePagesIndexRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
   '/finance/$kind/$id': typeof AuthenticatedFinanceKindIdRoute
@@ -260,6 +268,7 @@ export interface FileRoutesByTo {
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
   '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
+  '/website-pages/report-card-samples': typeof WebsitePagesReportCardSamplesRoute
   '/website-pages': typeof WebsitePagesIndexRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
   '/finance/$kind/$id': typeof AuthenticatedFinanceKindIdRoute
@@ -294,6 +303,7 @@ export interface FileRoutesById {
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
   '/website-pages/features': typeof WebsitePagesFeaturesRouteWithChildren
+  '/website-pages/report-card-samples': typeof WebsitePagesReportCardSamplesRoute
   '/website-pages/': typeof WebsitePagesIndexRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
   '/_authenticated/finance/$kind/$id': typeof AuthenticatedFinanceKindIdRoute
@@ -328,6 +338,7 @@ export interface FileRouteTypes {
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
     | '/website-pages/features'
+    | '/website-pages/report-card-samples'
     | '/website-pages/'
     | '/website-pages/features/$slug'
     | '/finance/$kind/$id'
@@ -360,6 +371,7 @@ export interface FileRouteTypes {
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
     | '/website-pages/features'
+    | '/website-pages/report-card-samples'
     | '/website-pages'
     | '/website-pages/features/$slug'
     | '/finance/$kind/$id'
@@ -393,6 +405,7 @@ export interface FileRouteTypes {
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
     | '/website-pages/features'
+    | '/website-pages/report-card-samples'
     | '/website-pages/'
     | '/website-pages/features/$slug'
     | '/_authenticated/finance/$kind/$id'
@@ -408,6 +421,7 @@ export interface RootRouteChildren {
   WebsitePagesBlogsRoute: typeof WebsitePagesBlogsRoute
   WebsitePagesContactUsRoute: typeof WebsitePagesContactUsRoute
   WebsitePagesFeaturesRoute: typeof WebsitePagesFeaturesRouteWithChildren
+  WebsitePagesReportCardSamplesRoute: typeof WebsitePagesReportCardSamplesRoute
   WebsitePagesIndexRoute: typeof WebsitePagesIndexRoute
 }
 
@@ -616,6 +630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WebsitePagesFeaturesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/website-pages/report-card-samples': {
+      id: '/website-pages/report-card-samples'
+      path: '/website-pages/report-card-samples'
+      fullPath: '/website-pages/report-card-samples'
+      preLoaderRoute: typeof WebsitePagesReportCardSamplesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/website-pages/features/$slug': {
       id: '/website-pages/features/$slug'
       path: '/$slug'
@@ -712,6 +733,7 @@ const rootRouteChildren: RootRouteChildren = {
   WebsitePagesBlogsRoute: WebsitePagesBlogsRoute,
   WebsitePagesContactUsRoute: WebsitePagesContactUsRoute,
   WebsitePagesFeaturesRoute: WebsitePagesFeaturesRouteWithChildren,
+  WebsitePagesReportCardSamplesRoute: WebsitePagesReportCardSamplesRoute,
   WebsitePagesIndexRoute: WebsitePagesIndexRoute,
 }
 export const routeTree = rootRouteImport

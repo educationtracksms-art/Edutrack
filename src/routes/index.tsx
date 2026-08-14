@@ -13,13 +13,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "A Uganda-based education management system that helps schools improve efficiency, simplify administration, and give staff, learners and parents a better experience.",
+          "Education Track SMS is a Uganda school management system for login, report cards, assessments, attendance, and school administration. Explore school software built for schools that want a free download style entry point, offline-ready workflows, and new curriculum support.",
       },
       { property: "og:title", content: "Education Track SMS | Uganda School Management System" },
       {
         property: "og:description",
         content:
-          "Give your school a better way to manage learners, assessments, report cards and daily operations with one platform built for growth.",
+          "Give your school a better way to manage learners, assessments, report cards, login access, and daily operations with one platform built for growth.",
       },
     ],
   }),
@@ -65,8 +65,15 @@ function Landing() {
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-white/85 md:text-lg">
             Education Track SMS helps schools reduce administrative stress, improve visibility, and
-            focus more on teaching, learning, and parent engagement.
+            focus more on teaching, learning, parent engagement, and school management system
+            workflows used across Uganda.
           </p>
+          <div className="mx-auto mt-8 max-w-3xl rounded-3xl border border-white/15 bg-white/10 px-5 py-4 text-sm leading-7 text-white/90 backdrop-blur">
+            Looking for a school management system Uganda login, free download information, free
+            offline school management system details, new curriculum sample report card PDF, term 2
+            report card wording, or report cards in Uganda? Explore our public pages for
+            school-ready guidance and reporting workflows.
+          </div>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               to="/signup"
@@ -79,6 +86,12 @@ function Landing() {
               className="rounded-md border border-white/25 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/20"
             >
               Staff sign in
+            </Link>
+            <Link
+              to="/website-pages/report-card-samples"
+              className="rounded-md border border-white/25 bg-transparent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              Sample report card
             </Link>
           </div>
         </div>
