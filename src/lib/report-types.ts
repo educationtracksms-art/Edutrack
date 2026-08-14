@@ -5,6 +5,7 @@ export type SubjectRow = {
   total: string;
   grade: string;
   gradeDetail: string;
+  subjectPoints: string;
   teacher: string;
 };
 
@@ -48,6 +49,7 @@ export type ReportCardData = {
   attendance: { present: number; absent: number; total: number } | null;
   rows: SubjectRow[];
   overall: { average: string; metricLabel: string; metric: string; descriptor: string };
+  totalPoints: number | null;
   approval: ReportApproval | null;
   gradeKeys: GradeKey[];
   coCurricular: { games: string; clubs: string; projects: string };

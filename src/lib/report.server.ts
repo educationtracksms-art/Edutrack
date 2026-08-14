@@ -47,7 +47,7 @@ export async function buildReportCards(
     supabase.from("streams").select("id, name").eq("school_id", schoolId),
     supabase
       .from("subjects")
-      .select("id, name, position")
+      .select("id, name, position, points")
       .eq("school_id", schoolId)
       .order("position"),
     supabase
@@ -168,6 +168,7 @@ export async function buildReportCards(
       .filter((subject: any) => subjectIdsToRender.has(subject.id))
       .map((subject: any) => {
         const mark = marks.find((m: any) => m.subject_id === subject.id);
+        const subjectMaxPoints = Number(subject.points ?? 0);
         if (!mark || (mark.formative == null && mark.summative == null)) {
           return {
             subject: subject.name,
@@ -176,6 +177,7 @@ export async function buildReportCards(
             total: "",
             grade: "",
             gradeDetail: "",
+            subjectPoints: educationLevel === "advanced" ? String(subjectMaxPoints) : "",
             teacher: mark?.teacher_initials ?? "",
           };
         }
@@ -183,6 +185,10 @@ export async function buildReportCards(
         const summative = Number(mark.summative ?? 0);
         const total = Math.round((formative + summative) * 10) / 10;
         const g = gradeFor(total, educationLevel);
+        const weightedPoints =
+          educationLevel === "advanced"
+            ? Math.min(subjectMaxPoints || 0, g.points || 0)
+            : 0;
         totals.push(total);
         return {
           subject: subject.name,
@@ -190,12 +196,9 @@ export async function buildReportCards(
           summative: fmt(summative),
           total: fmt(total),
           grade: g.grade,
-          gradeDetail:
-            educationLevel === "advanced"
-              ? g.points > 0
-                ? String(g.points)
-                : g.descriptor
-              : g.descriptor,
+          gradeDetail: educationLevel === "advanced" ? "" : g.descriptor,
+          subjectPoints:
+            educationLevel === "advanced" ? String(weightedPoints || subjectMaxPoints || 0) : "",
           teacher: mark.teacher_initials ?? "",
         };
       });
@@ -211,9 +214,8 @@ export async function buildReportCards(
           )?.descriptor ?? descriptorFromIdentifier(identifierAvg));
     const totalPoints =
       educationLevel === "advanced"
-        ? rows.reduce((sum, row) => sum + (Number(row.gradeDetail) || 0), 0)
-        : 0;
-
+        ? rows.reduce((sum, row) => sum + Number(row.subjectPoints || 0), 0)
+        : null;
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
     const approvedAssessment = marks.find((mark: any) => mark.approved_by || mark.approved_at);
@@ -296,10 +298,11 @@ export async function buildReportCards(
       rows,
       overall: {
         average: `${average.toFixed(1)}%`,
-        metricLabel: educationLevel === "advanced" ? "Points" : "Identifier out of three",
-        metric: educationLevel === "advanced" ? String(totalPoints) : identifierAvg.toFixed(2),
+        metricLabel: "Identifier out of three",
+        metric: identifierAvg.toFixed(2),
         descriptor: identifierDescriptor,
       },
+      totalPoints,
       approval: approvedAssessment
         ? {
             name: approvedByName || "Director of Studies",

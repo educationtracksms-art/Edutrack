@@ -140,7 +140,7 @@ function AssessmentsError({ error, reset }: { error: Error; reset: () => void })
   return null;
 }
 
-export function AssessmentsPage() {
+function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
@@ -339,6 +339,7 @@ export function AssessmentsPage() {
     students: StudentRow[];
     subjects: SubjectRow[];
     terms: TermRow[];
+    classes: ClassRow[];
     gradingScales: GradingScaleRow[];
     staffProfileMap: Map<string, string>;
   }>({
@@ -350,6 +351,7 @@ export function AssessmentsPage() {
         studentsResult,
         subjectsResult,
         termsResult,
+        classesResult,
         gradingScalesResult,
         profilesResult,
       ] = (await Promise.all([
@@ -370,6 +372,12 @@ export function AssessmentsPage() {
         ),
         schoolQuery(
           supabase
+            .from("classes")
+            .select("id, name, class_teacher_id, education_level")
+            .order("name"),
+        ),
+        schoolQuery(
+          supabase
             .from("grading_scales")
             .select("grade, min_score, max_score, descriptor")
             .order("min_score", { ascending: false }),
@@ -386,6 +394,7 @@ export function AssessmentsPage() {
         students: (studentsResult.data ?? []) as StudentRow[],
         subjects: (subjectsResult.data ?? []) as SubjectRow[],
         terms: (termsResult.data ?? []) as TermRow[],
+        classes: (classesResult.data ?? []) as ClassRow[],
         gradingScales: (gradingScalesResult.data ?? []) as GradingScaleRow[],
         staffProfileMap,
       };

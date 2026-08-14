@@ -1233,6 +1233,7 @@ export type Database = {
           id: string;
           name: string;
           position: number;
+          points: number | null;
           school_id: string;
         };
         Insert: {
@@ -1242,6 +1243,7 @@ export type Database = {
           id?: string;
           name: string;
           position?: number;
+          points?: number | null;
           school_id: string;
         };
         Update: {
@@ -1251,6 +1253,7 @@ export type Database = {
           id?: string;
           name?: string;
           position?: number;
+          points?: number | null;
           school_id?: string;
         };
         Relationships: [

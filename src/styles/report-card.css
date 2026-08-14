@@ -64,9 +64,27 @@
     overflow: hidden;
   }
   .report-doc .report-watermark {
-    opacity: 0.1;
+    opacity: 0.16;
     width: 170mm;
     height: 170mm;
+  }
+  .report-doc .student-info-table td,
+  .report-doc .student-info-table .label,
+  .report-doc .student-info-table .label-lin,
+  .report-doc .student-info-table .label-name,
+  .report-doc .student-info-table .label-small,
+  .report-doc .student-info-table .attendance-cell,
+  .report-doc .student-info-table .attendance-cell td,
+  .report-doc .student-info-table .attendance-cell tr:last-child td,
+  .report-doc .title-row td,
+  .report-doc .results th,
+  .report-doc .results tbody tr:nth-child(even),
+  .report-doc .overall-table td,
+  .report-doc .definitions,
+  .report-doc .keywords th,
+  .report-doc .activities td:first-child,
+  .report-doc .comments .label {
+    background: transparent !important;
   }
   .report-doc:last-child {
     page-break-after: auto;
@@ -82,6 +100,12 @@
   overflow: hidden;
   isolation: isolate;
 }
+.report-doc.advanced-report {
+  background:
+    radial-gradient(circle at top left, rgba(30, 58, 138, 0.08), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(201, 48, 44, 0.08), transparent 30%),
+    white;
+}
 .report-doc > * {
   position: relative;
   z-index: 1;
@@ -95,7 +119,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.12;
+  opacity: 0.18;
   pointer-events: none;
   z-index: 0;
   filter: grayscale(100%);
@@ -198,7 +222,7 @@
 .report-doc .student-info-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
   border: 1px solid #dde2ec;
   border-radius: 10px;
   overflow: hidden;
@@ -208,17 +232,18 @@
   border: 1px solid #dde2ec;
   vertical-align: middle;
   font-size: 14px;
+  background: rgba(255, 255, 255, 0.72);
 }
 .report-doc .student-info-table .label {
   font-weight: 600;
   color: #1f2a3f;
-  background: #f8faff;
+  background: rgba(248, 250, 255, 0.58);
   white-space: nowrap;
 }
 .report-doc .student-info-table .label-lin {
   font-weight: 600;
   color: #1f2a3f;
-  background: #f8faff;
+  background: rgba(248, 250, 255, 0.58);
   white-space: nowrap;
   width: 5%;
   min-width: 40px;
@@ -237,7 +262,7 @@
 .report-doc .student-info-table .label-name {
   font-weight: 600;
   color: #1f2a3f;
-  background: #f8faff;
+  background: rgba(248, 250, 255, 0.58);
   white-space: nowrap;
   width: 8%;
   min-width: 50px;
@@ -251,7 +276,7 @@
 .report-doc .student-info-table .label-small {
   font-weight: 600;
   color: #1f2a3f;
-  background: #f8faff;
+  background: rgba(248, 250, 255, 0.58);
   white-space: nowrap;
   width: 10%;
   min-width: 70px;
@@ -262,10 +287,12 @@
   width: 18%;
 }
 .report-doc .student-info-table .attendance-cell {
-  background: #f8faff;
+  background: rgba(248, 250, 255, 0.5);
   text-align: center;
   width: 20%;
   padding: 10px 12px;
+  position: relative;
+  z-index: 3;
 }
 .report-doc .student-info-table .attendance-cell table {
   margin: 0 auto;
@@ -285,24 +312,26 @@
   border: 1px solid #3d4a5a;
   padding: 5px 12px;
   font-size: 14px;
-  background: white;
+  background: rgba(255, 255, 255, 0.72);
 }
 .report-doc .student-info-table .attendance-cell tr:last-child td {
   font-weight: 600;
-  background: #eef2f9;
+  background: rgba(238, 242, 249, 0.78);
 }
 .report-doc .passport-cell {
   text-align: center;
   vertical-align: middle;
   width: 16%;
   padding: 10px 12px;
+  position: relative;
+  z-index: 3;
 }
 .report-doc .passport {
   width: 105px;
   height: 125px;
   max-width: 105px;
   max-height: 125px;
-  background: #eef2f9;
+  background: rgba(238, 242, 249, 0.78);
   border: 4px solid #c9302c;
   border-radius: 10px;
   display: flex;
@@ -317,9 +346,11 @@
   margin: 0 auto;
   box-shadow: 0 2px 8px rgba(201, 48, 44, 0.25);
   line-height: 1.3;
+  position: relative;
+  z-index: 4;
 }
 .report-doc .title-row td {
-  background: #f8faff;
+  background: rgba(248, 250, 255, 0.58);
   font-weight: 600;
   font-size: 15px;
   color: #1f2a3f;
@@ -335,6 +366,24 @@
   border-left: 5px solid #c9302c;
   padding-left: 10px;
 }
+.report-doc.advanced-report .title,
+.report-doc.advanced-report .section-title {
+  border-left-color: #1e3a8a;
+}
+.report-doc.advanced-report .results th {
+  background: #e9efff;
+}
+.report-doc.advanced-report .results td,
+.report-doc.advanced-report .results th {
+  border-color: #334155;
+}
+.report-doc.advanced-report .definitions h3 {
+  color: #1e3a8a;
+  letter-spacing: 0.6px;
+}
+.report-doc.advanced-report .keywords table {
+  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.08);
+}
 .report-doc .approved-note {
   margin: -2px 0 6px 15px;
   font-size: 12px;
@@ -345,10 +394,10 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 .report-doc .results th {
-  background: #eef2f7;
+  background: rgba(238, 242, 247, 0.72);
   border: 1px solid #3d4a5a;
   padding: 4px 3px;
   font-weight: 600;
@@ -379,17 +428,17 @@
   width: 7%;
 }
 .report-doc .results tbody tr:nth-child(even) {
-  background: #fafcff;
+  background: rgba(250, 252, 255, 0.35);
 }
 .report-doc .overall-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 6px 0 8px;
+  margin: 12px 0 12px;
 }
 .report-doc .overall-table td {
   border: 1px solid #3d4a5a;
   padding: 6px 10px;
-  background: #f0f4fa;
+  background: rgba(240, 244, 250, 0.62);
   font-size: 13px;
 }
 .report-doc .overall-table .overall-cell {
@@ -447,7 +496,7 @@
   flex-wrap: wrap;
   gap: 8px;
   margin: 8px 0 8px;
-  background: #f9fbfe;
+  background: rgba(249, 251, 254, 0.5);
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid #dde2ec;
@@ -469,7 +518,7 @@
   border-collapse: collapse;
 }
 .report-doc .keywords th {
-  background: #e4e9f2;
+  background: rgba(228, 233, 242, 0.72);
   border: 1px solid #3d4a5a;
   padding: 3px 5px;
   font-weight: 600;
@@ -497,7 +546,7 @@
 .report-doc .activities {
   width: 100%;
   border-collapse: collapse;
-  margin: 4px 0 8px;
+  margin: 12px 0 12px;
   font-size: 13px;
 }
 .report-doc .activities td {
@@ -507,13 +556,13 @@
 }
 .report-doc .activities td:first-child {
   font-weight: 600;
-  background: #f2f6fd;
+  background: rgba(242, 246, 253, 0.62);
   width: 16%;
 }
 .report-doc .comments {
   width: 100%;
   border-collapse: collapse;
-  margin: 4px 0 8px;
+  margin: 12px 0 12px;
 }
 .report-doc .comments td {
   border: 1px solid #3d4a5a;
@@ -523,7 +572,7 @@
 }
 .report-doc .comments .label {
   font-weight: 700;
-  background: #eef2f7;
+  background: rgba(238, 242, 247, 0.72);
   width: 18%;
   font-size: 13px;
 }

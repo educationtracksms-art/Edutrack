@@ -13,6 +13,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
     coCurricular,
     comments,
     staff,
+    totalPoints,
   } = data;
   const isAdvanced = gradingLevel === "advanced";
   const watermarkLabel = school.name || "School";
@@ -53,7 +54,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
   })();
 
   return (
-    <div className="report-doc">
+    <div className={`report-doc ${isAdvanced ? "advanced-report" : ""}`}>
       <div className="report-watermark" aria-hidden="true">
         {school.logoUrl ? (
           <img src={school.logoUrl} alt="" />
@@ -148,9 +149,6 @@ export function ReportCard({ data }: { data: ReportCardData }) {
             <td className="label-small">Class / Stream:</td>
             <td className="value-small">{student.classStream}</td>
           </tr>
-          <tr className="title-row">
-            <td colSpan={6}>{data.title}</td>
-          </tr>
         </tbody>
       </table>
 
@@ -183,44 +181,53 @@ export function ReportCard({ data }: { data: ReportCardData }) {
               <td>{row.summative}</td>
               <td>{row.total}</td>
               <td>{row.grade}</td>
-              <td>{row.gradeDetail}</td>
+              <td>{isAdvanced ? row.subjectPoints : row.gradeDetail}</td>
               <td>{row.teacher}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <table className="overall-table">
-        <tbody>
-          <tr>
-            <td>
-              <div className="overall-cell">
-                <span>
-                  <strong>OVERALL AVERAGE ACHIEVEMENT</strong>{" "}
-                  <span className="avg-score">{overall.average}</span>
-                </span>
-                <span className="identifier-block">
-                  <strong>{overall.metricLabel}:</strong> {overall.metric}
-                </span>
-                {overall.descriptor && (
-                  <span className="descriptor-block">
-                    <strong>Descriptor:</strong> {overall.descriptor}
+      {!isAdvanced && (
+        <table className="overall-table">
+          <tbody>
+            <tr>
+              <td>
+                <div className="overall-cell">
+                  <span>
+                    <strong>OVERALL AVERAGE ACHIEVEMENT</strong>{" "}
+                    <span className="avg-score">{overall.average}</span>
                   </span>
-                )}
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                  <span className="identifier-block">
+                    <strong>{overall.metricLabel}:</strong> {overall.metric}
+                  </span>
+                  {overall.descriptor && (
+                    <span className="descriptor-block">
+                      <strong>Descriptor:</strong> {overall.descriptor}
+                    </span>
+                  )}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
 
       <section className="definitions">
         <div className="keywords">
-          <h3>KEY WORDS AND DEFINITION OF TERMS</h3>
+          {isAdvanced && (
+            <div className="overall-cell" style={{ marginBottom: "8px" }}>
+              <span>
+                <strong>TOTAL POINTS:</strong> <span className="avg-score">{totalPoints ?? 0}</span>
+              </span>
+            </div>
+          )}
+          <h3>{isAdvanced ? "A-LEVEL GRADE KEY" : "KEY WORDS AND DEFINITION OF TERMS"}</h3>
           <table>
             <tbody>
               <tr>
                 <th>{isAdvanced ? "Grade" : "Identifier"}</th>
-                <th>{isAdvanced ? "Score Range" : "Score Range"}</th>
+                <th>Score Range</th>
                 <th>{isAdvanced ? "Points" : "Descriptor"}</th>
               </tr>
               {gradeKeys.map((key) => (
@@ -233,27 +240,29 @@ export function ReportCard({ data }: { data: ReportCardData }) {
             </tbody>
           </table>
         </div>
-        <div className="meaning">
-          <p>
-            <strong>Competency:</strong> The overall expected capability of a learner after exposure
-            to knowledge, skills and values.
-          </p>
-          <p>
-            <strong>Descriptor:</strong> Gives details on the extent to which the learner has
-            achieved the stipulated learning outcomes.
-          </p>
-          <p>
-            <strong>Generic Skills:</strong> Higher order transferable skills applied in school and
-            work.
-          </p>
-          <p>
-            <strong>Identifier:</strong> Alphabetical grade distinguishing learner achievement.
-          </p>
-          <p>
-            <strong>Score:</strong> Refers to the average of the scores obtained from all learning
-            outcomes.
-          </p>
-        </div>
+        {!isAdvanced && (
+          <div className="meaning">
+            <p>
+              <strong>Competency:</strong> The overall expected capability of a learner after
+              exposure to knowledge, skills and values.
+            </p>
+            <p>
+              <strong>Descriptor:</strong> Gives details on the extent to which the learner has
+              achieved the stipulated learning outcomes.
+            </p>
+            <p>
+              <strong>Generic Skills:</strong> Higher order transferable skills applied in school
+              and work.
+            </p>
+            <p>
+              <strong>Identifier:</strong> Alphabetical grade distinguishing learner achievement.
+            </p>
+            <p>
+              <strong>Score:</strong> Refers to the average of the scores obtained from all
+              learning outcomes.
+            </p>
+          </div>
+        )}
       </section>
 
       <h2 className="section-title">CO CURRICULAR ACTIVITIES AND PROJECTS</h2>
@@ -288,7 +297,9 @@ export function ReportCard({ data }: { data: ReportCardData }) {
             <td>{comments.headTeacher}</td>
           </tr>
           <tr>
-            <td className="label">Next term begins on</td>
+            <td className="label">
+              <strong>Next term begins on</strong>
+            </td>
             <td>{nextTermBeginsOn || "_____________________"}</td>
           </tr>
         </tbody>

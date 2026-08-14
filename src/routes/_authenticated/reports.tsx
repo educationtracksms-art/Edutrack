@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { ReportCard } from "@/components/report/ReportCard";
+import { ALevelReportCard } from "@/components/report/ALevelReportCard";
+import { OLevelReportCard } from "@/components/report/OLevelReportCard";
 import { Btn, PageHeader, Panel, inputClass } from "@/components/ui-kit";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { logReportPrint } from "@/lib/admin.functions";
@@ -289,9 +290,13 @@ function ReportsPage() {
       </Panel>
 
       <div className="space-y-6">
-        {cards.map((card) => (
-          <ReportCard key={card.studentId} data={card} />
-        ))}
+        {cards.map((card) =>
+          card.gradingLevel === "advanced" ? (
+            <ALevelReportCard key={card.studentId} data={card} />
+          ) : (
+            <OLevelReportCard key={card.studentId} data={card} />
+          ),
+        )}
       </div>
     </div>
   );

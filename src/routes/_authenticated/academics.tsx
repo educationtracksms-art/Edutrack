@@ -80,6 +80,7 @@ function AcademicsPage() {
     code: string | null;
     category: string | null;
     position: number | null;
+    points: number | null;
   };
 
   const [classForm, setClassForm] = useState({
@@ -94,6 +95,7 @@ function AcademicsPage() {
     code: "",
     category: "",
     position: "",
+    points: "1",
   });
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
@@ -280,7 +282,7 @@ function AcademicsPage() {
   }
 
   function resetSubjectForm() {
-    setSubjectForm({ name: "", code: "", category: "", position: "" });
+    setSubjectForm({ name: "", code: "", category: "", position: "", points: "1" });
     setEditingSubjectId(null);
   }
 
@@ -426,11 +428,15 @@ function AcademicsPage() {
   const addSubject = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
+      const points = Number(subjectForm.points);
+      if (Number.isNaN(points) || points < 1 || points > 5)
+        throw new Error("Subject points must be between 1 and 5");
       const { error } = await supabase.from("subjects").insert({
         school_id: schoolId,
         name: subjectForm.name.trim(),
         code: subjectForm.code || null,
         category: subjectForm.category || undefined,
+        points,
         position: subjectForm.position
           ? Number(subjectForm.position)
           : (data?.subjects.length ?? 0) + 1,
@@ -449,12 +455,16 @@ function AcademicsPage() {
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!editingSubjectId) throw new Error("No subject selected for update");
+      const points = Number(subjectForm.points);
+      if (Number.isNaN(points) || points < 1 || points > 5)
+        throw new Error("Subject points must be between 1 and 5");
       const { error } = await supabase
         .from("subjects")
         .update({
           name: subjectForm.name.trim(),
           code: subjectForm.code || null,
           category: subjectForm.category || undefined,
+          points,
           position: subjectForm.position
             ? Number(subjectForm.position)
             : (data?.subjects.length ?? 0) + 1,
@@ -676,6 +686,7 @@ function AcademicsPage() {
       if (!aLevelGradingForm.grade.trim()) throw new Error("Enter a grade label");
       if (Number.isNaN(minScore) || Number.isNaN(maxScore) || Number.isNaN(points))
         throw new Error("Enter valid score boundaries and points");
+      if (points < 1 || points > 5) throw new Error("A-level points must be between 1 and 5");
       if (maxScore < minScore) throw new Error("Maximum score must be greater than minimum score");
       await saveGradingScaleFn({
         data: {
@@ -800,6 +811,7 @@ function AcademicsPage() {
       code: item.code ?? "",
       category: item.category ?? "",
       position: item.position?.toString() ?? "",
+      points: item.points?.toString() ?? "1",
     });
   }
 
@@ -1071,6 +1083,18 @@ function AcademicsPage() {
                 />
               </Field>
             </div>
+            <Field label="Points">
+              <input
+                required
+                type="number"
+                min={1}
+                max={5}
+                className={inputClass}
+                value={subjectForm.points}
+                onChange={(e) => setSubjectForm({ ...subjectForm, points: e.target.value })}
+                placeholder="5"
+              />
+            </Field>
             <Field label="Category">
               <input
                 placeholder="Core / Elective"
@@ -1100,7 +1124,10 @@ function AcademicsPage() {
                 key={item.id}
                 className="flex items-center justify-between rounded-md border border-border px-3 py-2"
               >
-                <span>{item.name}</span>
+                <span className="flex items-center gap-2">
+                  <span>{item.name}</span>
+                  <Pill tone="info">{item.points ?? 1} pts</Pill>
+                </span>
                 <div className="flex items-center gap-2">
                   {item.category && <Pill tone="muted">{item.category}</Pill>}
                   <Btn variant="ghost" onClick={() => startEditingSubject(item)}>
