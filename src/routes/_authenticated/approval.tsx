@@ -7,28 +7,9 @@ import { toast } from "sonner";
 import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
+import { fetchDosApprovalRows, type ApprovalRow } from "@/lib/dos-approvals";
 import { updateAssessmentStatus } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
-
-type ApprovalRow = {
-  id: string;
-  student_id: string;
-  subject_id: string;
-  term_id: string;
-  class_id?: string | null;
-  stream_id?: string | null;
-  formative: number | null;
-  summative: number | null;
-  status: "draft" | "submitted" | "approved" | "rejected";
-  locked: boolean;
-  rejection_reason: string | null;
-  student_name?: string;
-  subject_name?: string;
-  term_name?: string;
-  class_name?: string;
-  stream_name?: string;
-  submitted_by_name?: string;
-};
 
 type SubmissionSummaryRow = {
   key: string;
@@ -78,55 +59,16 @@ function ApprovalsPage() {
   const isDos = hasAny(me?.roles, ["dos"]);
   const updateStatus = useServerFn(updateAssessmentStatus);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["dos-approvals", schoolId],
+  const { data: allRows, isLoading } = useQuery({
+    queryKey: ["dos-assessment-rows", schoolId],
     enabled: !!schoolId && isDos,
-    queryFn: async () => {
-      const [assessments, students, classes, streams, subjects, terms, profiles] =
-        await Promise.all([
-          supabase
-            .from("assessments")
-            .select(
-              "id, student_id, subject_id, term_id, formative, summative, status, locked, rejection_reason, created_at, submitted_by",
-            )
-            .eq("school_id", schoolId)
-            .neq("status", "approved")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("students")
-            .select("id, full_name, class_id, stream_id")
-            .eq("school_id", schoolId),
-          supabase.from("classes").select("id, name").eq("school_id", schoolId),
-          supabase.from("streams").select("id, name").eq("school_id", schoolId),
-          supabase.from("subjects").select("id, name").eq("school_id", schoolId),
-          supabase.from("terms").select("id, name").eq("school_id", schoolId),
-          supabase.from("profiles").select("id, full_name").eq("school_id", schoolId),
-        ]);
-
-      const studentMap = new Map((students.data ?? []).map((row: any) => [row.id, row.full_name]));
-      const studentClassMap = new Map((students.data ?? []).map((row: any) => [row.id, row.class_id]));
-      const studentStreamMap = new Map((students.data ?? []).map((row: any) => [row.id, row.stream_id]));
-      const classMap = new Map((classes.data ?? []).map((row: any) => [row.id, row.name]));
-      const streamMap = new Map((streams.data ?? []).map((row: any) => [row.id, row.name]));
-      const subjectMap = new Map((subjects.data ?? []).map((row: any) => [row.id, row.name]));
-      const termMap = new Map((terms.data ?? []).map((row: any) => [row.id, row.name]));
-      const profileMap = new Map((profiles.data ?? []).map((row: any) => [row.id, row.full_name]));
-
-      return (assessments.data ?? []).map((row: any): ApprovalRow => ({
-        ...row,
-        student_name: studentMap.get(row.student_id) ?? "Unknown learner",
-        subject_name: subjectMap.get(row.subject_id) ?? "Unknown subject",
-        term_name: termMap.get(row.term_id) ?? "Unknown term",
-        class_id: studentClassMap.get(row.student_id) ?? null,
-        stream_id: studentStreamMap.get(row.student_id) ?? null,
-        class_name: classMap.get(studentClassMap.get(row.student_id)) ?? "Unknown class",
-        stream_name: streamMap.get(studentStreamMap.get(row.student_id)) ?? "Unknown stream",
-        submitted_by_name: row.submitted_by
-          ? (profileMap.get(row.submitted_by) ?? "Unknown teacher")
-          : "Not submitted",
-      }));
-    },
+    queryFn: async () => fetchDosApprovalRows(schoolId),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
+  const data = useMemo(() => (allRows ?? []).filter((row) => row.status !== "approved"), [allRows]);
 
   const visibleData = useMemo(() => {
     const rows = [...(data ?? [])];
@@ -191,7 +133,7 @@ function ApprovalsPage() {
     },
     onSuccess: () => {
       toast.success("Status updated");
-      queryClient.invalidateQueries({ queryKey: ["dos-approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["dos-assessment-rows"] });
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
