@@ -104,6 +104,10 @@ export async function buildReportCards(
       .eq("term_id", termFilterId),
     supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
   ]);
+  const { data: commentRules } = await supabase
+    .from("report_comment_rules")
+    .select("comment_role, points, descriptor, comment")
+    .eq("school_id", schoolId);
 
   const approvedAssessments = (assessments ?? []).filter(
     (assessment: any) => assessment.status === "approved",
@@ -235,6 +239,17 @@ export async function buildReportCards(
     );
     const learnerName = student.full_name ?? "";
     const resolveComment = (role: "class_teacher" | "head_teacher") => {
+      if (educationLevel === "advanced") {
+        const matchedRule = (commentRules ?? []).find(
+          (rule: any) =>
+            rule.comment_role === role &&
+            rule.points != null &&
+            Number(rule.points) === Number(totalPoints ?? -1),
+        );
+        if (matchedRule) return matchedRule.comment as string;
+        return "";
+      }
+
       if (gradeCounts.A >= 6) return "Exceptional Performance.";
       if (role === "class_teacher") {
         if (gradeCounts.A >= 4)

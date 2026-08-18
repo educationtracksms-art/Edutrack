@@ -780,7 +780,8 @@ export const upsertReportCommentRule = createServerFn({ method: "POST" })
     (data: {
       id?: string | null;
       commentRole: "class_teacher" | "head_teacher";
-      descriptor: string;
+      descriptor?: string | null;
+      points?: number | null;
       comment: string;
     }) => data,
   )
@@ -807,7 +808,8 @@ export const upsertReportCommentRule = createServerFn({ method: "POST" })
     const payload = {
       school_id: schoolId,
       comment_role: data.commentRole,
-      descriptor: data.descriptor.trim(),
+      descriptor: data.points != null ? String(data.points) : data.descriptor?.trim() || "",
+      points: data.points ?? null,
       comment: data.comment.trim(),
     };
 

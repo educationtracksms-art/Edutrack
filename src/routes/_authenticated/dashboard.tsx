@@ -554,12 +554,20 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
       </Panel>
 
       {canEditComments && (
-        <CommentEditorPanel
-          schoolId={me?.profile?.school_id ?? null}
-          commentRole="class_teacher"
-          title="Class teacher comment rules"
-          description="These comments are applied automatically from the learner's overall descriptor."
-        />
+        <>
+          <CommentEditorPanel
+            schoolId={me?.profile?.school_id ?? null}
+            commentRole="class_teacher"
+            title="Class teacher comment rules"
+            description="Use point-based rules for A-level learners and descriptor rules for O-level learners."
+          />
+          <CommentEditorPanel
+            schoolId={me?.profile?.school_id ?? null}
+            commentRole="head_teacher"
+            title="Head teacher comment rules"
+            description="Use a separate set of point-based comments for the head teacher's report remark."
+          />
+        </>
       )}
     </div>
   );
@@ -578,7 +586,12 @@ function CommentEditorPanel({
 }) {
   const saveRule = useServerFn(upsertReportCommentRule);
   const deleteRule = useServerFn(deleteReportCommentRule);
-  const [draft, setDraft] = useState({ id: "", descriptor: "Outstanding", comment: "" });
+  const [draft, setDraft] = useState<{
+    id: string;
+    descriptor: string;
+    points: string;
+    comment: string;
+  }>({ id: "", descriptor: "Outstanding", points: "", comment: "" });
   const { data: rules } = useQuery({
     queryKey: ["dashboard-report-comment-rules", schoolId, commentRole],
     enabled: !!schoolId,
@@ -586,19 +599,23 @@ function CommentEditorPanel({
       (
         await supabase
           .from("report_comment_rules")
-          .select("id, descriptor, comment")
+          .select("id, descriptor, points, comment")
           .eq("school_id", schoolId)
           .eq("comment_role", commentRole)
+          .order("points", { ascending: true, nullsFirst: false })
           .order("descriptor", { ascending: true })
       ).data ?? [],
   });
 
   useEffect(() => {
     if (!rules) return;
-    const first = rules[0] as { id: string; descriptor: string; comment: string } | undefined;
+    const first = rules[0] as
+      | { id: string; descriptor: string; points: number | null; comment: string }
+      | undefined;
     setDraft((current) => ({
       id: first?.id ?? current.id ?? "",
       descriptor: first?.descriptor ?? current.descriptor,
+      points: first?.points != null ? String(first.points) : current.points,
       comment: first?.comment ?? current.comment,
     }));
   }, [rules]);
@@ -609,7 +626,8 @@ function CommentEditorPanel({
         data: {
           id: draft.id || null,
           commentRole,
-          descriptor: draft.descriptor,
+          descriptor: draft.points ? draft.points : draft.descriptor,
+          points: draft.points ? Number(draft.points) : null,
           comment: draft.comment,
         },
       }),
@@ -632,18 +650,48 @@ function CommentEditorPanel({
   return (
     <Panel title={title} className="mt-4">
       <p className="mb-4 text-sm text-muted-foreground">{description}</p>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4">
         <label className="block text-sm">
-          <span className="font-medium">Descriptor</span>
+          <span className="font-medium">Rule type</span>
           <select
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            value={draft.descriptor}
-            onChange={(event) => setDraft({ ...draft, descriptor: event.target.value })}
+            value={draft.points ? "points" : "descriptor"}
+            onChange={(event) =>
+              setDraft({
+                ...draft,
+                points: event.target.value === "points" ? draft.points || "3" : "",
+              })
+            }
           >
-            <option value="Outstanding">Outstanding</option>
-            <option value="Modulate">Modulate</option>
-            <option value="Basic">Basic</option>
+            <option value="descriptor">Descriptor</option>
+            <option value="points">Point based</option>
           </select>
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">{draft.points ? "Points" : "Descriptor"}</span>
+          {draft.points ? (
+            <select
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              value={draft.points}
+              onChange={(event) => setDraft({ ...draft, points: event.target.value })}
+            >
+              {Array.from({ length: 15 }, (_, index) => index + 3).map((point) => (
+                <option key={point} value={point}>
+                  {point}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              value={draft.descriptor}
+              onChange={(event) => setDraft({ ...draft, descriptor: event.target.value })}
+            >
+              <option value="Outstanding">Outstanding</option>
+              <option value="Modulate">Modulate</option>
+              <option value="Basic">Basic</option>
+            </select>
+          )}
         </label>
         <label className="block text-sm md:col-span-2">
           <span className="font-medium">Comment</span>
@@ -678,27 +726,38 @@ function CommentEditorPanel({
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="pb-2">Descriptor</th>
+              <th className="pb-2">Descriptor / Points</th>
               <th className="pb-2">Comment</th>
               <th className="pb-2" />
             </tr>
           </thead>
           <tbody>
-            {(rules ?? []).map((rule: { id: string; descriptor: string; comment: string }) => (
-              <tr key={rule.id} className="border-t border-border">
-                <td className="py-2 pr-4">{rule.descriptor}</td>
-                <td className="py-2 pr-4">{rule.comment}</td>
-                <td className="py-2 text-right">
-                  <button
-                    type="button"
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-                    onClick={() => setDraft(rule)}
-                  >
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {(rules ?? []).map(
+              (rule: { id: string; descriptor: string; points: number | null; comment: string }) => (
+                <tr key={rule.id} className="border-t border-border">
+                  <td className="py-2 pr-4">
+                    {rule.points != null ? `Points ${rule.points}` : rule.descriptor}
+                  </td>
+                  <td className="py-2 pr-4">{rule.comment}</td>
+                  <td className="py-2 text-right">
+                    <button
+                      type="button"
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                      onClick={() =>
+                        setDraft({
+                          id: rule.id,
+                          descriptor: rule.descriptor,
+                          points: rule.points != null ? String(rule.points) : "",
+                          comment: rule.comment,
+                        })
+                      }
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ),
+            )}
             {(rules ?? []).length === 0 && (
               <tr>
                 <td colSpan={3} className="py-4 text-muted-foreground">

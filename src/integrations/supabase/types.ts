@@ -708,6 +708,7 @@ export type Database = {
           created_at: string;
           descriptor: string;
           id: string;
+          points: number | null;
           school_id: string;
           updated_at: string;
         };
@@ -717,6 +718,7 @@ export type Database = {
           created_at?: string;
           descriptor: string;
           id?: string;
+          points?: number | null;
           school_id: string;
           updated_at?: string;
         };
@@ -726,6 +728,7 @@ export type Database = {
           created_at?: string;
           descriptor?: string;
           id?: string;
+          points?: number | null;
           school_id?: string;
           updated_at?: string;
         };
