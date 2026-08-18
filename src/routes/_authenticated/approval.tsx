@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
-import { reviewAssessments, updateAssessmentStatus } from "@/lib/admin.functions";
+import { updateAssessmentStatus } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type ApprovalRow = {
@@ -41,7 +41,7 @@ type SubmissionSummaryRow = {
   expected_count: number;
 };
 
-export const Route = createFileRoute("/_authenticated/approvals")({
+export const Route = createFileRoute("/_authenticated/approval")({
   beforeLoad: async () => {
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
@@ -71,10 +71,12 @@ export const Route = createFileRoute("/_authenticated/approvals")({
 function ApprovalsPage() {
   const queryClient = useQueryClient();
   const [sortBy, setSortBy] = useState<"created_at" | "class" | "stream" | "subject">("created_at");
+  const [classFilter, setClassFilter] = useState("all");
+  const [subjectFilter, setSubjectFilter] = useState("all");
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const isDos = hasAny(me?.roles, ["dos"]);
-  const approveEntry = useServerFn(updateAssessmentStatus);
+  const updateStatus = useServerFn(updateAssessmentStatus);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dos-approvals", schoolId],
@@ -88,6 +90,7 @@ function ApprovalsPage() {
               "id, student_id, subject_id, term_id, formative, summative, status, locked, rejection_reason, created_at, submitted_by",
             )
             .eq("school_id", schoolId)
+            .neq("status", "approved")
             .order("created_at", { ascending: false }),
           supabase
             .from("students")
@@ -101,33 +104,13 @@ function ApprovalsPage() {
         ]);
 
       const studentMap = new Map((students.data ?? []).map((row: any) => [row.id, row.full_name]));
-      const studentClassMap = new Map(
-        (students.data ?? []).map((row: any) => [row.id, row.class_id]),
-      );
-      const studentStreamMap = new Map(
-        (students.data ?? []).map((row: any) => [row.id, row.stream_id]),
-      );
+      const studentClassMap = new Map((students.data ?? []).map((row: any) => [row.id, row.class_id]));
+      const studentStreamMap = new Map((students.data ?? []).map((row: any) => [row.id, row.stream_id]));
       const classMap = new Map((classes.data ?? []).map((row: any) => [row.id, row.name]));
       const streamMap = new Map((streams.data ?? []).map((row: any) => [row.id, row.name]));
       const subjectMap = new Map((subjects.data ?? []).map((row: any) => [row.id, row.name]));
       const termMap = new Map((terms.data ?? []).map((row: any) => [row.id, row.name]));
       const profileMap = new Map((profiles.data ?? []).map((row: any) => [row.id, row.full_name]));
-      const scopeSubmitted = new Map<string, number>();
-
-      for (const row of assessments.data ?? []) {
-        const studentClassId = studentClassMap.get(row.student_id) ?? null;
-        const studentStreamId = studentStreamMap.get(row.student_id) ?? null;
-        const scopeKey = [
-          studentClassId ?? "all",
-          studentStreamId ?? "all",
-          row.subject_id ?? "unknown-subject",
-          row.term_id ?? "unknown-term",
-        ].join(":");
-        scopeSubmitted.set(
-          scopeKey,
-          (scopeSubmitted.get(scopeKey) ?? 0) + (row.status === "submitted" ? 1 : 0),
-        );
-      }
 
       return (assessments.data ?? []).map((row: any): ApprovalRow => ({
         ...row,
@@ -147,8 +130,14 @@ function ApprovalsPage() {
 
   const visibleData = useMemo(() => {
     const rows = [...(data ?? [])];
+    const filteredRows = rows.filter((row) => {
+      const matchesClass = classFilter === "all" || (row.class_id ?? "unknown-class") === classFilter;
+      const matchesSubject =
+        subjectFilter === "all" || (row.subject_id ?? "unknown-subject") === subjectFilter;
+      return matchesClass && matchesSubject;
+    });
     if (sortBy === "class") {
-      return rows.sort((a, b) => {
+      return filteredRows.sort((a, b) => {
         const classCompare = (a.class_name ?? "").localeCompare(b.class_name ?? "");
         if (classCompare !== 0) return classCompare;
         const streamCompare = (a.stream_name ?? "").localeCompare(b.stream_name ?? "");
@@ -157,7 +146,7 @@ function ApprovalsPage() {
       });
     }
     if (sortBy === "stream") {
-      return rows.sort((a, b) => {
+      return filteredRows.sort((a, b) => {
         const streamCompare = (a.stream_name ?? "").localeCompare(b.stream_name ?? "");
         if (streamCompare !== 0) return streamCompare;
         const classCompare = (a.class_name ?? "").localeCompare(b.class_name ?? "");
@@ -166,7 +155,7 @@ function ApprovalsPage() {
       });
     }
     if (sortBy === "subject") {
-      return rows.sort((a, b) => {
+      return filteredRows.sort((a, b) => {
         const subjectCompare = (a.subject_name ?? "").localeCompare(b.subject_name ?? "");
         if (subjectCompare !== 0) return subjectCompare;
         const classCompare = (a.class_name ?? "").localeCompare(b.class_name ?? "");
@@ -174,8 +163,40 @@ function ApprovalsPage() {
         return (a.student_name ?? "").localeCompare(b.student_name ?? "");
       });
     }
-    return rows;
-  }, [data, sortBy]);
+    return filteredRows;
+  }, [data, sortBy, classFilter, subjectFilter]);
+
+  const classOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const row of data ?? []) options.set(row.class_id ?? "unknown-class", row.class_name ?? "Unknown class");
+    return Array.from(options.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [data]);
+
+  const subjectOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const row of data ?? [])
+      options.set(row.subject_id ?? "unknown-subject", row.subject_name ?? "Unknown subject");
+    return Array.from(options.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [data]);
+
+  const statusMutation = useMutation({
+    mutationFn: async (vars: { assessmentId: string; status: ApprovalRow["status"] }) => {
+      await updateStatus({
+        data: {
+          assessmentId: vars.assessmentId,
+          status: vars.status,
+          reason: null,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Status updated");
+      queryClient.invalidateQueries({ queryKey: ["dos-approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
 
   const submissionSummaryRows = useMemo(() => {
     const rows = data ?? [];
@@ -241,123 +262,6 @@ function ApprovalsPage() {
     });
   }, [data]);
 
-  const actionMutation = useMutation({
-    mutationFn: async (vars: { assessmentId: string; status: "approved" | "rejected" }) => {
-      const reason =
-        vars.status === "rejected" ? window.prompt("Enter a rejection reason")?.trim() : null;
-      if (vars.status === "rejected" && !reason) {
-        throw new Error("A rejection reason is required");
-      }
-      await approveEntry({
-        data: {
-          assessmentId: vars.assessmentId,
-          status: vars.status,
-          reason: reason ?? null,
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Approval updated");
-      queryClient.invalidateQueries({ queryKey: ["dos-approvals"] });
-      queryClient.invalidateQueries({ queryKey: ["assessments"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-    onError: (error: Error) => toast.error(friendlyAdminError(error)),
-  });
-
-  const bulkApproveMutation = useMutation({
-    mutationFn: async (scope: {
-      kind: "class" | "stream";
-      classId?: string;
-      streamId?: string;
-    }) => {
-      const scopedRows = visibleData.filter((row) => {
-        if (scope.kind === "class") return row.class_id === scope.classId;
-        return row.stream_id === scope.streamId;
-      });
-      const ids = scopedRows.filter((row) => row.status === "submitted").map((row) => row.id);
-      if (!ids.length) {
-        throw new Error("No submitted assessments found in this group");
-      }
-      await reviewAssessments({
-        data: {
-          ids,
-          action: "approve",
-          classId: scope.classId ?? null,
-          streamId: scope.streamId ?? null,
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Group approved");
-      queryClient.invalidateQueries({ queryKey: ["dos-approvals"] });
-      queryClient.invalidateQueries({ queryKey: ["assessments"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-    onError: (error: Error) => toast.error(friendlyAdminError(error)),
-  });
-
-  const groupedRows = useMemo(() => {
-    if (sortBy === "class") {
-      const groups = new Map<string, ApprovalRow[]>();
-      for (const row of visibleData) {
-        const key = row.class_id ?? row.class_name ?? "unknown-class";
-        const existing = groups.get(key) ?? [];
-        existing.push(row);
-        groups.set(key, existing);
-      }
-      return Array.from(groups.entries()).map(([key, rows]) => ({
-        key,
-        label: rows[0]?.class_name ?? "Unknown class",
-        kind: "class" as const,
-        rows,
-        classId: rows[0]?.class_id,
-      }));
-    }
-
-    if (sortBy === "stream") {
-      const groups = new Map<string, ApprovalRow[]>();
-      for (const row of visibleData) {
-        const key = row.stream_id ?? row.stream_name ?? "unknown-stream";
-        const existing = groups.get(key) ?? [];
-        existing.push(row);
-        groups.set(key, existing);
-      }
-      return Array.from(groups.entries()).map(([key, rows]) => ({
-        key,
-        label: rows[0]?.stream_name ?? "Unknown stream",
-        kind: "stream" as const,
-        rows,
-        streamId: rows[0]?.stream_id,
-      }));
-    }
-
-    if (sortBy === "subject") {
-      const groups = new Map<string, ApprovalRow[]>();
-      for (const row of visibleData) {
-        const key = row.subject_id ?? row.subject_name ?? "unknown-subject";
-        const existing = groups.get(key) ?? [];
-        existing.push(row);
-        groups.set(key, existing);
-      }
-      return Array.from(groups.entries()).map(([key, rows]) => ({
-        key,
-        label: rows[0]?.subject_name ?? "Unknown subject",
-        kind: "subject" as const,
-        rows,
-      }));
-    }
-
-    return [
-      {
-        key: "all",
-        label: "All assessments",
-        kind: "all" as const,
-        rows: visibleData,
-      },
-    ];
-  }, [sortBy, visibleData]);
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -406,7 +310,10 @@ function ApprovalsPage() {
       </Panel>
 
       <Panel title="All assessments">
-        <div className="mb-3 flex flex-wrap gap-2">
+        <p className="mb-3 text-sm text-muted-foreground">
+          This table shows every mark row in the database for the school, regardless of status.
+        </p>
+        <div className="mb-3 grid gap-2 md:grid-cols-3">
           <select
             className={`${inputClass} max-w-xs`}
             value={sortBy}
@@ -416,6 +323,26 @@ function ApprovalsPage() {
             <option value="class">Sort by class</option>
             <option value="stream">Sort by stream</option>
             <option value="subject">Sort by subject</option>
+          </select>
+          <select className={inputClass} value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+            <option value="all">All classes</option>
+            {classOptions.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <select
+            className={inputClass}
+            value={subjectFilter}
+            onChange={(event) => setSubjectFilter(event.target.value)}
+          >
+            <option value="all">All subjects</option>
+            {subjectOptions.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -432,117 +359,57 @@ function ApprovalsPage() {
                 <tr>
                   <th className="pb-2">Learner</th>
                   <th className="pb-2">Class</th>
-                  <th className="pb-2">Stream</th>
                   <th className="pb-2">Subject</th>
-                  <th className="pb-2">Term</th>
-                  <th className="pb-2">Submitted by</th>
                   <th className="pb-2">Score</th>
                   <th className="pb-2">Status</th>
                   <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
-                {groupedRows.map((group) => {
-                  const submittedCount = group.rows.filter(
-                    (row) => row.status === "submitted",
-                  ).length;
-                  const approveWholeGroup =
-                    group.kind === "class" || group.kind === "stream" ? (
-                      <button
-                        type="button"
-                        className="rounded-md border border-border px-3 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={
-                          bulkApproveMutation.isPending ||
-                          submittedCount === 0 ||
-                          (!group.classId && !group.streamId)
-                        }
-                        onClick={() =>
-                          bulkApproveMutation.mutate({
-                            kind: group.kind,
-                            classId: group.classId,
-                            streamId: group.streamId,
-                          })
-                        }
-                      >
-                        Approve {group.kind}
-                      </button>
-                    ) : null;
-
+                {visibleData.map((row) => {
+                  const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
                   return (
-                    <Fragment key={group.key}>
-                      {group.kind !== "all" ? (
-                        <tr className="border-t border-border bg-muted/30">
-                          <td className="py-2 pr-4 font-semibold" colSpan={6}>
-                            {group.label}
-                          </td>
-                          <td className="py-2 pr-4 text-xs text-muted-foreground" colSpan={2}>
-                            {submittedCount} submitted
-                          </td>
-                          <td className="py-2 text-right" colSpan={1}>
-                            {approveWholeGroup}
-                          </td>
-                        </tr>
-                      ) : null}
-                      {group.rows.map((row) => {
-                        const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
-                        return (
-                          <tr key={row.id} className="border-t border-border">
-                            <td className="py-3 pr-4 font-medium">{row.student_name}</td>
-                            <td className="py-3 pr-4">{row.class_name}</td>
-                            <td className="py-3 pr-4">{row.stream_name}</td>
-                            <td className="py-3 pr-4">{row.subject_name}</td>
-                            <td className="py-3 pr-4">{row.term_name}</td>
-                            <td className="py-3 pr-4">
-                              {row.submitted_by_name ?? "Not submitted"}
-                            </td>
-                            <td className="py-3 pr-4">{total}</td>
-                            <td className="py-3 pr-4">
-                              <Pill
-                                tone={
-                                  row.status === "approved"
-                                    ? "success"
-                                    : row.status === "rejected"
-                                      ? "danger"
-                                      : row.status === "submitted"
-                                        ? "warning"
-                                        : "muted"
-                                }
-                              >
-                                {row.status}
-                              </Pill>
-                              {row.rejection_reason ? (
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {row.rejection_reason}
-                                </p>
-                              ) : null}
-                            </td>
-                            <td className="py-3 text-right">
-                              <div className="flex justify-end gap-2">
-                                <select
-                                  className={inputClass}
-                                  value={row.status}
-                                  onChange={(event) => {
-                                    const nextStatus = event.target.value as
-                                      "draft" | "submitted" | "approved" | "rejected";
-                                    if (nextStatus === row.status) return;
-                                    actionMutation.mutate({
-                                      assessmentId: row.id,
-                                      status: nextStatus,
-                                    });
-                                  }}
-                                  disabled={actionMutation.isPending}
-                                >
-                                  <option value="draft">Draft</option>
-                                  <option value="submitted">Submitted</option>
-                                  <option value="approved">Approved</option>
-                                  <option value="rejected">Rejected</option>
-                                </select>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Fragment>
+                    <tr key={row.id} className="border-t border-border">
+                      <td className="py-3 pr-4 font-medium">{row.student_name}</td>
+                      <td className="py-3 pr-4">{row.class_name}</td>
+                      <td className="py-3 pr-4">{row.subject_name}</td>
+                      <td className="py-3 pr-4">{total}</td>
+                      <td className="py-3 pr-4">
+                        <Pill
+                          tone={
+                            row.status === "approved"
+                              ? "success"
+                              : row.status === "rejected"
+                                ? "danger"
+                                : row.status === "submitted"
+                                  ? "warning"
+                                  : "muted"
+                          }
+                        >
+                          {row.status}
+                        </Pill>
+                        {row.rejection_reason ? (
+                          <p className="mt-1 text-xs text-muted-foreground">{row.rejection_reason}</p>
+                        ) : null}
+                      </td>
+                      <td className="py-3 text-right">
+                        <select
+                          className={inputClass}
+                          value={row.status}
+                          onChange={(event) => {
+                            const nextStatus = event.target.value as ApprovalRow["status"];
+                            if (nextStatus === row.status) return;
+                            statusMutation.mutate({ assessmentId: row.id, status: nextStatus });
+                          }}
+                          disabled={statusMutation.isPending}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="submitted">Submitted</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>

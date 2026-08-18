@@ -114,7 +114,9 @@ function useDashboardData(
           schoolQuery(
             supabase
               .from("assessments")
-              .select("id, student_id, subject_id, formative, summative, status, school_id"),
+              .select(
+                "id, student_id, subject_id, term_id, formative, summative, status, school_id, approved_by, approved_at",
+              ),
           ),
           supabase.from("subjects").select("id, name"),
           schoolQuery(supabase.from("classes").select("id, name, class_teacher_id")),
@@ -876,7 +878,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     { name: "Male", value: data.students.filter((s) => s.gender === "Male").length },
   ].filter((g) => g.value > 0);
 
-  const approved = data.assessments.filter((a) => a.status === "approved").length;
+  const approved = data.assessments.filter((assessment) => assessment.status === "approved").length;
   const rejected = data.assessments.filter((a) => a.status === "rejected").length;
   const submitted = data.assessments.filter((a) => a.status === "submitted").length;
   const draft = data.assessments.filter((a) => a.status === "draft").length;
@@ -905,9 +907,46 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
     return true;
   });
-  const submittedAssessments = reviewedAssessments.filter(
-    (assessment) => assessment.status === "submitted",
-  );
+  const visibleAssessments = reviewedAssessments;
+  const dosMarkRows = data.assessments
+    .map((assessment) => {
+      const student = data.students.find((item) => item.id === assessment.student_id);
+      const subject = data.subjects.find((item) => item.id === assessment.subject_id);
+      const classId = student?.class_id ?? null;
+      const className = classId ? classById.get(classId) ?? "Unknown class" : null;
+      if (!student || !subject || !className) return null;
+      if (reviewClassId && classId !== reviewClassId) return null;
+      if (reviewStreamId && student.stream_id !== reviewStreamId) return null;
+      return {
+        id: assessment.id,
+        student_name: student.full_name ?? "Unknown learner",
+        class_name: className,
+        subject: subject.name ?? "Unknown subject",
+        formative: assessment.formative,
+        summative: assessment.summative,
+        total_marks: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
+        status: assessment.status,
+      };
+    })
+    .filter(
+      (
+        row,
+      ): row is {
+        id: string;
+        student_name: string;
+        class_name: string;
+        subject: string;
+        formative: number | null;
+        summative: number | null;
+        total_marks: number;
+        status: string;
+      } => row !== null,
+    )
+    .sort((left, right) =>
+      `${left.class_name} ${left.student_name} ${left.subject}`.localeCompare(
+        `${right.class_name} ${right.student_name} ${right.subject}`,
+      ),
+    );
 
   const trend = ["Term I", "Term II", "Term III"].map((term, index) => ({
     term,
@@ -1094,11 +1133,11 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
             </Field>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
-            Review submitted marks only. Rejected marks return to teachers for correction and
-            approved marks stay locked.
+            Review all marks in the selected scope. Submitted marks can be approved, while drafts,
+            rejected, and approved marks remain visible for oversight.
           </p>
           <div className="mt-4">
-            {submittedAssessments.length === 0 ? (
+            {visibleAssessments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No student marks are available.</p>
             ) : (
               <ResponsiveTable
@@ -1120,7 +1159,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {submittedAssessments.map((assessment) => (
+                      {visibleAssessments.map((assessment) => (
                         <tr key={assessment.id} className="border-t border-border">
                           <td className="py-2 pr-4 font-medium">{assessment.studentName}</td>
                           <td className="py-2 pr-4">
@@ -1176,7 +1215,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                 }
                 mobile={
                   <>
-                    {submittedAssessments.map((assessment) => (
+                    {visibleAssessments.map((assessment) => (
                       <div
                         key={assessment.id}
                         className="rounded-2xl border border-border bg-card p-4 shadow-sm"

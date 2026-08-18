@@ -123,8 +123,15 @@ const NAV: NavItem[] = [
     module: "academics",
   },
   {
-    to: "/approvals",
+    to: "/approval",
     label: "Approvals for DOS",
+    icon: ClipboardCheck,
+    roles: ["dos"],
+    module: "academics",
+  },
+  {
+    to: "/approved",
+    label: "Approved",
     icon: ClipboardCheck,
     roles: ["dos"],
     module: "academics",

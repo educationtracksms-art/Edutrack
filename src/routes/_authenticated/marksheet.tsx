@@ -144,7 +144,8 @@ function MarksheetPage() {
           supabase
             .from("assessments")
             .select("student_id, subject_id, formative, summative")
-            .eq("term_id", selectedTermId),
+            .eq("term_id", selectedTermId)
+            .eq("status", "approved"),
         )
       ).data ?? [],
   });
