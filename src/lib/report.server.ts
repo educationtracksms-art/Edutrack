@@ -88,11 +88,11 @@ export async function buildReportCards(
   }
 
   const termFilterId = term?.id ?? "00000000-0000-0000-0000-000000000000";
-  const [{ data: assessments }, { data: attendance }, { data: activities }] = await Promise.all([
+  const [{ data: assessments }, { data: attendance }, { data: activities }, { data: activePeriods }] = await Promise.all([
     supabase
       .from("assessments")
       .select(
-        "student_id, subject_id, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+        "student_id, subject_id, exam_type, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
       )
       .in("student_id", ids)
       .eq("term_id", termFilterId)
@@ -103,14 +103,16 @@ export async function buildReportCards(
       .in("student_id", ids)
       .eq("term_id", termFilterId),
     supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
+    (supabase as any).from("assessment_periods").select("exam_type").eq("school_id", schoolId).eq("term_id", termFilterId).eq("is_active", true),
   ]);
   const { data: commentRules } = await supabase
     .from("report_comment_rules")
     .select("comment_role, points, descriptor, comment")
     .eq("school_id", schoolId);
 
+  const activeTypes = new Set((activePeriods ?? []).map((p: any) => p.exam_type));
   const approvedAssessments = (assessments ?? []).filter(
-    (assessment: any) => assessment.status === "approved",
+    (assessment: any) => assessment.status === "approved" && activeTypes.has(assessment.exam_type),
   );
 
   const feesEnabled = toggles?.find((t: any) => t.module === "fees")?.enabled ?? true;
@@ -171,9 +173,16 @@ export async function buildReportCards(
     const rows: SubjectRow[] = (subjects ?? [])
       .filter((subject: any) => subjectIdsToRender.has(subject.id))
       .map((subject: any) => {
-        const mark = marks.find((m: any) => m.subject_id === subject.id);
+        const subjectMarks = marks.filter((m: any) => m.subject_id === subject.id);
+        const mark = subjectMarks[subjectMarks.length - 1];
+        const summativeMarks = subjectMarks
+          .map((m: any) => Number(m.summative))
+          .filter((value: number) => Number.isFinite(value));
+        const averageSummative = summativeMarks.length
+          ? summativeMarks.reduce((sum: number, value: number) => sum + value, 0) / summativeMarks.length
+          : null;
         const subjectMaxPoints = Number(subject.points ?? 0);
-        if (!mark || (mark.formative == null && mark.summative == null)) {
+        if (!mark || (mark.formative == null && averageSummative == null)) {
           return {
             subject: subject.name,
             formative: "",
@@ -186,7 +195,7 @@ export async function buildReportCards(
           };
         }
         const formative = Number(mark.formative ?? 0);
-        const summative = Number(mark.summative ?? 0);
+        const summative = averageSummative ?? 0;
         const total = Math.round((formative + summative) * 10) / 10;
         const g = gradeFor(total, educationLevel);
         const weightedPoints =

@@ -1322,6 +1322,7 @@ export type Database = {
           stream_id: string | null;
           subject_id: string;
           teacher_id: string;
+          weekly_periods: number;
         };
         Insert: {
           class_id?: string | null;
@@ -1331,6 +1332,7 @@ export type Database = {
           stream_id?: string | null;
           subject_id: string;
           teacher_id: string;
+          weekly_periods?: number;
         };
         Update: {
           class_id?: string | null;
@@ -1340,6 +1342,7 @@ export type Database = {
           stream_id?: string | null;
           subject_id?: string;
           teacher_id?: string;
+          weekly_periods?: number;
         };
         Relationships: [
           {

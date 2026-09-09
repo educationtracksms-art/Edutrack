@@ -105,6 +105,7 @@ function AcademicsPage() {
     subject_id: "",
     class_id: "",
     stream_id: "",
+    weekly_periods: "1",
   });
   const [yearForm, setYearForm] = useState({ name: "" });
   const [termForm, setTermForm] = useState({
@@ -492,6 +493,7 @@ function AcademicsPage() {
         subject_id: allocForm.subject_id,
         class_id: allocForm.class_id || null,
         stream_id: allocForm.stream_id || null,
+        weekly_periods: Math.max(1, Number(allocForm.weekly_periods) || 1),
       };
       const { error } = await supabase.from("teacher_allocations").insert(payload);
       if (error) throw new Error(error.message);
@@ -500,7 +502,7 @@ function AcademicsPage() {
         .insert({ ...payload, action: "assigned", performed_by: me?.userId ?? null });
     },
     onSuccess: () => {
-      setAllocForm({ teacher_id: "", subject_id: "", class_id: "", stream_id: "" });
+      setAllocForm({ teacher_id: "", subject_id: "", class_id: "", stream_id: "", weekly_periods: "1" });
       toast.success("Teacher allocated");
       refresh();
     },
@@ -1668,7 +1670,7 @@ function AcademicsPage() {
 
       <Panel title="Teacher allocations" className="mt-4">
         <form
-          className="mb-4 grid gap-3 md:grid-cols-5"
+          className="mb-4 grid gap-3 md:grid-cols-6"
           onSubmit={(e) => {
             e.preventDefault();
             addAllocation.mutate();
@@ -1734,6 +1736,16 @@ function AcademicsPage() {
                 ))}
             </select>
           </Field>
+          <Field label="Periods / week">
+            <input
+              className={inputClass}
+              type="number"
+              min="1"
+              max="60"
+              value={allocForm.weekly_periods}
+              onChange={(e) => setAllocForm({ ...allocForm, weekly_periods: e.target.value })}
+            />
+          </Field>
           <div className="flex items-end">
             <Btn type="submit" variant="accent" disabled={addAllocation.isPending}>
               Allocate
@@ -1749,6 +1761,7 @@ function AcademicsPage() {
                 <th className="pb-2">Subject</th>
                 <th className="pb-2">Class</th>
                 <th className="pb-2">Stream</th>
+                <th className="pb-2">Periods / week</th>
                 <th className="pb-2" />
               </tr>
             </thead>
@@ -1759,6 +1772,7 @@ function AcademicsPage() {
                   <td>{subjectName(a.subject_id)}</td>
                   <td>{className(a.class_id)}</td>
                   <td>{streamName(a.stream_id)}</td>
+                  <td>{a.weekly_periods}</td>
                   <td className="text-right">
                     <Btn variant="ghost" onClick={() => removeAllocation.mutate(a.id)}>
                       Remove
@@ -1768,7 +1782,7 @@ function AcademicsPage() {
               ))}
               {(data?.allocations ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
                     No allocations yet.
                   </td>
                 </tr>

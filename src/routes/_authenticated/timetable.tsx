@@ -67,6 +67,7 @@ function TimetablePage() {
     lunch_end: null,
   });
   const [periodDrafts, setPeriodDrafts] = useState<PeriodDraft[]>([]);
+  const [editingPeriodOrder, setEditingPeriodOrder] = useState<number | null>(null);
   const [form, setForm] = useState({
     id: "",
     class_id: "",
@@ -264,21 +265,37 @@ function TimetablePage() {
   }, [data?.periods]);
 
   const classStreamGroups = useMemo(() => {
+    const teacherScoped =
+      !canEdit && hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
+    const teacherAllocations = teacherScoped
+      ? (data?.allocations ?? []).filter((allocation) => allocation.teacher_id === me?.userId)
+      : [];
     const classes = [...(data?.classes ?? [])].filter(
-      (item) => !classFilter || item.id === classFilter,
+      (item) =>
+        (!teacherScoped || teacherAllocations.some((allocation) => allocation.class_id === item.id)) &&
+        (!classFilter || item.id === classFilter),
     );
     return classes.map((item) => ({
       id: item.id,
       label: item.name,
       streams: [...(data?.streams ?? [])]
         .filter((stream) => stream.class_id === item.id)
+        .filter(
+          (stream) =>
+            !teacherScoped ||
+            teacherAllocations.some(
+              (allocation) =>
+                allocation.class_id === item.id &&
+                (!allocation.stream_id || allocation.stream_id === stream.id),
+            ),
+        )
         .filter((stream) => !streamFilter || stream.id === streamFilter)
         .map((stream) => ({
           id: stream.id,
           label: stream.name,
         })),
     }));
-  }, [data?.classes, data?.streams, classFilter, streamFilter]);
+  }, [canEdit, data?.allocations, data?.classes, data?.streams, classFilter, streamFilter, me?.roles, me?.userId]);
 
   const streamColumns = useMemo(
     () =>
@@ -297,12 +314,25 @@ function TimetablePage() {
   const dayEntries = useMemo(
     () =>
       (data?.entries ?? []).filter((entry) => {
+        const teacherScoped =
+          !canEdit && hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
+        const teacherAllocations = teacherScoped
+          ? (data?.allocations ?? []).filter((allocation) => allocation.teacher_id === me?.userId)
+          : [];
+        const canViewEntry =
+          !teacherScoped ||
+          teacherAllocations.some(
+            (allocation) =>
+              allocation.class_id === entry.class_id &&
+              (!allocation.stream_id || allocation.stream_id === entry.stream_id),
+          );
+        if (!canViewEntry) return false;
         if (String(entry.day_of_week) !== dayFilter) return false;
         if (classFilter && entry.class_id !== classFilter) return false;
         if (streamFilter && entry.stream_id !== streamFilter) return false;
         return true;
       }),
-    [data?.entries, dayFilter, classFilter, streamFilter],
+    [canEdit, data?.allocations, data?.entries, dayFilter, classFilter, streamFilter, me?.roles, me?.userId],
   );
   const visibleDayLabels = useMemo(
     () => visibleDays.map((day) => ({ day, label: DAYS[Number(day) - 1] ?? `Day ${day}` })),
@@ -471,11 +501,105 @@ function TimetablePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const autoGenerateTimetable = useMutation({
+    mutationFn: async () => {
+      if (!schoolId || !currentTerm || !currentYear) {
+        throw new Error("Create an academic year and term first");
+      }
+      const slots = periodRows.filter((row) => !row.is_break && !row.is_lunch);
+      const occupied = new Set(
+        (data?.entries ?? []).flatMap((entry) => [
+          `teacher:${entry.day_of_week}:${entry.period}:${entry.teacher_id}`,
+          `class:${entry.day_of_week}:${entry.period}:${entry.class_id}`,
+          `stream:${entry.day_of_week}:${entry.period}:${entry.stream_id ?? ""}`,
+        ]),
+      );
+      const generated: Array<Record<string, unknown>> = [];
+      let skipped = 0;
+
+      for (const allocation of data?.allocations ?? []) {
+        if (!allocation.class_id) {
+          skipped += 1;
+          continue;
+        }
+        const streams = (data?.streams ?? []).filter(
+          (stream) => stream.class_id === allocation.class_id &&
+            (!allocation.stream_id || stream.id === allocation.stream_id),
+        );
+        const targets = streams.length
+          ? streams
+          : allocation.stream_id
+            ? [{ id: allocation.stream_id }]
+            : [{ id: null }];
+        for (const stream of targets) {
+          const existingCount = (data?.entries ?? []).filter(
+            (entry) => entry.teacher_id === allocation.teacher_id &&
+              entry.subject_id === allocation.subject_id &&
+              entry.class_id === allocation.class_id &&
+              entry.stream_id === stream.id,
+          ).length;
+          let remaining = Math.max(0, (allocation.weekly_periods ?? 1) - existingCount);
+          for (let day = 1; day <= DAYS.length && remaining > 0; day += 1) {
+            for (const slot of slots) {
+              const keys = [
+                `teacher:${day}:${slot.period_order}:${allocation.teacher_id}`,
+                `class:${day}:${slot.period_order}:${allocation.class_id}`,
+                `stream:${day}:${slot.period_order}:${stream.id ?? ""}`,
+              ];
+              if (keys.some((key) => occupied.has(key))) continue;
+              generated.push({
+                school_id: schoolId,
+                academic_year_id: currentYear.id,
+                term_id: currentTerm.id,
+                class_id: allocation.class_id,
+                stream_id: stream.id,
+                subject_id: allocation.subject_id,
+                teacher_id: allocation.teacher_id,
+                day_of_week: day,
+                period: slot.period_order,
+                start_time: slot.start_time,
+                end_time: slot.end_time,
+              });
+              keys.forEach((key) => occupied.add(key));
+              remaining -= 1;
+              if (remaining === 0) break;
+            }
+          }
+          skipped += remaining;
+        }
+      }
+
+      if (generated.length) {
+        const { error } = await supabase.from("timetable_entries").insert(generated);
+        if (error) throw new Error(error.message);
+      }
+      return { generated: generated.length, skipped };
+    },
+    onSuccess: ({ generated, skipped }) => {
+      queryClient.invalidateQueries({ queryKey: ["timetable", schoolId] });
+      toast.success(`Generated ${generated} lessons${skipped ? `; ${skipped} could not be placed` : ""}`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const stats = {
     required: data?.allocations.length ?? 0,
     scheduled: dayEntries.length,
     conflicts: countConflicts(dayEntries),
   };
+
+  const allocationGaps = (data?.allocations ?? [])
+    .map((allocation: any) => {
+      const scheduled = (data?.entries ?? []).filter(
+        (entry) =>
+          entry.teacher_id === allocation.teacher_id &&
+          entry.subject_id === allocation.subject_id &&
+          entry.class_id === allocation.class_id &&
+          entry.stream_id === allocation.stream_id,
+      ).length;
+      return { allocation, scheduled, required: allocation.weekly_periods ?? 1 };
+    })
+    .filter(({ scheduled, required }) => scheduled < required);
 
   if (isModuleLoading) {
     return (
@@ -575,8 +699,25 @@ function TimetablePage() {
     <div>
       <PageHeader
         title="Timetable"
-        description="Screenshot-style timetable with classes across the top and time down the left."
+        description={
+          !canEdit && hasAny(me?.roles, ["subject_teacher", "class_teacher"])
+            ? "Your assigned classes and streams."
+            : "Screenshot-style timetable with classes across the top and time down the left."
+        }
       />
+
+      {hasAny(me?.roles, ["dos"]) && (
+        <div className="mb-4 flex justify-end">
+          <Btn
+            type="button"
+            variant="accent"
+            onClick={() => autoGenerateTimetable.mutate()}
+            disabled={autoGenerateTimetable.isPending}
+          >
+            {autoGenerateTimetable.isPending ? "Generating timetable…" : "Auto generate timetable"}
+          </Btn>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Stat label="Allocations" value={stats.required} />
@@ -586,6 +727,13 @@ function TimetablePage() {
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.8fr_1fr]">
         <Panel title="Daily timetable">
+          {allocationGaps.length > 0 && (
+            <p className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+              {allocationGaps.length} teacher allocation{allocationGaps.length === 1 ? "" : "s"} still
+              {" "}need timetable periods. Every allocation must reach its weekly target before a
+              class distribution is complete.
+            </p>
+          )}
           <div className="mb-3 grid gap-3 md:grid-cols-4">
             <Field label="Class">
               <select
@@ -743,12 +891,51 @@ function TimetablePage() {
                     </thead>
                     <tbody>
                       {periodRows.map((slot, index) => {
+                        const periodDraft = periodDrafts.find(
+                          (draft) => draft.period_order === slot.period_order,
+                        );
+                        const displayedLabel = periodDraft?.label ?? slot.label;
+                        const isEditingPeriod =
+                          canEdit && editingPeriodOrder === slot.period_order;
+                        const periodLabelCell = (
+                          <td
+                            className={`border border-border px-2 py-2 text-center font-semibold leading-tight ${
+                              canEdit ? "cursor-pointer hover:bg-muted/40" : ""
+                            }`}
+                            onClick={() => canEdit && setEditingPeriodOrder(slot.period_order)}
+                            title={canEdit ? "Click to edit this period" : undefined}
+                          >
+                            {isEditingPeriod ? (
+                              <input
+                                autoFocus
+                                className={`${inputClass} w-full text-center text-sm`}
+                                value={displayedLabel}
+                                onChange={(e) =>
+                                  setPeriodDrafts((current) =>
+                                    current.map((draft) =>
+                                      draft.period_order === slot.period_order
+                                        ? { ...draft, label: e.target.value }
+                                        : draft,
+                                    ),
+                                  )
+                                }
+                                onBlur={() => setEditingPeriodOrder(null)}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === "Escape") {
+                                    setEditingPeriodOrder(null);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              displayedLabel
+                            )}
+                          </td>
+                        );
                         if (slot.is_break || slot.is_lunch) {
                           return (
                             <tr key={`${day}-${slot.label}-${index}`} className="bg-muted/20">
-                              <td className="border border-border px-2 py-2 text-center font-semibold">
-                                {slot.label}
-                              </td>
+                              {periodLabelCell}
                               <td
                                 className="border border-border px-2 py-2 text-center font-semibold"
                                 colSpan={Math.max(timetableColumnCount, 1)}
@@ -761,9 +948,7 @@ function TimetablePage() {
 
                         return (
                           <tr key={`${day}-${slot.period_order}`}>
-                            <td className="border border-border px-2 py-2 text-center font-semibold leading-tight">
-                              {slot.label}
-                            </td>
+                            {periodLabelCell}
                             {streamColumns.length ? (
                               streamColumns.map((column) => {
                                 const entry =

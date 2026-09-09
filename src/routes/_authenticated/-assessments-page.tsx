@@ -894,7 +894,8 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
         (assessment) =>
           assessment.student_id === entryForm.studentId &&
           assessment.subject_id === entryForm.subjectId &&
-          assessment.term_id === termId,
+          assessment.term_id === termId &&
+          (assessment.exam_type ?? "end_of_term") === entryForm.examType,
       );
 
       if (!existing) {
@@ -927,6 +928,7 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
             .eq("student_id", entryForm.studentId)
             .eq("subject_id", entryForm.subjectId)
             .eq("term_id", termId)
+            .eq("exam_type", entryForm.examType)
             .maybeSingle()
         ).data?.id;
       if (!assessmentId) throw new Error("Unable to locate the saved assessment");
@@ -1306,8 +1308,9 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
                 value={entryForm.examType}
                 onChange={(event) => setEntryForm({ ...entryForm, examType: event.target.value })}
               >
-                <option value="end_of_term">End of term</option>
+                <option value="beginning_of_term">Beginning of term</option>
                 <option value="mid_term">Mid term</option>
+                <option value="end_of_term">End of term</option>
                 <option value="class_test">Class test</option>
                 <option value="assignment">Assignment</option>
               </select>

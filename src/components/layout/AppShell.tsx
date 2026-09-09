@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarCheck,
   CalendarClock,
+  CalendarDays,
   ClipboardCheck,
   Landmark,
   FileBadge,
@@ -38,6 +39,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getEnabledModuleMap } from "@/lib/modules";
 import { cn } from "@/lib/utils";
+import { NotificationPanel } from "@/components/notifications/NotificationPanel";
 import {
   Sheet,
   SheetContent,
@@ -108,6 +110,8 @@ const NAV: NavItem[] = [
     roles: SCHOOL_ROLES,
     module: "timetable",
   },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays, roles: SCHOOL_ROLES },
+  { to: "/events", label: "Events", icon: CalendarDays, roles: SCHOOL_ROLES },
   {
     to: "/assessments",
     label: "Assessments",
@@ -327,6 +331,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
+          <div className="border-t border-sidebar-border px-3 py-2">
+            <div className={cn(!labelsVisible && "flex justify-center")}>
+              <NotificationPanel showLabel={labelsVisible} />
+            </div>
+          </div>
+
           <div className="border-t border-sidebar-border p-3 text-xs">
             {labelsVisible ? (
               <>
@@ -400,6 +410,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 })}
               </nav>
 
+              <div className="border-t border-sidebar-border px-3 py-2">
+                <NotificationPanel />
+              </div>
+
               <div className="border-t border-sidebar-border p-3">
                 <p className="truncate text-sm font-medium">
                   {me?.profile?.full_name || me?.email}
@@ -449,10 +463,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <p className="truncate text-xs text-muted-foreground">{pageTitle}</p>
               </div>
             </div>
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="flex items-center gap-2">
+              <NotificationPanel />
+              <div className="hidden items-center gap-2 md:flex">
               <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
                 {primaryRole ? ROLE_LABELS[primaryRole] : "No role"}
               </span>
+              </div>
             </div>
           </div>
         </header>

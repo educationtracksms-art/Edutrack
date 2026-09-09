@@ -21,12 +21,15 @@ import { Route as AuthenticatedAssessmentsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAssestmentRouteImport } from './routes/_authenticated/assestment'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authenticated/audit-logs'
+import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedEnvDebugRouteImport } from './routes/_authenticated/env-debug'
+import { Route as AuthenticatedEventsRouteImport } from './routes/_authenticated/events'
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedMarksheetRouteImport } from './routes/_authenticated/marksheet'
+import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPromotionsRouteImport } from './routes/_authenticated/promotions'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedSchoolsRouteImport } from './routes/_authenticated/schools'
@@ -103,6 +106,11 @@ const AuthenticatedAuditLogsRoute = AuthenticatedAuditLogsRouteImport.update({
   path: '/audit-logs',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedChangePasswordRoute =
   AuthenticatedChangePasswordRouteImport.update({
     id: '/change-password',
@@ -117,6 +125,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
 const AuthenticatedEnvDebugRoute = AuthenticatedEnvDebugRouteImport.update({
   id: '/env-debug',
   path: '/env-debug',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedEventsRoute = AuthenticatedEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFinanceRoute = AuthenticatedFinanceRouteImport.update({
@@ -134,6 +147,12 @@ const AuthenticatedMarksheetRoute = AuthenticatedMarksheetRouteImport.update({
   path: '/marksheet',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedNotificationsRoute =
+  AuthenticatedNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPromotionsRoute = AuthenticatedPromotionsRouteImport.update({
   id: '/promotions',
   path: '/promotions',
@@ -225,12 +244,15 @@ export interface FileRoutesByFullPath {
   '/assestment': typeof AuthenticatedAssestmentRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
+  '/calendar': typeof AuthenticatedCalendarRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/env-debug': typeof AuthenticatedEnvDebugRoute
+  '/events': typeof AuthenticatedEventsRoute
   '/finance': typeof AuthenticatedFinanceRouteWithChildren
   '/library': typeof AuthenticatedLibraryRoute
   '/marksheet': typeof AuthenticatedMarksheetRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/schools': typeof AuthenticatedSchoolsRoute
@@ -259,12 +281,15 @@ export interface FileRoutesByTo {
   '/assestment': typeof AuthenticatedAssestmentRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
+  '/calendar': typeof AuthenticatedCalendarRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/env-debug': typeof AuthenticatedEnvDebugRoute
+  '/events': typeof AuthenticatedEventsRoute
   '/finance': typeof AuthenticatedFinanceRouteWithChildren
   '/library': typeof AuthenticatedLibraryRoute
   '/marksheet': typeof AuthenticatedMarksheetRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/schools': typeof AuthenticatedSchoolsRoute
@@ -295,12 +320,15 @@ export interface FileRoutesById {
   '/_authenticated/assestment': typeof AuthenticatedAssestmentRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/audit-logs': typeof AuthenticatedAuditLogsRoute
+  '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/env-debug': typeof AuthenticatedEnvDebugRoute
+  '/_authenticated/events': typeof AuthenticatedEventsRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRouteWithChildren
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/marksheet': typeof AuthenticatedMarksheetRoute
+  '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/promotions': typeof AuthenticatedPromotionsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/schools': typeof AuthenticatedSchoolsRoute
@@ -331,12 +359,15 @@ export interface FileRouteTypes {
     | '/assestment'
     | '/attendance'
     | '/audit-logs'
+    | '/calendar'
     | '/change-password'
     | '/dashboard'
     | '/env-debug'
+    | '/events'
     | '/finance'
     | '/library'
     | '/marksheet'
+    | '/notifications'
     | '/promotions'
     | '/reports'
     | '/schools'
@@ -365,12 +396,15 @@ export interface FileRouteTypes {
     | '/assestment'
     | '/attendance'
     | '/audit-logs'
+    | '/calendar'
     | '/change-password'
     | '/dashboard'
     | '/env-debug'
+    | '/events'
     | '/finance'
     | '/library'
     | '/marksheet'
+    | '/notifications'
     | '/promotions'
     | '/reports'
     | '/schools'
@@ -400,12 +434,15 @@ export interface FileRouteTypes {
     | '/_authenticated/assestment'
     | '/_authenticated/attendance'
     | '/_authenticated/audit-logs'
+    | '/_authenticated/calendar'
     | '/_authenticated/change-password'
     | '/_authenticated/dashboard'
     | '/_authenticated/env-debug'
+    | '/_authenticated/events'
     | '/_authenticated/finance'
     | '/_authenticated/library'
     | '/_authenticated/marksheet'
+    | '/_authenticated/notifications'
     | '/_authenticated/promotions'
     | '/_authenticated/reports'
     | '/_authenticated/schools'
@@ -523,6 +560,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAuditLogsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/calendar': {
+      id: '/_authenticated/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AuthenticatedCalendarRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/change-password': {
       id: '/_authenticated/change-password'
       path: '/change-password'
@@ -544,6 +588,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEnvDebugRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/events': {
+      id: '/_authenticated/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof AuthenticatedEventsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/finance': {
       id: '/_authenticated/finance'
       path: '/finance'
@@ -563,6 +614,13 @@ declare module '@tanstack/react-router' {
       path: '/marksheet'
       fullPath: '/marksheet'
       preLoaderRoute: typeof AuthenticatedMarksheetRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/notifications': {
+      id: '/_authenticated/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/promotions': {
@@ -692,12 +750,15 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAssestmentRoute: typeof AuthenticatedAssestmentRoute
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedAuditLogsRoute: typeof AuthenticatedAuditLogsRoute
+  AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEnvDebugRoute: typeof AuthenticatedEnvDebugRoute
+  AuthenticatedEventsRoute: typeof AuthenticatedEventsRoute
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRouteWithChildren
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedMarksheetRoute: typeof AuthenticatedMarksheetRoute
+  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedPromotionsRoute: typeof AuthenticatedPromotionsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSchoolsRoute: typeof AuthenticatedSchoolsRoute
@@ -715,12 +776,15 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAssestmentRoute: AuthenticatedAssestmentRoute,
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedAuditLogsRoute: AuthenticatedAuditLogsRoute,
+  AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEnvDebugRoute: AuthenticatedEnvDebugRoute,
+  AuthenticatedEventsRoute: AuthenticatedEventsRoute,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRouteWithChildren,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedMarksheetRoute: AuthenticatedMarksheetRoute,
+  AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedPromotionsRoute: AuthenticatedPromotionsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSchoolsRoute: AuthenticatedSchoolsRoute,

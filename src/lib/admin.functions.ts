@@ -627,6 +627,22 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const updateAssessmentPeriod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { termId: string; examType: string; isActive: boolean; isLocked: boolean }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("dos") && !roles.includes("super_admin")) throw new Error("Only the Director of Studies can manage assessment periods");
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId || !["beginning_of_term", "mid_term", "end_of_term"].includes(data.examType)) throw new Error("Invalid assessment period");
+    const { error } = await (context.supabase as any).from("assessment_periods").upsert({ school_id: schoolId, term_id: data.termId, exam_type: data.examType, is_active: data.isActive, is_locked: data.isActive ? data.isLocked : false, updated_at: new Date().toISOString() }, { onConflict: "school_id,term_id,exam_type" });
+    if (error) throw new Error(error.message);
+    const label = data.examType.replaceAll("_", " ");
+    const { data: recipients } = await context.supabase.from("profiles").select("id").eq("school_id", schoolId);
+    await context.supabase.from("notifications").insert((recipients ?? []).map((r: any) => ({ school_id: schoolId, user_id: r.id, title: `Assessment entry ${data.isLocked ? "locked" : "open"}`, body: `${label} assessment entry is now ${data.isLocked ? "locked" : "open"}.` })));
+    return { ok: true };
+  });
+
 export const upsertReportComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(
@@ -1038,6 +1054,9 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
     if (student.status !== "active") {
       throw new Error("Only verified students can receive assessments");
     }
+    const examType = data.examType?.trim() || "end_of_term";
+    const { data: period } = await (context.supabase as any).from("assessment_periods").select("is_active, is_locked").eq("school_id", schoolId).eq("term_id", data.termId).eq("exam_type", examType).maybeSingle();
+    if (period && (!period.is_active || period.is_locked)) throw new Error("This assessment period is not open for entry");
 
     const teacherRoles = new Set(["subject_teacher", "class_teacher", "dos"]);
     if (roles.some((role) => teacherRoles.has(role))) {
@@ -1086,6 +1105,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       .eq("student_id", data.studentId)
       .eq("subject_id", data.subjectId)
       .eq("term_id", data.termId)
+      .eq("exam_type", examType)
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
     if (existingAssessment) {
@@ -1099,7 +1119,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       student_id: data.studentId,
       subject_id: data.subjectId,
       term_id: data.termId,
-      exam_type: data.examType?.trim() || "end_of_term",
+      exam_type: examType,
       grade_descriptor: gradeMatch.descriptor || null,
       formative: data.formative ?? null,
       summative: data.summative ?? null,
@@ -1258,6 +1278,9 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     if (existingAssessment.locked) {
       throw new Error("Locked assessments cannot be submitted");
     }
+    const { data: assessmentDetails } = await context.supabase.from("assessments").select("term_id, exam_type").eq("id", data.assessmentId).maybeSingle();
+    const { data: period } = assessmentDetails ? await (context.supabase as any).from("assessment_periods").select("is_active, is_locked").eq("school_id", schoolId).eq("term_id", assessmentDetails.term_id).eq("exam_type", assessmentDetails.exam_type).maybeSingle() : { data: null };
+    if (period && (!period.is_active || period.is_locked)) throw new Error("This assessment period is not open for entry");
 
     const { data: gradingScales } = await context.supabase
       .from("grading_scales")

@@ -84,7 +84,7 @@ function UsersPage() {
       const [{ data: profiles }, { data: roles }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, email, initials, is_active, must_change_password"),
+          .select("id, full_name, email, initials, is_active, must_change_password, school_id"),
         supabase.from("user_roles").select("user_id, role"),
       ]);
       return (profiles ?? []).map((profile) => ({
@@ -93,6 +93,9 @@ function UsersPage() {
       }));
     },
   });
+
+  const schoolNameFor = (schoolId: string | null) =>
+    (schools ?? []).find((school) => school.id === schoolId)?.name ?? null;
 
   const { data: departments } = useQuery({
     queryKey: ["departments"],
@@ -219,85 +222,91 @@ function UsersPage() {
         description="Accounts are created by administrators — never self-registered."
       />
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <Panel title="Departments">
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Department name">
-              <input
-                className={inputClass}
-                value={departmentForm.name}
-                onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })}
-              />
-            </Field>
-            <Field label="Description">
-              <input
-                className={inputClass}
-                value={departmentForm.description}
-                onChange={(e) =>
-                  setDepartmentForm({ ...departmentForm, description: e.target.value })
-                }
-              />
-            </Field>
-          </div>
-          <div className="mt-3">
-            <Btn variant="accent" onClick={() => departmentMutation.mutate()}>
-              Create department
-            </Btn>
-          </div>
-          <div className="mt-4 space-y-2">
-            {(departments ?? []).map((dept: any) => (
-              <div key={dept.id} className="rounded-xl border border-border px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium">{dept.name}</p>
-                  <Pill tone={dept.hod_user_id ? "success" : "warning"}>
-                    {dept.hod_user_id ? "HOD assigned" : "No HOD"}
-                  </Pill>
+      <div className={isSuper ? "grid gap-4" : "grid gap-4 lg:grid-cols-[1fr_340px]"}>
+        {!isSuper && (
+          <Panel title="Departments">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Department name">
+                <input
+                  className={inputClass}
+                  value={departmentForm.name}
+                  onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })}
+                />
+              </Field>
+              <Field label="Description">
+                <input
+                  className={inputClass}
+                  value={departmentForm.description}
+                  onChange={(e) =>
+                    setDepartmentForm({ ...departmentForm, description: e.target.value })
+                  }
+                />
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Btn variant="accent" onClick={() => departmentMutation.mutate()}>
+                Create department
+              </Btn>
+            </div>
+            <div className="mt-4 space-y-2">
+              {(departments ?? []).map((dept: any) => (
+                <div key={dept.id} className="rounded-xl border border-border px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">{dept.name}</p>
+                    <Pill tone={dept.hod_user_id ? "success" : "warning"}>
+                      {dept.hod_user_id ? "HOD assigned" : "No HOD"}
+                    </Pill>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <Field label="Assign department">
-              <select
-                className={inputClass}
-                value={departmentAssign.departmentId}
-                onChange={(e) =>
-                  setDepartmentAssign({ ...departmentAssign, departmentId: e.target.value })
-                }
-              >
-                <option value="">Select department</option>
-                {(departments ?? []).map((dept: any) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Assign HOD">
-              <select
-                className={inputClass}
-                value={departmentAssign.hodUserId}
-                onChange={(e) =>
-                  setDepartmentAssign({ ...departmentAssign, hodUserId: e.target.value })
-                }
-              >
-                <option value="">Select teacher</option>
-                {(people ?? [])
-                  .filter((person) => person.roles.includes("subject_teacher") || person.roles.includes("class_teacher"))
-                  .map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.full_name || person.email}
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Field label="Assign department">
+                <select
+                  className={inputClass}
+                  value={departmentAssign.departmentId}
+                  onChange={(e) =>
+                    setDepartmentAssign({ ...departmentAssign, departmentId: e.target.value })
+                  }
+                >
+                  <option value="">Select department</option>
+                  {(departments ?? []).map((dept: any) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
                     </option>
                   ))}
-              </select>
-            </Field>
-          </div>
-          <div className="mt-3">
-            <Btn variant="accent" onClick={() => assignHodMutation.mutate()}>
-              Assign HOD
-            </Btn>
-          </div>
-        </Panel>
+                </select>
+              </Field>
+              <Field label="Assign HOD">
+                <select
+                  className={inputClass}
+                  value={departmentAssign.hodUserId}
+                  onChange={(e) =>
+                    setDepartmentAssign({ ...departmentAssign, hodUserId: e.target.value })
+                  }
+                >
+                  <option value="">Select teacher</option>
+                  {(people ?? [])
+                    .filter(
+                      (person) =>
+                        person.roles.includes("subject_teacher") ||
+                        person.roles.includes("class_teacher"),
+                    )
+                    .map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.full_name || person.email}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Btn variant="accent" onClick={() => assignHodMutation.mutate()}>
+                Assign HOD
+              </Btn>
+            </div>
+          </Panel>
+        )}
 
         <Panel title="Accounts">
           <ResponsiveTable
@@ -308,6 +317,7 @@ function UsersPage() {
                     <tr>
                       <th className="pb-2">Name</th>
                       <th className="pb-2">Email</th>
+                      {isSuper && <th className="pb-2">School</th>}
                       <th className="pb-2">Roles</th>
                       <th className="pb-2">State</th>
                       <th className="pb-2" />
@@ -325,6 +335,9 @@ function UsersPage() {
                           )}
                         </td>
                         <td className="py-2.5">{person.email}</td>
+                        {isSuper && (
+                          <td className="py-2.5">{schoolNameFor(person.school_id) || "—"}</td>
+                        )}
                         <td className="py-2.5">
                           <div className="flex flex-wrap gap-1">
                             {person.roles.map((role) => (
@@ -355,7 +368,7 @@ function UsersPage() {
                                   email: person.email ?? "",
                                   role: (person.roles[0] ?? "subject_teacher") as AppRole,
                                   initials: person.initials ?? "",
-                                  schoolId: "",
+                                  schoolId: person.school_id ?? "",
                                 });
                               }}
                             >
@@ -403,6 +416,11 @@ function UsersPage() {
                         <p className="mt-1 break-all text-xs text-muted-foreground">
                           {person.email}
                         </p>
+                        {isSuper && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            School: {schoolNameFor(person.school_id) || "—"}
+                          </p>
+                        )}
                       </div>
                       {person.must_change_password ? (
                         <Pill tone="warning">Must reset</Pill>
@@ -430,7 +448,7 @@ function UsersPage() {
                             email: person.email ?? "",
                             role: (person.roles[0] ?? "subject_teacher") as AppRole,
                             initials: person.initials ?? "",
-                            schoolId: "",
+                            schoolId: person.school_id ?? "",
                           });
                         }}
                       >
