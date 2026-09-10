@@ -754,6 +754,18 @@ function CommentEditorPanel({
                     >
                       Edit
                     </button>
+                    <button
+                      type="button"
+                      className="ml-2 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10"
+                      onClick={() => {
+                        if (window.confirm("Delete this comment rule?")) {
+                          deleteMutation.mutate(rule.id);
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ),

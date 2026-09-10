@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
@@ -19,8 +19,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
+  Search,
   Settings2,
   Users,
+  X,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -158,7 +160,7 @@ const NAV: NavItem[] = [
     to: "/marksheet",
     label: "Marksheet",
     icon: NotebookText,
-    roles: ["head_teacher", "deputy_head_teacher", "dos", "class_teacher"],
+    roles: ["head_teacher", "deputy_head_teacher", "dos", "class_teacher", "subject_teacher"],
     module: "academics",
   },
   {
@@ -170,10 +172,16 @@ const NAV: NavItem[] = [
   },
   { to: "/users", label: "Users & Roles", icon: Users, roles: ["super_admin", "school_admin"] },
   {
-    to: "/settings",
-    label: "School Settings",
+    to: "/account-settings",
+    label: "My settings",
     icon: Settings2,
-    roles: ["school_admin", "head_teacher", "deputy_head_teacher"],
+    roles: ["super_admin", ...SCHOOL_ROLES, "bursar"],
+  },
+  {
+    to: "/settings",
+    label: "Settings",
+    icon: Settings2,
+    roles: ["super_admin", ...SCHOOL_ROLES, "bursar"],
   },
   {
     to: "/audit-logs",
@@ -186,6 +194,7 @@ const NAV: NavItem[] = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: me } = useCurrentUser();
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isMobile = useIsMobile();
@@ -196,6 +205,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
   const [labelsVisible, setLabelsVisible] = React.useState(() => !isMobile);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const preloadPage = React.useCallback(
+    (to: string) => void router.preloadRoute({ to }),
+    [router],
+  );
 
   React.useEffect(() => {
     setLabelsVisible(!isMobile);
@@ -204,6 +220,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  React.useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+      if (event.key === "Escape") setSearchOpen(false);
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  React.useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
 
   React.useEffect(() => {
     if (!isMobile) return;
@@ -242,6 +274,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const items = NAV.filter((item) => hasAny(me?.roles, item.roles)).filter((item) =>
     item.module ? (moduleMap?.get(item.module) ?? true) : true,
+  );
+  const searchResults = items.filter((item) =>
+    item.label.toLowerCase().includes(searchTerm.trim().toLowerCase()),
   );
   const primaryRole = me?.roles?.[0];
   const sidebarWidth = labelsVisible ? "w-72" : "w-20";
@@ -315,6 +350,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.to}
                   to={item.to}
                   preload="intent"
+                  onPointerDown={() => preloadPage(item.to)}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors",
                     active
@@ -386,8 +422,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SheetDescription>
             </SheetHeader>
 
-            <div className="flex h-[calc(100%-5.75rem)] flex-col">
-              <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
                 {items.map((item) => {
                   const active = pathname.startsWith(item.to);
                   return (
@@ -395,6 +431,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       key={item.to}
                       to={item.to}
                       preload="intent"
+                      onPointerDown={() => preloadPage(item.to)}
                       onClick={() => setMobileNavOpen(false)}
                       className={cn(
                         "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-colors",
@@ -441,9 +478,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           !isMobile && contentOffset,
         )}
       >
-        <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/90 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-4 md:px-5">
-            <div className="flex min-w-0 items-center gap-3">
+        <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/80 shadow-[0_4px_20px_oklch(0.2_0.04_258_/_0.04)] backdrop-blur-xl">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-3 py-3 sm:flex-nowrap sm:px-4 md:px-5">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               {isMobile ? (
                 <Button
                   type="button"
@@ -463,7 +500,72 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <p className="truncate text-xs text-muted-foreground">{pageTitle}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 gap-2 px-3 text-muted-foreground"
+                  onClick={() => setSearchOpen((value) => !value)}
+                  aria-label="Search system"
+                >
+                  <Search className="h-4 w-4" />
+                  <span className="hidden sm:inline">Search</span>
+                  <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium sm:inline">
+                    Ctrl K
+                  </kbd>
+                </Button>
+                {searchOpen && (
+                  <div className="absolute right-0 top-11 z-50 w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background p-2 shadow-xl">
+                    <div className="flex items-center gap-2 border-b border-border px-2 pb-2">
+                      <Search className="h-4 w-4 text-muted-foreground" />
+                      <input
+                        ref={searchInputRef}
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                        placeholder="Search school tools..."
+                        className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none"
+                        aria-label="Search school tools"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchTerm("");
+                          setSearchOpen(false);
+                        }}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted"
+                        aria-label="Close search"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto pt-1">
+                      {searchResults.length ? (
+                        searchResults.map((item) => (
+                          <button
+                            key={item.to}
+                            type="button"
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                            onClick={() => {
+                              navigate({ to: item.to });
+                              setSearchOpen(false);
+                              setSearchTerm("");
+                            }}
+                            onMouseEnter={() => router.preloadRoute({ to: item.to })}
+                            onFocus={() => router.preloadRoute({ to: item.to })}
+                            onPointerDown={() => preloadPage(item.to)}
+                          >
+                            <item.icon className="h-4 w-4 text-muted-foreground" />
+                            <span>{item.label}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-3 py-4 text-sm text-muted-foreground">No tools found.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               <NotificationPanel />
               <div className="hidden items-center gap-2 md:flex">
               <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
@@ -473,7 +575,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-3 sm:p-4 md:p-6">
+        <main className="min-w-0 flex-1 p-4 sm:p-5 md:p-7">
           <div className="mx-auto w-full max-w-[1800px]">{children}</div>
         </main>
       </div>

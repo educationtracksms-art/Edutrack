@@ -81,6 +81,8 @@ function AcademicsPage() {
     category: string | null;
     position: number | null;
     points: number | null;
+    education_level: string | null;
+    is_subsidiary: boolean;
   };
 
   const [classForm, setClassForm] = useState({
@@ -89,6 +91,12 @@ function AcademicsPage() {
     education_level: "ordinary",
     class_teacher_id: "",
   });
+  const educationLevelForClassName = (name: string) => {
+    const normalized = name.trim().toUpperCase().replace(/\s+/g, "");
+    if (/^S\.?[56](\b|-|\()/.test(normalized)) return "advanced";
+    if (/^S\.?[1-4](\b|-|\()/.test(normalized)) return "ordinary";
+    return null;
+  };
   const [streamForm, setStreamForm] = useState({ name: "", class_id: "", stream_teacher_id: "" });
   const [subjectForm, setSubjectForm] = useState({
     name: "",
@@ -96,6 +104,8 @@ function AcademicsPage() {
     category: "",
     position: "",
     points: "1",
+    education_level: "ordinary",
+    is_subsidiary: false,
   });
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
@@ -283,7 +293,7 @@ function AcademicsPage() {
   }
 
   function resetSubjectForm() {
-    setSubjectForm({ name: "", code: "", category: "", position: "", points: "1" });
+    setSubjectForm({ name: "", code: "", category: "", position: "", points: "1", education_level: "ordinary", is_subsidiary: false });
     setEditingSubjectId(null);
   }
 
@@ -441,6 +451,8 @@ function AcademicsPage() {
         position: subjectForm.position
           ? Number(subjectForm.position)
           : (data?.subjects.length ?? 0) + 1,
+        education_level: subjectForm.education_level,
+        is_subsidiary: subjectForm.education_level === "advanced" && subjectForm.is_subsidiary,
       });
       if (error) throw new Error(error.message);
     },
@@ -469,6 +481,8 @@ function AcademicsPage() {
           position: subjectForm.position
             ? Number(subjectForm.position)
             : (data?.subjects.length ?? 0) + 1,
+          education_level: subjectForm.education_level,
+          is_subsidiary: subjectForm.education_level === "advanced" && subjectForm.is_subsidiary,
         })
         .eq("id", editingSubjectId)
         .eq("school_id", schoolId);
@@ -477,6 +491,24 @@ function AcademicsPage() {
     onSuccess: () => {
       resetSubjectForm();
       toast.success("Subject updated");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteSubject = useMutation({
+    mutationFn: async (subject: AcademicSubject) => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      const { error } = await supabase
+        .from("subjects")
+        .delete()
+        .eq("id", subject.id)
+        .eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      resetSubjectForm();
+      toast.success("Subject deleted");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -814,6 +846,8 @@ function AcademicsPage() {
       category: item.category ?? "",
       position: item.position?.toString() ?? "",
       points: item.points?.toString() ?? "1",
+      education_level: item.education_level ?? "ordinary",
+      is_subsidiary: Boolean(item.is_subsidiary),
     });
   }
 
@@ -871,7 +905,15 @@ function AcademicsPage() {
                 required
                 className={inputClass}
                 value={classForm.name}
-                onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const inferredLevel = educationLevelForClassName(name);
+                  setClassForm({
+                    ...classForm,
+                    name,
+                    ...(inferredLevel ? { education_level: inferredLevel } : {}),
+                  });
+                }}
               />
             </Field>
             <Field label="Level type">
@@ -1105,6 +1147,26 @@ function AcademicsPage() {
                 onChange={(e) => setSubjectForm({ ...subjectForm, category: e.target.value })}
               />
             </Field>
+            <Field label="Education level">
+              <select
+                className={inputClass}
+                value={subjectForm.education_level}
+                onChange={(e) => setSubjectForm({ ...subjectForm, education_level: e.target.value })}
+              >
+                <option value="ordinary">O-Level</option>
+                <option value="advanced">A-Level</option>
+              </select>
+            </Field>
+            {subjectForm.education_level === "advanced" && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={subjectForm.is_subsidiary}
+                  onChange={(e) => setSubjectForm({ ...subjectForm, is_subsidiary: e.target.checked })}
+                />
+                Subsidiary subject (50+ = 1 point, below 50 = 0)
+              </label>
+            )}
             <div className="flex flex-wrap gap-2">
               <Btn
                 type="submit"
@@ -1120,25 +1182,69 @@ function AcademicsPage() {
               )}
             </div>
           </form>
-          <ul className="space-y-1 text-sm">
-            {(data?.subjects ?? []).map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
-              >
-                <span className="flex items-center gap-2">
-                  <span>{item.name}</span>
-                  <Pill tone="info">{item.points ?? 1} pts</Pill>
-                </span>
-                <div className="flex items-center gap-2">
-                  {item.category && <Pill tone="muted">{item.category}</Pill>}
-                  <Btn variant="ghost" onClick={() => startEditingSubject(item)}>
-                    Edit
-                  </Btn>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-hidden rounded-xl border border-border">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Subject</th>
+                    <th className="px-4 py-3 font-semibold">Code</th>
+                    <th className="px-4 py-3 font-semibold">Level</th>
+                    <th className="px-4 py-3 font-semibold">Category</th>
+                    <th className="px-4 py-3 text-center font-semibold">Points</th>
+                    <th className="px-4 py-3 text-center font-semibold">Position</th>
+                    <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(data?.subjects ?? []).map((item) => (
+                    <tr key={item.id} className="transition-colors hover:bg-muted/30">
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <span>{item.name}</span>
+                          {item.is_subsidiary && <Pill tone="info">SUB</Pill>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                        {item.code || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Pill tone="muted">
+                          {item.education_level === "advanced" ? "A-Level" : "O-Level"}
+                        </Pill>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{item.category || "—"}</td>
+                      <td className="px-4 py-3 text-center font-medium">{item.points ?? 1}</td>
+                      <td className="px-4 py-3 text-center text-muted-foreground">{item.position ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <Btn variant="ghost" onClick={() => startEditingSubject(item)}>
+                            Edit
+                          </Btn>
+                          <Btn
+                            variant="ghost"
+                            onClick={() => {
+                              if (window.confirm(`Delete subject "${item.name}"?`)) {
+                                deleteSubject.mutate(item);
+                              }
+                            }}
+                            disabled={deleteSubject.isPending}
+                          >
+                            Delete
+                          </Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!data?.subjects?.length && (
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                No subjects added yet.
+              </p>
+            )}
+          </div>
         </Panel>
       </div>
 
@@ -1211,12 +1317,17 @@ function AcademicsPage() {
               </select>
             </Field>
             <Field label="Term name">
-              <input
+              <select
                 required
                 className={inputClass}
                 value={termForm.name}
                 onChange={(e) => setTermForm({ ...termForm, name: e.target.value })}
-              />
+              >
+                <option value="">Select term</option>
+                <option value="Term 1">Term 1</option>
+                <option value="Term 2">Term 2</option>
+                <option value="Term 3">Term 3</option>
+              </select>
             </Field>
             <div className="grid gap-2 md:grid-cols-2">
               <Field label="Start date">

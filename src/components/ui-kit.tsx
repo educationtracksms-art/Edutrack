@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 export function PageHeader({
   title,
@@ -12,17 +13,21 @@ export function PageHeader({
   eyebrow?: string;
 }) {
   return (
-    <div className="no-print mb-5 flex flex-col gap-3 rounded-3xl border border-border bg-[linear-gradient(180deg,var(--color-card),var(--color-secondary))] p-4 shadow-sm sm:mb-6 sm:gap-4 sm:p-6">
+    <div className="no-print mb-5 flex flex-col gap-3 rounded-3xl border border-border bg-[linear-gradient(135deg,var(--color-card),var(--color-primary-soft))] p-5 shadow-[var(--shadow-card)] sm:mb-6 sm:gap-4 sm:p-7">
       <div className="min-w-0">
-        <p className="mb-2 inline-flex rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-primary">
+        <p className="mb-3 inline-flex rounded-full border border-primary/10 bg-primary-soft px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-primary">
           {eyebrow}
         </p>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
         {description && (
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
         )}
       </div>
-      {actions && <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">{actions}</div>}
+      {actions && (
+        <div className="page-actions flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
@@ -38,9 +43,9 @@ export function Panel({
 }) {
   return (
     <section
-      className={`rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5 ${className}`}
+      className={`min-w-0 rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-6 ${className}`}
     >
-      {title && <h2 className="mb-4 text-sm font-semibold text-foreground">{title}</h2>}
+      {title && <h2 className="mb-5 text-base font-bold tracking-tight text-foreground">{title}</h2>}
       {children}
     </section>
   );
@@ -56,9 +61,9 @@ export function Stat({
   hint?: string;
 }) {
   return (
-    <div className="rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-2 text-xl font-semibold sm:text-2xl">{value}</p>
+    <div className="group rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:border-primary/25 sm:p-6">
+      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
+      <p className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -98,16 +103,19 @@ export function Btn({
   disabled?: boolean;
 }) {
   const styles: Record<string, string> = {
-    primary: "bg-primary text-primary-foreground hover:bg-primary/90",
-    accent: "bg-accent text-accent-foreground hover:opacity-90",
-    ghost: "border border-border bg-background text-foreground hover:bg-muted",
+    primary:
+      "border border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:-translate-y-px hover:bg-primary/90 hover:shadow-md",
+    accent:
+      "border border-accent bg-accent text-accent-foreground shadow-sm shadow-accent/20 hover:-translate-y-px hover:brightness-95 hover:shadow-md",
+    ghost:
+      "border border-border bg-background text-foreground shadow-sm hover:-translate-y-px hover:border-primary/40 hover:bg-primary-soft hover:text-primary hover:shadow-md",
   };
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors disabled:opacity-60 sm:w-auto ${styles[variant]}`}
+      className={`min-h-10 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150 active:translate-y-px disabled:opacity-60 sm:w-auto ${styles[variant]}`}
     >
       {children}
     </button>
@@ -124,7 +132,30 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring";
+  "w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-ring focus:ring-4 focus:ring-ring/10";
+
+export function PasswordInput({ className = inputClass, ...props }: Omit<ComponentProps<"input">, "type">) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        className={`${className} pr-10`}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((current) => !current)}
+        aria-label={visible ? "Hide password" : "Show password"}
+        title={visible ? "Hide password" : "Show password"}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset"
+      >
+        {visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
 
 export function ResponsiveTable({ desktop, mobile }: { desktop: ReactNode; mobile: ReactNode }) {
   return (

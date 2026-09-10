@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
 import { PublicShell } from "@/components/layout/PublicShell";
+import { PasswordInput } from "@/components/ui-kit";
 import logoUrl from "@/assets/logo.png";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -112,9 +113,8 @@ function AuthPage() {
               <label className="text-sm font-medium" htmlFor="password">
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 required
                 minLength={8}
                 value={password}

@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import { toast } from "sonner";
+import ExcelJS from "exceljs";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -65,6 +67,7 @@ function StudentsPage() {
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [importingStudents, setImportingStudents] = useState(false);
   const [feesDrafts, setFeesDrafts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     full_name: "",
@@ -283,6 +286,150 @@ function StudentsPage() {
   const className = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? "—";
   const streamName = (id: string | null) => streams?.find((stream) => stream.id === id)?.name ?? "";
 
+  async function downloadStudentList() {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "EduTrack";
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet("Students");
+    sheet.columns = [
+      { header: "Full name", key: "full_name", width: 30 },
+      { header: "LIN", key: "lin", width: 18 },
+      { header: "Gender", key: "gender", width: 12 },
+      { header: "Class", key: "class", width: 14 },
+      { header: "Stream", key: "stream", width: 14 },
+      { header: "House", key: "house", width: 18 },
+      { header: "SchPay code", key: "schpay_code", width: 18 },
+      { header: "Parent name", key: "parent_name", width: 24 },
+      { header: "Parent phone", key: "parent_phone", width: 18 },
+      { header: "Fees balance", key: "fees_balance", width: 16 },
+      { header: "Status", key: "status", width: 14 },
+    ];
+    for (const student of visibleStudents) {
+      sheet.addRow({
+        full_name: student.full_name,
+        lin: student.lin ?? "",
+        gender: student.gender ?? "",
+        class: className(student.class_id),
+        stream: streamName(student.stream_id),
+        house: student.house ?? "",
+        schpay_code: student.schpay_code ?? "",
+        parent_name: student.parent_name ?? "",
+        parent_phone: student.parent_phone ?? "",
+        fees_balance: Number(student.fees_balance ?? 0),
+        status: student.status ?? "pending",
+      });
+    }
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF123A63" } };
+    sheet.autoFilter = { from: "A1", to: `K${Math.max(1, sheet.rowCount)}` };
+    const buffer = await workbook.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buffer]));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `EduTrack_Students_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importStudentList(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !schoolId || !me?.userId) return;
+
+    setImportingStudents(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await file.arrayBuffer());
+      const sheet = workbook.worksheets[0];
+      if (!sheet) throw new Error("The workbook does not contain a worksheet");
+
+      const rows = sheet.getRows(1, sheet.rowCount) ?? [];
+      const cellText = (value: unknown) => {
+        if (value == null) return "";
+        if (typeof value === "object" && value !== null && "text" in value) {
+          return String((value as { text?: unknown }).text ?? "").trim();
+        }
+        return String(value).trim();
+      };
+      const normalizeHeader = (value: unknown) =>
+        cellText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+      const headers = (rows[0]?.values as unknown[] | undefined)?.slice(1).map(normalizeHeader) ?? [];
+      const aliases: Record<string, string[]> = {
+        full_name: ["fullname", "name", "studentname", "learnername"],
+        lin: ["lin", "learneridentificationnumber"],
+        gender: ["gender", "sex"],
+        class_name: ["class", "classname", "level"],
+        stream_name: ["stream", "streamname"],
+        house: ["house"],
+        schpay_code: ["schpaycode", "paymentcode"],
+        parent_name: ["parentname", "guardianname"],
+        parent_phone: ["parentphone", "guardianphone", "phone"],
+      };
+      const columnIndex = (names: string[]) => headers.findIndex((header) => names.includes(header));
+      const indexes = Object.fromEntries(
+        Object.entries(aliases).map(([key, names]) => [key, columnIndex(names)]),
+      );
+      if (indexes.full_name < 0) {
+        throw new Error("The spreadsheet must include a Full name or Name column");
+      }
+
+      const imported = [];
+      const skipped: string[] = [];
+      for (let rowNumber = 1; rowNumber < rows.length; rowNumber += 1) {
+        const values = (rows[rowNumber]?.values as unknown[] | undefined)?.slice(1) ?? [];
+        const valueFor = (key: string) => {
+          const index = indexes[key];
+          return index >= 0 ? cellText(values[index]) : "";
+        };
+        const fullName = valueFor("full_name");
+        if (!fullName) continue;
+
+        const classValue = valueFor("class_name").toLowerCase();
+        const streamValue = valueFor("stream_name").toLowerCase();
+        const classMatch = classes?.find((item) => item.name.trim().toLowerCase() === classValue);
+        const streamMatch = streams?.find((item) => {
+          if (item.name.trim().toLowerCase() !== streamValue) return false;
+          return !classMatch || item.class_id === classMatch.id;
+        });
+        if (classValue && !classMatch) {
+          skipped.push(`Row ${rowNumber + 1}: class "${valueFor("class_name")}" was not found`);
+          continue;
+        }
+        if (streamValue && !streamMatch) {
+          skipped.push(`Row ${rowNumber + 1}: stream "${valueFor("stream_name")}" was not found`);
+          continue;
+        }
+        imported.push({
+          school_id: schoolId,
+          full_name: fullName,
+          lin: valueFor("lin") || null,
+          gender: valueFor("gender") || "Female",
+          class_id: classMatch?.id ?? null,
+          stream_id: streamMatch?.id ?? null,
+          house: valueFor("house") || null,
+          schpay_code: valueFor("schpay_code") || null,
+          parent_name: valueFor("parent_name") || null,
+          parent_phone: valueFor("parent_phone") || null,
+          status: "pending",
+          created_by: me.userId,
+        });
+      }
+
+      if (!imported.length) {
+        throw new Error(skipped[0] ?? "No student rows were found in the spreadsheet");
+      }
+      const { error } = await supabase.from("students").insert(imported);
+      if (error) throw new Error(error.message);
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      toast.success(`${imported.length} student${imported.length === 1 ? "" : "s"} imported`);
+      if (skipped.length) toast.warning(`${skipped.length} row${skipped.length === 1 ? "" : "s"} skipped`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not import students");
+    } finally {
+      setImportingStudents(false);
+    }
+  }
+
   if (!canAccessStudents) {
     return (
       <Panel>
@@ -299,11 +446,28 @@ function StudentsPage() {
         title="Students"
         description="Registered learners stay pending until an administrator verifies the admission."
         actions={
-          canRegisterOrEditStudents ? (
-            <Btn variant="accent" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
-              {showForm ? "Close" : "Register learner"}
+          <div className="flex flex-wrap gap-2">
+            <Btn variant="outline" onClick={downloadStudentList} disabled={!visibleStudents.length}>
+              Download Excel
             </Btn>
-          ) : undefined
+            {canRegisterOrEditStudents && (
+              <>
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-secondary px-3.5 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+                  {importingStudents ? "Importing..." : "Import Excel"}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="sr-only"
+                    onChange={importStudentList}
+                    disabled={importingStudents}
+                  />
+                </label>
+                <Btn variant="accent" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
+                  {showForm ? "Close" : "Register learner"}
+                </Btn>
+              </>
+            )}
+          </div>
         }
       />
 

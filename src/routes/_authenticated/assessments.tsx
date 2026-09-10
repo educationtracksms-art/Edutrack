@@ -258,7 +258,7 @@ function AssessmentsPage() {
         schoolQuery(
           supabase
             .from("grading_scales")
-            .select("grade, min_score, max_score, descriptor, education_level, points")
+            .select("grade, min_score, max_score, grade_descriptor, education_level, points")
             .order("min_score", { ascending: false }),
         ),
         schoolQuery(supabase.from("profiles").select("id, full_name")),
@@ -278,7 +278,12 @@ function AssessmentsPage() {
         class_id: string | null;
         stream_id: string | null;
       }>;
-      const gradingScaleRows = (gradingScalesResult.data ?? []) as GradingScaleRow[];
+      const gradingScaleRows = ((gradingScalesResult.data ?? []) as Array<
+        Omit<GradingScaleRow, "descriptor"> & { grade_descriptor: string }
+      >).map((scale) => ({
+        ...scale,
+        descriptor: scale.grade_descriptor,
+      }));
       const staffProfiles = (profilesResult.data ?? []) as StaffProfileRow[];
       const staffProfileMap = new Map(
         staffProfiles.map((profile) => [profile.id, profile.full_name]),
@@ -379,7 +384,7 @@ function AssessmentsPage() {
         schoolQuery(
           supabase
             .from("grading_scales")
-            .select("grade, min_score, max_score, descriptor")
+            .select("grade, min_score, max_score, grade_descriptor")
             .order("min_score", { ascending: false }),
         ),
         schoolQuery(supabase.from("profiles").select("id, full_name")),
@@ -395,7 +400,12 @@ function AssessmentsPage() {
         subjects: (subjectsResult.data ?? []) as SubjectRow[],
         terms: (termsResult.data ?? []) as TermRow[],
         classes: (classesResult.data ?? []) as ClassRow[],
-        gradingScales: (gradingScalesResult.data ?? []) as GradingScaleRow[],
+        gradingScales: ((gradingScalesResult.data ?? []) as Array<
+          Omit<GradingScaleRow, "descriptor"> & { grade_descriptor: string }
+        >).map((scale) => ({
+          ...scale,
+          descriptor: scale.grade_descriptor,
+        })),
         staffProfileMap,
       };
     },

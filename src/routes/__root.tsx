@@ -7,6 +7,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useRef, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -239,8 +240,31 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <ValidationFeedback>
+        <Outlet />
+      </ValidationFeedback>
       <Toaster />
     </QueryClientProvider>
   );
+}
+
+/** Shows a consistent popup whenever the browser blocks a form with missing required data. */
+function ValidationFeedback({ children }: { children: ReactNode }) {
+  const lastMessageAt = useRef(0);
+
+  function handleInvalid(event: React.InvalidEvent<HTMLFormElement>) {
+    const field = event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+    const now = Date.now();
+
+    // A single submit can trigger several invalid events. Keep the popup useful rather than noisy.
+    if (now - lastMessageAt.current < 500) return;
+    lastMessageAt.current = now;
+
+    const label = field.labels?.[0]?.textContent?.trim() || field.getAttribute("aria-label");
+    toast.error("Please complete the required fields", {
+      description: label ? `${label.replace(/[*:]/g, "").trim()} is required.` : "Check the highlighted field and try again.",
+    });
+  }
+
+  return <div onInvalidCapture={handleInvalid}>{children}</div>;
 }

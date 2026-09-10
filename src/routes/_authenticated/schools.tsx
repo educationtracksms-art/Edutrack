@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { createSchoolWithAdmin, setSchoolStatus } from "@/lib/admin.functions";
+import { createSchoolWithAdmin, manageSchoolSubscription, recordSchoolPayment, setSchoolStatus } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import {
   Btn,
@@ -36,6 +36,10 @@ function SchoolsPage() {
   const queryClient = useQueryClient();
   const createSchool = useServerFn(createSchoolWithAdmin);
   const changeStatus = useServerFn(setSchoolStatus);
+  const changeSubscription = useServerFn(manageSchoolSubscription);
+  const recordPayment = useServerFn(recordSchoolPayment);
+  const [billingSchoolId, setBillingSchoolId] = useState<string | null>(null);
+  const [billing, setBilling] = useState({ planId: "", status: "active" as const, startsAt: new Date().toISOString().slice(0, 10), endsAt: "", amount: "", method: "mobile_money", reference: "" });
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -56,6 +60,15 @@ function SchoolsPage() {
         .order("created_at", { ascending: false });
       return data ?? [];
     },
+  });
+  const { data: plans } = useQuery({
+    queryKey: ["subscription-plans"],
+    queryFn: async () => (await supabase.from("subscription_plans").select("id,name,price,billing_cycle").eq("is_active", true).order("price")).data ?? [],
+  });
+  const { data: payments } = useQuery({
+    queryKey: ["school-payments", billingSchoolId],
+    enabled: !!billingSchoolId,
+    queryFn: async () => (await supabase.from("school_payments").select("amount,currency,payment_date,method,reference,status").eq("school_id", billingSchoolId!).order("payment_date", { ascending: false }).limit(8)).data ?? [],
   });
 
   const createMutation = useMutation({
@@ -121,6 +134,7 @@ function SchoolsPage() {
                           </Pill>
                         </td>
                         <td className="text-right">
+                          <Btn variant="ghost" onClick={() => setBillingSchoolId(school.id)}>Billing</Btn>
                           <Btn
                             variant="ghost"
                             onClick={() =>
@@ -190,7 +204,7 @@ function SchoolsPage() {
           />
         </Panel>
 
-        <Panel title="Add a school">
+                <Panel title="Add a school">
           <form
             className="space-y-3"
             onSubmit={(event) => {
@@ -270,6 +284,21 @@ function SchoolsPage() {
           )}
         </Panel>
       </div>
+      {billingSchoolId && (
+        <Panel title={`Subscription & payments · ${(schools ?? []).find((s) => s.id === billingSchoolId)?.name ?? "School"}`} className="mt-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <form className="space-y-3" onSubmit={async (event) => { event.preventDefault(); if (!billing.planId) return toast.error("Select a plan"); try { const sub = await changeSubscription({ data: { schoolId: billingSchoolId, planId: billing.planId, status: billing.status, startsAt: billing.startsAt, endsAt: billing.endsAt || undefined } }); if (billing.amount) await recordPayment({ data: { schoolId: billingSchoolId, subscriptionId: sub.id, amount: Number(billing.amount), currency: "UGX", paymentDate: billing.startsAt, method: billing.method, reference: billing.reference || undefined } }); toast.success("Subscription saved"); queryClient.invalidateQueries({ queryKey: ["school-payments", billingSchoolId] }); } catch (error) { toast.error(friendlyAdminError(error as Error)); } }}>
+              <Field label="Plan"><select required className={inputClass} value={billing.planId} onChange={(e) => setBilling({ ...billing, planId: e.target.value })}><option value="">Select plan</option>{(plans ?? []).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.price} UGX/{p.billing_cycle}</option>)}</select></Field>
+              <Field label="Status"><select className={inputClass} value={billing.status} onChange={(e) => setBilling({ ...billing, status: e.target.value as typeof billing.status })}><option value="active">Active</option><option value="trial">Trial</option><option value="past_due">Past due</option><option value="cancelled">Cancelled</option></select></Field>
+              <div className="grid grid-cols-2 gap-3"><Field label="Starts"><input type="date" className={inputClass} value={billing.startsAt} onChange={(e) => setBilling({ ...billing, startsAt: e.target.value })} /></Field><Field label="Ends"><input type="date" className={inputClass} value={billing.endsAt} onChange={(e) => setBilling({ ...billing, endsAt: e.target.value })} /></Field></div>
+              <div className="grid grid-cols-2 gap-3"><Field label="Payment amount (optional)"><input type="number" min="0" className={inputClass} value={billing.amount} onChange={(e) => setBilling({ ...billing, amount: e.target.value })} /></Field><Field label="Method"><select className={inputClass} value={billing.method} onChange={(e) => setBilling({ ...billing, method: e.target.value })}><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="cash">Cash</option><option value="card">Card</option></select></Field></div>
+              <Field label="Payment reference"><input className={inputClass} value={billing.reference} onChange={(e) => setBilling({ ...billing, reference: e.target.value })} /></Field>
+              <Btn type="submit" variant="accent">Save subscription{billing.amount ? " and payment" : ""}</Btn>
+            </form>
+            <div><p className="mb-2 text-sm font-medium">Recent payments</p>{(payments ?? []).length ? <div className="space-y-2">{payments!.map((p, i) => <div key={i} className="flex justify-between rounded-lg border border-border p-2 text-sm"><span>{p.payment_date} · {p.method}</span><span className="font-medium">{p.amount} {p.currency}</span></div>)}</div> : <p className="text-sm text-muted-foreground">No payments recorded.</p>}</div>
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

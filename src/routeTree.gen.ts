@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DashoardRouteImport } from './routes/dashoard'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedAcademicsRouteImport } from './routes/_authenticated/academics'
+import { Route as AuthenticatedAccountSettingsRouteImport } from './routes/_authenticated/account-settings'
 import { Route as AuthenticatedApprovalRouteImport } from './routes/_authenticated/approval'
 import { Route as AuthenticatedApprovedRouteImport } from './routes/_authenticated/approved'
 import { Route as AuthenticatedAssessmentsRouteImport } from './routes/_authenticated/assessments'
@@ -75,6 +76,12 @@ const AuthenticatedAcademicsRoute = AuthenticatedAcademicsRouteImport.update({
   path: '/academics',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAccountSettingsRoute =
+  AuthenticatedAccountSettingsRouteImport.update({
+    id: '/account-settings',
+    path: '/account-settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedApprovalRoute = AuthenticatedApprovalRouteImport.update({
   id: '/approval',
   path: '/approval',
@@ -238,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/dashoard': typeof DashoardRoute
   '/signup': typeof SignupRoute
   '/academics': typeof AuthenticatedAcademicsRoute
+  '/account-settings': typeof AuthenticatedAccountSettingsRoute
   '/approval': typeof AuthenticatedApprovalRoute
   '/approved': typeof AuthenticatedApprovedRoute
   '/assessments': typeof AuthenticatedAssessmentsRoute
@@ -275,6 +283,7 @@ export interface FileRoutesByTo {
   '/dashoard': typeof DashoardRoute
   '/signup': typeof SignupRoute
   '/academics': typeof AuthenticatedAcademicsRoute
+  '/account-settings': typeof AuthenticatedAccountSettingsRoute
   '/approval': typeof AuthenticatedApprovalRoute
   '/approved': typeof AuthenticatedApprovedRoute
   '/assessments': typeof AuthenticatedAssessmentsRoute
@@ -314,6 +323,7 @@ export interface FileRoutesById {
   '/dashoard': typeof DashoardRoute
   '/signup': typeof SignupRoute
   '/_authenticated/academics': typeof AuthenticatedAcademicsRoute
+  '/_authenticated/account-settings': typeof AuthenticatedAccountSettingsRoute
   '/_authenticated/approval': typeof AuthenticatedApprovalRoute
   '/_authenticated/approved': typeof AuthenticatedApprovedRoute
   '/_authenticated/assessments': typeof AuthenticatedAssessmentsRoute
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
     | '/dashoard'
     | '/signup'
     | '/academics'
+    | '/account-settings'
     | '/approval'
     | '/approved'
     | '/assessments'
@@ -390,6 +401,7 @@ export interface FileRouteTypes {
     | '/dashoard'
     | '/signup'
     | '/academics'
+    | '/account-settings'
     | '/approval'
     | '/approved'
     | '/assessments'
@@ -428,6 +440,7 @@ export interface FileRouteTypes {
     | '/dashoard'
     | '/signup'
     | '/_authenticated/academics'
+    | '/_authenticated/account-settings'
     | '/_authenticated/approval'
     | '/_authenticated/approved'
     | '/_authenticated/assessments'
@@ -516,6 +529,13 @@ declare module '@tanstack/react-router' {
       path: '/academics'
       fullPath: '/academics'
       preLoaderRoute: typeof AuthenticatedAcademicsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/account-settings': {
+      id: '/_authenticated/account-settings'
+      path: '/account-settings'
+      fullPath: '/account-settings'
+      preLoaderRoute: typeof AuthenticatedAccountSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/approval': {
@@ -744,6 +764,7 @@ const AuthenticatedFinanceRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAcademicsRoute: typeof AuthenticatedAcademicsRoute
+  AuthenticatedAccountSettingsRoute: typeof AuthenticatedAccountSettingsRoute
   AuthenticatedApprovalRoute: typeof AuthenticatedApprovalRoute
   AuthenticatedApprovedRoute: typeof AuthenticatedApprovedRoute
   AuthenticatedAssessmentsRoute: typeof AuthenticatedAssessmentsRoute
@@ -770,6 +791,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAcademicsRoute: AuthenticatedAcademicsRoute,
+  AuthenticatedAccountSettingsRoute: AuthenticatedAccountSettingsRoute,
   AuthenticatedApprovalRoute: AuthenticatedApprovalRoute,
   AuthenticatedApprovedRoute: AuthenticatedApprovedRoute,
   AuthenticatedAssessmentsRoute: AuthenticatedAssessmentsRoute,

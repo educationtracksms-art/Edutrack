@@ -212,7 +212,9 @@ export function ReportCard({ data }: { data: ReportCardData }) {
           <tbody>
             {rows.map((row) => (
               <tr key={row.subject}>
-                <td>{row.subject}</td>
+                <td className={row.isPaper ? "paper-row-subject" : undefined}>
+                  {row.isPaper ? `↳ ${row.subject}` : row.subject}
+                </td>
                 <td>{row.formative}</td>
                 <td>{row.summative}</td>
                 <td>{row.total}</td>

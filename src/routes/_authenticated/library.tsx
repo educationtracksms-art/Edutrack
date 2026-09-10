@@ -523,6 +523,21 @@ function LibraryPage() {
                       </span>
                       <span>Location: {book.shelf_location ?? "—"}</span>
                     </div>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <Btn variant="ghost" onClick={() => startEditingBook(book)}>
+                        Edit
+                      </Btn>
+                      <Btn
+                        variant="ghost"
+                        onClick={() => {
+                          if (window.confirm(`Delete book "${book.title}"?`)) {
+                            deleteBook.mutate(book.id);
+                          }
+                        }}
+                      >
+                        Delete
+                      </Btn>
+                    </div>
                   </div>
                 ))}
                 {books.length === 0 && (

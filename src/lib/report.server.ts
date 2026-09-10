@@ -31,6 +31,7 @@ export async function buildReportCards(
     { data: roles },
     { data: streams },
     { data: subjects },
+    { data: subjectPapers },
     { data: studentSubjects },
     { data: scales },
     { data: identifierScales },
@@ -47,7 +48,12 @@ export async function buildReportCards(
     supabase.from("streams").select("id, name").eq("school_id", schoolId),
     supabase
       .from("subjects")
-      .select("id, name, position, points")
+      .select("id, name, position, points, education_level, is_subsidiary")
+      .eq("school_id", schoolId)
+      .order("position"),
+    (supabase as any)
+      .from("subject_papers")
+      .select("id, subject_id, name, position")
       .eq("school_id", schoolId)
       .order("position"),
     supabase
@@ -92,7 +98,7 @@ export async function buildReportCards(
     supabase
       .from("assessments")
       .select(
-        "student_id, subject_id, exam_type, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+        "student_id, subject_id, paper_id, exam_type, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
       )
       .in("student_id", ids)
       .eq("term_id", termFilterId)
@@ -173,7 +179,10 @@ export async function buildReportCards(
     const rows: SubjectRow[] = (subjects ?? [])
       .filter((subject: any) => subjectIdsToRender.has(subject.id))
       .map((subject: any) => {
-        const subjectMarks = marks.filter((m: any) => m.subject_id === subject.id);
+        const papers = (subjectPapers ?? []).filter((p: any) => p.subject_id === subject.id);
+        const paperRows = papers.length ? papers : [null];
+        return paperRows.map((paper: any) => {
+        const subjectMarks = marks.filter((m: any) => m.subject_id === subject.id && (paper ? m.paper_id === paper.id : !m.paper_id));
         const mark = subjectMarks[subjectMarks.length - 1];
         const summativeMarks = subjectMarks
           .map((m: any) => Number(m.summative))
@@ -184,7 +193,10 @@ export async function buildReportCards(
         const subjectMaxPoints = Number(subject.points ?? 0);
         if (!mark || (mark.formative == null && averageSummative == null)) {
           return {
-            subject: subject.name,
+            subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+            subjectId: subject.id,
+            paperId: paper?.id ?? null,
+            isPaper: Boolean(paper),
             formative: "",
             summative: "",
             total: "",
@@ -200,20 +212,28 @@ export async function buildReportCards(
         const g = gradeFor(total, educationLevel);
         const weightedPoints =
           educationLevel === "advanced"
-            ? Math.min(subjectMaxPoints || 0, g.points || 0)
+            ? subject.is_subsidiary
+              ? (total >= 50 ? 1 : 0)
+              : Math.min(subjectMaxPoints || 0, g.points || 0)
             : 0;
         totals.push(total);
         return {
-          subject: subject.name,
+          subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+          subjectId: subject.id,
+          paperId: paper?.id ?? null,
+          isPaper: Boolean(paper),
           formative: fmt(formative),
           summative: fmt(summative),
           total: fmt(total),
           grade: g.grade,
           gradeDetail: educationLevel === "advanced" ? "" : g.descriptor,
           subjectPoints:
-            educationLevel === "advanced" ? String(weightedPoints || subjectMaxPoints || 0) : "",
+            educationLevel === "advanced"
+              ? String(subject.is_subsidiary ? weightedPoints : weightedPoints || subjectMaxPoints || 0)
+              : "",
           teacher: mark.teacher_initials ?? "",
         };
+        }).flat();
       });
 
     const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;

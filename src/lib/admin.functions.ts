@@ -643,6 +643,48 @@ export const updateAssessmentPeriod = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const manageSchoolSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: {
+    schoolId: string;
+    planId: string;
+    status: "trial" | "active" | "past_due" | "expired" | "cancelled";
+    startsAt: string;
+    endsAt?: string;
+    notes?: string;
+  }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can manage subscriptions");
+    const { error: closeError } = await context.supabase
+      .from("school_subscriptions")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("school_id", data.schoolId)
+      .in("status", ["trial", "active", "past_due"]);
+    if (closeError) throw new Error(closeError.message);
+    const { data: subscription, error } = await context.supabase
+      .from("school_subscriptions")
+      .insert({ school_id: data.schoolId, plan_id: data.planId, status: data.status, starts_at: data.startsAt, ends_at: data.endsAt || null, notes: data.notes || null, created_by: context.userId })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    await context.supabase.from("schools").update({ subscription_plan: data.planId }).eq("id", data.schoolId);
+    await logAudit(context.supabase, context.userId, data.schoolId, "SUBSCRIPTION_UPDATED", "school_subscriptions", { status: data.status });
+    return subscription;
+  });
+
+export const recordSchoolPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { schoolId: string; subscriptionId?: string; amount: number; currency: string; paymentDate: string; method: string; reference?: string; notes?: string }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can record payments");
+    const { data: payment, error } = await context.supabase.from("school_payments").insert({ ...data, subscription_id: data.subscriptionId || null, recorded_by: context.userId }).select("id").single();
+    if (error) throw new Error(error.message);
+    await logAudit(context.supabase, context.userId, data.schoolId, "SCHOOL_PAYMENT_RECORDED", "school_payments", { amount: data.amount, reference: data.reference });
+    return payment;
+  });
+
 export const upsertReportComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(

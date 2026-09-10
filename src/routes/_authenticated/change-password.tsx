@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Btn, Field, PageHeader, Panel, inputClass } from "@/components/ui-kit";
+import { Btn, Field, PageHeader, Panel, PasswordInput, inputClass } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/change-password")({
   head: () => ({
@@ -60,8 +60,7 @@ function ChangePasswordPage() {
       <Panel>
         <form className="space-y-3" onSubmit={submit}>
           <Field label="New password">
-            <input
-              type="password"
+            <PasswordInput
               required
               minLength={8}
               className={inputClass}
@@ -70,8 +69,7 @@ function ChangePasswordPage() {
             />
           </Field>
           <Field label="Confirm new password">
-            <input
-              type="password"
+            <PasswordInput
               required
               minLength={8}
               className={inputClass}

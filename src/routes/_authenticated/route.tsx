@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
+  pendingComponent: NavigationPending,
   beforeLoad: async ({ location }) => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
@@ -23,3 +24,14 @@ export const Route = createFileRoute("/_authenticated")({
     </AppShell>
   ),
 });
+
+function NavigationPending() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        Loading page…
+      </div>
+    </div>
+  );
+}

@@ -24,6 +24,7 @@ type AssessmentRow = {
   subject_id: string;
   formative: number | null;
   summative: number | null;
+  status: "approved";
 };
 type GradingScaleRow = {
   grade: string;
@@ -34,7 +35,13 @@ type GradingScaleRow = {
   points: number | null;
 };
 
-const ALLOWED_ROLES = ["head_teacher", "deputy_head_teacher", "dos", "class_teacher"] as const;
+const ALLOWED_ROLES = [
+  "head_teacher",
+  "deputy_head_teacher",
+  "dos",
+  "class_teacher",
+  "subject_teacher",
+] as const;
 
 export const Route = createFileRoute("/_authenticated/marksheet")({
   beforeLoad: async () => {
@@ -143,7 +150,7 @@ function MarksheetPage() {
         await schoolQuery(
           supabase
             .from("assessments")
-            .select("student_id, subject_id, formative, summative")
+            .select("student_id, subject_id, formative, summative, status")
             .eq("term_id", selectedTermId)
             .eq("status", "approved"),
         )
@@ -205,7 +212,24 @@ function MarksheetPage() {
   const assessmentLookup = useMemo(() => {
     const map = new Map<string, AssessmentRow>();
     for (const item of assessments ?? []) {
-      map.set(`${item.student_id}:${item.subject_id}`, item);
+      const key = `${item.student_id}:${item.subject_id}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, { ...item });
+        continue;
+      }
+
+      // A term can contain multiple assessment periods and A-Level papers.
+      // Keep every mark from the database instead of allowing the last row to
+      // replace the earlier rows for the same learner and subject.
+      existing.formative =
+        existing.formative === null && item.formative === null
+          ? null
+          : Number(existing.formative ?? 0) + Number(item.formative ?? 0);
+      existing.summative =
+        existing.summative === null && item.summative === null
+          ? null
+          : Number(existing.summative ?? 0) + Number(item.summative ?? 0);
     }
     return map;
   }, [assessments]);

@@ -74,6 +74,10 @@ function SettingsPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("No school linked to your account");
+      const reportAccountNumber = form.report_account_number.trim();
+      if (form.report_payment_reference_type === "account_number" && !reportAccountNumber) {
+        throw new Error("Enter the school account number before saving");
+      }
       const logoUrl = logoFile
         ? await uploadImage(logoFile, `schools/${schoolId}/logo`)
         : form.logo_url;
@@ -84,7 +88,7 @@ function SettingsPage() {
           logo_url: logoUrl,
           report_account_number:
             form.report_payment_reference_type === "account_number"
-              ? form.report_account_number || null
+              ? reportAccountNumber
               : null,
         })
         .eq("id", schoolId);
@@ -142,6 +146,7 @@ function SettingsPage() {
             </Field>
             <Field label="Email">
               <input
+                type="email"
                 className={inputClass}
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -201,6 +206,7 @@ function SettingsPage() {
             {form.report_payment_reference_type === "account_number" && (
               <Field label="School account number">
                 <input
+                  required
                   className={inputClass}
                   value={form.report_account_number}
                   onChange={(e) => setForm({ ...form, report_account_number: e.target.value })}

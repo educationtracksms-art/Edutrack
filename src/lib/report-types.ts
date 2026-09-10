@@ -1,4 +1,7 @@
 export type SubjectRow = {
+  subjectId?: string;
+  paperId?: string | null;
+  isPaper?: boolean;
   subject: string;
   formative: string;
   summative: string;
