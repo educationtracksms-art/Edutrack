@@ -351,12 +351,21 @@ function AcademicsPage() {
   const addClass = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
+      const name = classForm.name.trim();
+      if (!name) throw new Error("Enter a class name first");
+      if (!classForm.class_teacher_id) throw new Error("Choose a class teacher first");
+      if (!data?.teachers.some((teacher) => teacher.id === classForm.class_teacher_id)) {
+        throw new Error("Choose a class teacher from this school");
+      }
+      if (classForm.level && (!Number.isInteger(Number(classForm.level)) || Number(classForm.level) < 1)) {
+        throw new Error("Class order must be a whole number greater than zero");
+      }
       const { error } = await supabase.from("classes").insert({
         school_id: schoolId,
-        name: classForm.name.trim(),
+        name,
         level: classForm.level ? Number(classForm.level) : null,
         education_level: classForm.education_level,
-        class_teacher_id: classForm.class_teacher_id || null,
+        class_teacher_id: classForm.class_teacher_id,
       });
       if (error) throw new Error(error.message);
     },
@@ -372,13 +381,22 @@ function AcademicsPage() {
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!editingClassId) throw new Error("No class selected for update");
+      const name = classForm.name.trim();
+      if (!name) throw new Error("Enter a class name first");
+      if (!classForm.class_teacher_id) throw new Error("Choose a class teacher first");
+      if (!data?.teachers.some((teacher) => teacher.id === classForm.class_teacher_id)) {
+        throw new Error("Choose a class teacher from this school");
+      }
+      if (classForm.level && (!Number.isInteger(Number(classForm.level)) || Number(classForm.level) < 1)) {
+        throw new Error("Class order must be a whole number greater than zero");
+      }
       const { error } = await supabase
         .from("classes")
         .update({
-          name: classForm.name.trim(),
+          name,
           level: classForm.level ? Number(classForm.level) : null,
           education_level: classForm.education_level,
-          class_teacher_id: classForm.class_teacher_id || null,
+          class_teacher_id: classForm.class_teacher_id,
         })
         .eq("id", editingClassId)
         .eq("school_id", schoolId);
@@ -396,11 +414,20 @@ function AcademicsPage() {
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!streamForm.class_id) throw new Error("Choose the class this stream belongs to");
+      if (!data?.classes.some((item) => item.id === streamForm.class_id)) {
+        throw new Error("The selected class is no longer available. Choose a class again");
+      }
+      const name = streamForm.name.trim();
+      if (!name) throw new Error("Enter a stream name first");
+      if (!streamForm.stream_teacher_id) throw new Error("Choose a stream teacher first");
+      if (!data?.teachers.some((teacher) => teacher.id === streamForm.stream_teacher_id)) {
+        throw new Error("Choose a stream teacher from this school");
+      }
       const { error } = await supabase.from("streams").insert({
         school_id: schoolId,
         class_id: streamForm.class_id,
-        name: streamForm.name.trim(),
-        stream_teacher_id: streamForm.stream_teacher_id || null,
+        name,
+        stream_teacher_id: streamForm.stream_teacher_id,
       });
       if (error) throw new Error(error.message);
     },
@@ -417,12 +444,21 @@ function AcademicsPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!editingStreamId) throw new Error("No stream selected for update");
       if (!streamForm.class_id) throw new Error("Choose the class this stream belongs to");
+      if (!data?.classes.some((item) => item.id === streamForm.class_id)) {
+        throw new Error("The selected class is no longer available. Choose a class again");
+      }
+      const name = streamForm.name.trim();
+      if (!name) throw new Error("Enter a stream name first");
+      if (!streamForm.stream_teacher_id) throw new Error("Choose a stream teacher first");
+      if (!data?.teachers.some((teacher) => teacher.id === streamForm.stream_teacher_id)) {
+        throw new Error("Choose a stream teacher from this school");
+      }
       const { error } = await supabase
         .from("streams")
         .update({
           class_id: streamForm.class_id,
-          name: streamForm.name.trim(),
-          stream_teacher_id: streamForm.stream_teacher_id || null,
+          name,
+          stream_teacher_id: streamForm.stream_teacher_id,
         })
         .eq("id", editingStreamId)
         .eq("school_id", schoolId);
@@ -439,12 +475,17 @@ function AcademicsPage() {
   const addSubject = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
+      const name = subjectForm.name.trim();
+      if (!name) throw new Error("Enter a subject name first");
       const points = Number(subjectForm.points);
       if (Number.isNaN(points) || points < 1 || points > 5)
         throw new Error("Subject points must be between 1 and 5");
+      if (subjectForm.position && (!Number.isInteger(Number(subjectForm.position)) || Number(subjectForm.position) < 1)) {
+        throw new Error("Subject position must be a whole number greater than zero");
+      }
       const { error } = await supabase.from("subjects").insert({
         school_id: schoolId,
-        name: subjectForm.name.trim(),
+        name,
         code: subjectForm.code || null,
         category: subjectForm.category || undefined,
         points,
@@ -468,13 +509,18 @@ function AcademicsPage() {
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!editingSubjectId) throw new Error("No subject selected for update");
+      const name = subjectForm.name.trim();
+      if (!name) throw new Error("Enter a subject name first");
       const points = Number(subjectForm.points);
       if (Number.isNaN(points) || points < 1 || points > 5)
         throw new Error("Subject points must be between 1 and 5");
+      if (subjectForm.position && (!Number.isInteger(Number(subjectForm.position)) || Number(subjectForm.position) < 1)) {
+        throw new Error("Subject position must be a whole number greater than zero");
+      }
       const { error } = await supabase
         .from("subjects")
         .update({
-          name: subjectForm.name.trim(),
+          name,
           code: subjectForm.code || null,
           category: subjectForm.category || undefined,
           points,
@@ -517,15 +563,42 @@ function AcademicsPage() {
   const addAllocation = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
-      if (!allocForm.teacher_id || !allocForm.subject_id)
-        throw new Error("Pick a teacher and a subject");
+      if (!allocForm.teacher_id) throw new Error("Select a teacher first");
+      if (!allocForm.subject_id) throw new Error("Select a subject first");
+      if (!allocForm.class_id) throw new Error("Select the class this teacher will handle");
+      if (!data?.teachers.some((item) => item.id === allocForm.teacher_id)) {
+        throw new Error("The selected teacher is no longer available. Choose a teacher again");
+      }
+      if (!data?.subjects.some((item) => item.id === allocForm.subject_id)) {
+        throw new Error("The selected subject is no longer available. Choose a subject again");
+      }
+      if (!data?.classes.some((item) => item.id === allocForm.class_id)) {
+        throw new Error("The selected class is no longer available. Choose a class again");
+      }
+      const classStreams = (data?.streams ?? []).filter(
+        (stream) => stream.class_id === allocForm.class_id,
+      );
+      if (classStreams.length > 0 && !allocForm.stream_id) {
+        throw new Error("Select the stream this teacher will handle");
+      }
+      if (allocForm.stream_id) {
+        const stream = data?.streams.find((item) => item.id === allocForm.stream_id);
+        if (!stream) throw new Error("The selected stream is no longer available. Choose a stream again");
+        if (!allocForm.class_id || stream.class_id !== allocForm.class_id) {
+          throw new Error("Choose the class that contains the selected stream first");
+        }
+      }
+      const weeklyPeriods = Number(allocForm.weekly_periods);
+      if (!Number.isInteger(weeklyPeriods) || weeklyPeriods < 1 || weeklyPeriods > 60) {
+        throw new Error("Periods per week must be a whole number from 1 to 60");
+      }
       const payload = {
         school_id: schoolId,
         teacher_id: allocForm.teacher_id,
         subject_id: allocForm.subject_id,
-        class_id: allocForm.class_id || null,
+        class_id: allocForm.class_id,
         stream_id: allocForm.stream_id || null,
-        weekly_periods: Math.max(1, Number(allocForm.weekly_periods) || 1),
+        weekly_periods: weeklyPeriods,
       };
       const { error } = await supabase.from("teacher_allocations").insert(payload);
       if (error) throw new Error(error.message);
@@ -569,14 +642,23 @@ function AcademicsPage() {
       const name = termForm.name.trim();
       if (!name) throw new Error("Enter a term name");
       if (!termForm.academic_year_id) throw new Error("Choose an academic year for this term");
+      if (!data?.academicYears.some((year) => year.id === termForm.academic_year_id)) {
+        throw new Error("The selected academic year is no longer available. Choose a year again");
+      }
+      if (!termForm.start_date || !termForm.end_date) {
+        throw new Error("Add both the term start date and end date first");
+      }
+      if (termForm.end_date < termForm.start_date) {
+        throw new Error("Term end date must be on or after the start date");
+      }
       const { data: created, error } = await supabase
         .from("terms")
         .insert({
           school_id: schoolId,
           academic_year_id: termForm.academic_year_id,
           name,
-          start_date: termForm.start_date || null,
-          end_date: termForm.end_date || null,
+          start_date: termForm.start_date,
+          end_date: termForm.end_date,
         })
         .select("id")
         .single();
@@ -761,14 +843,26 @@ function AcademicsPage() {
   const saveIdentifierScale = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
+      const identifier = Number(identifierForm.identifier);
+      const minScore = Number(identifierForm.min_score);
+      const maxScore = Number(identifierForm.max_score);
+      const descriptor = identifierForm.descriptor.trim();
+      if (!Number.isFinite(identifier) || !Number.isInteger(identifier) || identifier < 1) {
+        throw new Error("Identifier must be a whole number greater than zero");
+      }
+      if (!Number.isFinite(minScore) || !Number.isFinite(maxScore)) {
+        throw new Error("Enter valid minimum and maximum scores");
+      }
+      if (maxScore < minScore) throw new Error("Maximum score must be greater than minimum score");
+      if (!descriptor) throw new Error("Enter an identifier descriptor");
       await saveIdentifierScaleFn({
         data: {
           id: identifierForm.id || null,
           schoolId,
-          identifier: Number(identifierForm.identifier),
-          minScore: Number(identifierForm.min_score),
-          maxScore: Number(identifierForm.max_score),
-          descriptor: (identifierForm.descriptor ?? "").trim(),
+          identifier,
+          minScore,
+          maxScore,
+          descriptor,
         },
       });
     },
@@ -936,11 +1030,12 @@ function AcademicsPage() {
             </Field>
             <Field label="Class teacher">
               <select
+                required
                 className={inputClass}
                 value={classForm.class_teacher_id}
                 onChange={(e) => setClassForm({ ...classForm, class_teacher_id: e.target.value })}
               >
-                <option value="">Not assigned</option>
+                <option value="">Select class teacher</option>
                 {(data?.teachers ?? []).map((teacher) => (
                   <option key={teacher.id} value={teacher.id}>
                     {teacher.full_name}
@@ -1013,6 +1108,7 @@ function AcademicsPage() {
           >
             <Field label="Class">
               <select
+                required
                 className={inputClass}
                 value={streamForm.class_id}
                 onChange={(e) => setStreamForm({ ...streamForm, class_id: e.target.value })}
@@ -1035,13 +1131,14 @@ function AcademicsPage() {
             </Field>
             <Field label="Stream teacher">
               <select
+                required
                 className={inputClass}
                 value={streamForm.stream_teacher_id}
                 onChange={(e) =>
                   setStreamForm({ ...streamForm, stream_teacher_id: e.target.value })
                 }
               >
-                <option value="">Not assigned</option>
+                <option value="">Select stream teacher</option>
                 {(data?.teachers ?? []).map((teacher) => (
                   <option key={teacher.id} value={teacher.id}>
                     {teacher.full_name}
@@ -1304,6 +1401,7 @@ function AcademicsPage() {
           >
             <Field label="Academic year">
               <select
+                required
                 className={inputClass}
                 value={termForm.academic_year_id}
                 onChange={(e) => setTermForm({ ...termForm, academic_year_id: e.target.value })}
@@ -1332,6 +1430,7 @@ function AcademicsPage() {
             <div className="grid gap-2 md:grid-cols-2">
               <Field label="Start date">
                 <input
+                  required
                   type="date"
                   className={inputClass}
                   value={termForm.start_date}
@@ -1340,6 +1439,7 @@ function AcademicsPage() {
               </Field>
               <Field label="End date">
                 <input
+                  required
                   type="date"
                   className={inputClass}
                   value={termForm.end_date}
@@ -1789,6 +1889,7 @@ function AcademicsPage() {
         >
           <Field label="Teacher">
             <select
+              required
               className={inputClass}
               value={allocForm.teacher_id}
               onChange={(e) => setAllocForm({ ...allocForm, teacher_id: e.target.value })}
@@ -1803,6 +1904,7 @@ function AcademicsPage() {
           </Field>
           <Field label="Subject">
             <select
+              required
               className={inputClass}
               value={allocForm.subject_id}
               onChange={(e) => setAllocForm({ ...allocForm, subject_id: e.target.value })}
@@ -1817,13 +1919,14 @@ function AcademicsPage() {
           </Field>
           <Field label="Class">
             <select
+              required
               className={inputClass}
               value={allocForm.class_id}
               onChange={(e) =>
                 setAllocForm({ ...allocForm, class_id: e.target.value, stream_id: "" })
               }
             >
-              <option value="">All classes</option>
+              <option value="">Select class</option>
               {(data?.classes ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -1833,11 +1936,14 @@ function AcademicsPage() {
           </Field>
           <Field label="Stream">
             <select
+              required={Boolean(
+                (data?.streams ?? []).some((stream) => stream.class_id === allocForm.class_id),
+              )}
               className={inputClass}
               value={allocForm.stream_id}
               onChange={(e) => setAllocForm({ ...allocForm, stream_id: e.target.value })}
             >
-              <option value="">All streams</option>
+              <option value="">Select stream</option>
               {(data?.streams ?? [])
                 .filter((s) => !allocForm.class_id || s.class_id === allocForm.class_id)
                 .map((s) => (

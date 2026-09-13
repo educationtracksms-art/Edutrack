@@ -251,6 +251,7 @@ export type Database = {
         Row: {
           days_absent: number;
           days_present: number;
+          total_days: number;
           id: string;
           school_id: string;
           student_id: string;
@@ -259,6 +260,7 @@ export type Database = {
         Insert: {
           days_absent?: number;
           days_present?: number;
+          total_days?: number;
           id?: string;
           school_id: string;
           student_id: string;
@@ -267,6 +269,7 @@ export type Database = {
         Update: {
           days_absent?: number;
           days_present?: number;
+          total_days?: number;
           id?: string;
           school_id?: string;
           student_id?: string;
@@ -788,6 +791,135 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      school_payments: {
+        Row: {
+          amount: number;
+          created_at: string;
+          currency: string;
+          id: string;
+          method: string;
+          notes: string | null;
+          payment_date: string;
+          recorded_by: string | null;
+          reference: string | null;
+          school_id: string;
+          status: string;
+          subscription_id: string | null;
+        };
+        Insert: {
+          amount: number;
+          created_at?: string;
+          currency?: string;
+          id?: string;
+          method?: string;
+          notes?: string | null;
+          payment_date?: string;
+          recorded_by?: string | null;
+          reference?: string | null;
+          school_id: string;
+          status?: string;
+          subscription_id?: string | null;
+        };
+        Update: {
+          amount?: number;
+          created_at?: string;
+          currency?: string;
+          id?: string;
+          method?: string;
+          notes?: string | null;
+          payment_date?: string;
+          recorded_by?: string | null;
+          reference?: string | null;
+          school_id?: string;
+          status?: string;
+          subscription_id?: string | null;
+        };
+        Relationships: [];
+      };
+      school_subscriptions: {
+        Row: {
+          auto_renew: boolean;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          created_at: string;
+          created_by: string | null;
+          ends_at: string | null;
+          id: string;
+          notes: string | null;
+          plan_id: string;
+          school_id: string;
+          starts_at: string;
+          status: "trial" | "active" | "past_due" | "expired" | "cancelled";
+          updated_at: string;
+        };
+        Insert: {
+          auto_renew?: boolean;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          ends_at?: string | null;
+          id?: string;
+          notes?: string | null;
+          plan_id: string;
+          school_id: string;
+          starts_at?: string;
+          status?: "trial" | "active" | "past_due" | "expired" | "cancelled";
+          updated_at?: string;
+        };
+        Update: {
+          auto_renew?: boolean;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          ends_at?: string | null;
+          id?: string;
+          notes?: string | null;
+          plan_id?: string;
+          school_id?: string;
+          starts_at?: string;
+          status?: "trial" | "active" | "past_due" | "expired" | "cancelled";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      subscription_plans: {
+        Row: {
+          billing_cycle: "monthly" | "termly" | "annual";
+          created_at: string;
+          description: string | null;
+          display_order: number;
+          id: string;
+          is_active: boolean;
+          is_platform_only: boolean;
+          name: string;
+          price: number;
+        };
+        Insert: {
+          billing_cycle?: "monthly" | "termly" | "annual";
+          created_at?: string;
+          description?: string | null;
+          display_order?: number;
+          id?: string;
+          is_active?: boolean;
+          is_platform_only?: boolean;
+          name: string;
+          price?: number;
+        };
+        Update: {
+          billing_cycle?: "monthly" | "termly" | "annual";
+          created_at?: string;
+          description?: string | null;
+          display_order?: number;
+          id?: string;
+          is_active?: boolean;
+          is_platform_only?: boolean;
+          name?: string;
+          price?: number;
+        };
+        Relationships: [];
       };
       schools: {
         Row: {
@@ -1605,6 +1737,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      can_view_subscription: { Args: never; Returns: boolean };
       can_manage_academics: { Args: never; Returns: boolean };
       can_manage_school: { Args: never; Returns: boolean };
       can_view_all_students: { Args: never; Returns: boolean };
@@ -1617,6 +1750,32 @@ export type Database = {
         Returns: boolean;
       };
       is_super_admin: { Args: never; Returns: boolean };
+      record_school_payment: {
+        Args: {
+          p_amount: number;
+          p_currency: string;
+          p_method: string;
+          p_notes?: string;
+          p_payment_date: string;
+          p_reference?: string;
+          p_school_id: string;
+          p_status?: string;
+          p_subscription_id?: string;
+        };
+        Returns: Database["public"]["Tables"]["school_payments"]["Row"];
+      };
+      replace_school_subscription: {
+        Args: {
+          p_auto_renew?: boolean;
+          p_ends_at?: string;
+          p_notes?: string;
+          p_plan_id: string;
+          p_school_id: string;
+          p_starts_at: string;
+          p_status: string;
+        };
+        Returns: Database["public"]["Tables"]["school_subscriptions"]["Row"];
+      };
       platform_school_stats: {
         Args: never;
         Returns: {

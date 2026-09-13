@@ -103,6 +103,7 @@ function FinancePage() {
     queryFn: async () => {
       const [
         years,
+        students,
         budgets,
         budgetLines,
         transactions,
@@ -118,6 +119,7 @@ function FinancePage() {
         paymentVouchers,
       ] = await Promise.all([
         db.from("financial_years").select("*").eq("school_id", schoolId!),
+        db.from("students").select("id, full_name").eq("school_id", schoolId!).is("deleted_at", null).order("full_name"),
         db.from("budgets").select("*").eq("school_id", schoolId!),
         db.from("budget_lines").select("*").eq("school_id", schoolId!),
         db.from("transactions").select("*").eq("school_id", schoolId!),
@@ -135,6 +137,7 @@ function FinancePage() {
 
       return {
         years: years.data ?? [],
+        students: students.data ?? [],
         budgets: budgets.data ?? [],
         budgetLines: budgetLines.data ?? [],
         transactions: transactions.data ?? [],
@@ -250,14 +253,24 @@ function FinancePage() {
     { name: "Vouchers", value: totals.voucherTotal },
   ];
   const invoiceMutation = useMutation({
-    mutationFn: async () =>
-      createStudentInvoice({
+    mutationFn: async () => {
+      const studentId = invoiceForm.studentId.trim();
+      const invoiceNumber = invoiceForm.invoiceNumber.trim();
+      const amount = Number(invoiceForm.amount);
+      if (!studentId) throw new Error("Select a student before creating the invoice");
+      if (!(data?.students ?? []).some((student: any) => student.id === studentId)) {
+        throw new Error("The selected student is no longer available. Choose a student again");
+      }
+      if (!invoiceNumber) throw new Error("Enter an invoice number first");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invoice amount must be greater than zero");
+      return createStudentInvoice({
         data: {
-          studentId: invoiceForm.studentId,
-          invoiceNumber: invoiceForm.invoiceNumber,
-          amount: Number(invoiceForm.amount),
+          studentId,
+          invoiceNumber,
+          amount,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Invoice created");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -266,15 +279,25 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const paymentMutation = useMutation({
-    mutationFn: async () =>
-      recordStudentPayment({
+    mutationFn: async () => {
+      const studentId = paymentForm.studentId.trim();
+      const paymentNumber = paymentForm.paymentNumber.trim();
+      const amount = Number(paymentForm.amount);
+      if (!studentId) throw new Error("Select a student before recording the payment");
+      if (!(data?.students ?? []).some((student: any) => student.id === studentId)) {
+        throw new Error("The selected student is no longer available. Choose a student again");
+      }
+      if (!paymentNumber) throw new Error("Enter a payment number first");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Payment amount must be greater than zero");
+      return recordStudentPayment({
         data: {
-          studentId: paymentForm.studentId,
-          paymentNumber: paymentForm.paymentNumber,
-          amount: Number(paymentForm.amount),
+          studentId,
+          paymentNumber,
+          amount,
           paymentMethod: paymentForm.paymentMethod,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Payment recorded");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -283,21 +306,30 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const budgetMutation = useMutation({
-    mutationFn: async () =>
-      createBudget({
+    mutationFn: async () => {
+      const title = budgetForm.title.trim();
+      const amount = Number(budgetForm.proposedAmount);
+      if (!budgetForm.financialYearId) throw new Error("Select a financial year first");
+      if (!(data?.years ?? []).some((year: any) => year.id === budgetForm.financialYearId)) {
+        throw new Error("The selected financial year is no longer available. Choose a year again");
+      }
+      if (!title) throw new Error("Enter a budget title first");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Proposed amount must be greater than zero");
+      return createBudget({
         data: {
           financialYearId: budgetForm.financialYearId,
-          title: budgetForm.title,
+          title,
           departmentName: budgetForm.departmentName || null,
           budgetLines: [
             {
               budgetCategory: "Operational",
               periodName: "Annual",
-              proposedAmount: Number(budgetForm.proposedAmount),
+              proposedAmount: amount,
             },
           ],
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Budget created");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -339,14 +371,17 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const supplierMutation = useMutation({
-    mutationFn: async () =>
-      createSupplier({
+    mutationFn: async () => {
+      const supplierName = supplierForm.supplierName.trim();
+      if (!supplierName) throw new Error("Enter the supplier name first");
+      return createSupplier({
         data: {
-          supplierName: supplierForm.supplierName,
-          contactPerson: supplierForm.contactPerson || null,
-          phone: supplierForm.phone || null,
+          supplierName,
+          contactPerson: supplierForm.contactPerson.trim() || null,
+          phone: supplierForm.phone.trim() || null,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Supplier added");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -354,22 +389,25 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const supplierInvoiceMutation = useMutation({
-    mutationFn: async () =>
-      createSupplierInvoice({
+    mutationFn: async () => {
+      if (!procurementSelection.supplierId) throw new Error("Select a supplier before creating the invoice");
+      if (!procurementSelection.purchaseOrderId) throw new Error("Select a purchase order before creating the invoice");
+      const supplier = (data?.suppliers ?? []).find((row: any) => row.id === procurementSelection.supplierId);
+      const purchaseOrder = (data?.purchaseOrders ?? []).find((row: any) => row.id === procurementSelection.purchaseOrderId);
+      if (!supplier) throw new Error("The selected supplier is no longer available. Choose a supplier again");
+      if (!purchaseOrder) throw new Error("The selected purchase order is no longer available. Choose an order again");
+      const amount = Number(purchaseOrder.total_amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("The purchase order has no valid amount");
+      return createSupplierInvoice({
         data: {
           invoiceNumber: `SI-${new Date().getFullYear()}-001`,
-          supplierId: procurementSelection.supplierId || null,
-          purchaseOrderId: procurementSelection.purchaseOrderId || null,
-          departmentName:
-            (data?.purchaseOrders ?? []).find((row: any) => row.id === procurementSelection.purchaseOrderId)
-              ?.department_name ?? departmentTag,
-          amount: Number(
-            (data?.purchaseOrders ?? []).find(
-              (row: any) => row.id === procurementSelection.purchaseOrderId,
-            )?.total_amount ?? 0,
-          ),
+          supplierId: procurementSelection.supplierId,
+          purchaseOrderId: procurementSelection.purchaseOrderId,
+          departmentName: purchaseOrder.department_name ?? departmentTag,
+          amount,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Supplier invoice created");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -377,17 +415,30 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const requestMutation = useMutation({
-    mutationFn: async () =>
-      createPurchaseRequest({
+    mutationFn: async () => {
+      const requestNumber = requestForm.requestNumber.trim();
+      const itemDescription = requestForm.itemDescription.trim();
+      const requestedAmount = Number(requestForm.requestedAmount);
+      if (!requestNumber) throw new Error("Enter a request number first");
+      if (!itemDescription) throw new Error("Describe the item being requested first");
+      if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) throw new Error("Requested amount must be greater than zero");
+      if (requestForm.budgetId && !(data?.budgets ?? []).some((budget: any) => budget.id === requestForm.budgetId)) {
+        throw new Error("The selected budget is no longer available. Choose a budget again");
+      }
+      if (requestForm.supplierId && !(data?.suppliers ?? []).some((supplier: any) => supplier.id === requestForm.supplierId)) {
+        throw new Error("The selected supplier is no longer available. Choose a supplier again");
+      }
+      return createPurchaseRequest({
         data: {
-          requestNumber: requestForm.requestNumber,
+          requestNumber,
           budgetId: requestForm.budgetId || null,
           supplierId: requestForm.supplierId || null,
-          departmentName: requestForm.departmentName || null,
-          itemDescription: requestForm.itemDescription,
-          requestedAmount: Number(requestForm.requestedAmount),
+          departmentName: requestForm.departmentName.trim() || null,
+          itemDescription,
+          requestedAmount,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Purchase request submitted");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -410,22 +461,25 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const orderMutation = useMutation({
-    mutationFn: async () =>
-      createPurchaseOrder({
+    mutationFn: async () => {
+      if (!procurementSelection.purchaseRequestId) throw new Error("Select a purchase request before creating the order");
+      if (!procurementSelection.supplierId) throw new Error("Select a supplier before creating the order");
+      const request = (data?.purchaseRequests ?? []).find((row: any) => row.id === procurementSelection.purchaseRequestId);
+      const supplier = (data?.suppliers ?? []).find((row: any) => row.id === procurementSelection.supplierId);
+      if (!request) throw new Error("The selected purchase request is no longer available. Choose a request again");
+      if (!supplier) throw new Error("The selected supplier is no longer available. Choose a supplier again");
+      const totalAmount = Number(request.requested_amount);
+      if (!Number.isFinite(totalAmount) || totalAmount <= 0) throw new Error("The purchase request has no valid amount");
+      return createPurchaseOrder({
         data: {
           orderNumber: `PO-${new Date().getFullYear()}-001`,
-          purchaseRequestId: procurementSelection.purchaseRequestId || null,
-          supplierId: procurementSelection.supplierId || null,
-          departmentName:
-            (data?.purchaseRequests ?? []).find((row: any) => row.id === procurementSelection.purchaseRequestId)
-              ?.department_name ?? departmentTag,
-          totalAmount: Number(
-            (data?.purchaseRequests ?? []).find(
-              (row: any) => row.id === procurementSelection.purchaseRequestId,
-            )?.requested_amount ?? 0,
-          ),
+          purchaseRequestId: procurementSelection.purchaseRequestId,
+          supplierId: procurementSelection.supplierId,
+          departmentName: request.department_name ?? departmentTag,
+          totalAmount,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Purchase order created");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -433,18 +487,20 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const goodsReceiptMutation = useMutation({
-    mutationFn: async () =>
-      recordGoodsReceipt({
+    mutationFn: async () => {
+      if (!procurementSelection.purchaseOrderId) throw new Error("Select a purchase order before recording goods received");
+      const order = (data?.purchaseOrders ?? []).find((row: any) => row.id === procurementSelection.purchaseOrderId);
+      if (!order) throw new Error("The selected purchase order is no longer available. Choose an order again");
+      const itemsReceived = Number(order.total_amount);
+      if (!Number.isFinite(itemsReceived) || itemsReceived <= 0) throw new Error("The purchase order has no valid received amount");
+      return recordGoodsReceipt({
         data: {
           purchaseOrderId: procurementSelection.purchaseOrderId,
           receiptNumber: `GRN-${new Date().getFullYear()}-001`,
-          itemsReceived: Number(
-            (data?.purchaseOrders ?? []).find(
-              (row: any) => row.id === procurementSelection.purchaseOrderId,
-            )?.total_amount ?? 0,
-          ),
+          itemsReceived,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Goods receipt recorded");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -452,14 +508,19 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const invoiceReviewMutation = useMutation({
-    mutationFn: async () =>
-      reviewSupplierInvoice({
+    mutationFn: async () => {
+      if (!procurementSelection.supplierInvoiceId) throw new Error("Select a supplier invoice before approving it");
+      if (!(data?.supplierInvoices ?? []).some((invoice: any) => invoice.id === procurementSelection.supplierInvoiceId)) {
+        throw new Error("The selected supplier invoice is no longer available. Choose an invoice again");
+      }
+      return reviewSupplierInvoice({
         data: {
           invoiceId: procurementSelection.supplierInvoiceId,
           status: "approved",
           note: "Approved for voucher processing",
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Invoice approved");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -467,25 +528,26 @@ function FinancePage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
   const voucherMutation = useMutation({
-    mutationFn: async () =>
-      createPaymentVoucher({
+    mutationFn: async () => {
+      if (!procurementSelection.voucherInvoiceId) throw new Error("Select an approved invoice before creating the voucher");
+      if (!procurementSelection.supplierId) throw new Error("Select the payee supplier before creating the voucher");
+      const invoice = (data?.supplierInvoices ?? []).find((row: any) => row.id === procurementSelection.voucherInvoiceId);
+      const supplier = (data?.suppliers ?? []).find((row: any) => row.id === procurementSelection.supplierId);
+      if (!invoice) throw new Error("The selected invoice is no longer available. Choose an invoice again");
+      if (!supplier) throw new Error("The selected supplier is no longer available. Choose a supplier again");
+      const amount = Number(invoice.amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("The invoice has no valid amount");
+      return createPaymentVoucher({
         data: {
           voucherNumber: `PV-${new Date().getFullYear()}-001`,
-          invoiceId: procurementSelection.voucherInvoiceId || null,
-          payeeName:
-            (data?.suppliers ?? []).find((row: any) => row.id === procurementSelection.supplierId)
-              ?.supplier_name ?? "Supplier",
-          departmentName:
-            (data?.supplierInvoices ?? []).find((row: any) => row.id === procurementSelection.voucherInvoiceId)
-              ?.department_name ?? departmentTag,
-          amount: Number(
-            (data?.supplierInvoices ?? []).find(
-              (row: any) => row.id === procurementSelection.voucherInvoiceId,
-            )?.amount ?? 0,
-          ),
+          invoiceId: procurementSelection.voucherInvoiceId,
+          payeeName: supplier.supplier_name,
+          departmentName: invoice.department_name ?? departmentTag,
+          amount,
           paymentMethod: "bank",
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Payment voucher created");
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
@@ -571,17 +633,23 @@ function FinancePage() {
         <Panel title="Create student invoice">
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Student ID">
-              <input
+              <select
+                required
                 className={inputClass}
                 value={invoiceForm.studentId}
                 onChange={(event) =>
                   setInvoiceForm({ ...invoiceForm, studentId: event.target.value })
                 }
-                placeholder="Paste student UUID"
-              />
+              >
+                <option value="">Select student</option>
+                {((data as any)?.students ?? []).map((student: any) => (
+                  <option key={student.id} value={student.id}>{student.full_name}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Invoice number">
               <input
+                required
                 className={inputClass}
                 value={invoiceForm.invoiceNumber}
                 onChange={(event) =>
@@ -591,7 +659,9 @@ function FinancePage() {
             </Field>
             <Field label="Amount">
               <input
+                required
                 type="number"
+                min="0.01"
                 className={inputClass}
                 value={invoiceForm.amount}
                 onChange={(event) => setInvoiceForm({ ...invoiceForm, amount: event.target.value })}
@@ -612,17 +682,23 @@ function FinancePage() {
         <Panel title="Record student payment">
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Student ID">
-              <input
+              <select
+                required
                 className={inputClass}
                 value={paymentForm.studentId}
                 onChange={(event) =>
                   setPaymentForm({ ...paymentForm, studentId: event.target.value })
                 }
-                placeholder="Paste student UUID"
-              />
+              >
+                <option value="">Select student</option>
+                {((data as any)?.students ?? []).map((student: any) => (
+                  <option key={student.id} value={student.id}>{student.full_name}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Payment number">
               <input
+                required
                 className={inputClass}
                 value={paymentForm.paymentNumber}
                 onChange={(event) =>
@@ -632,7 +708,9 @@ function FinancePage() {
             </Field>
             <Field label="Amount">
               <input
+                required
                 type="number"
+                min="0.01"
                 className={inputClass}
                 value={paymentForm.amount}
                 onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })}
@@ -708,6 +786,7 @@ function FinancePage() {
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Financial year">
               <select
+                required
                 className={inputClass}
                 value={budgetForm.financialYearId}
                 onChange={(event) =>
@@ -724,6 +803,7 @@ function FinancePage() {
             </Field>
             <Field label="Budget title">
               <input
+                required
                 className={inputClass}
                 value={budgetForm.title}
                 onChange={(event) => setBudgetForm({ ...budgetForm, title: event.target.value })}
@@ -741,7 +821,9 @@ function FinancePage() {
             </Field>
             <Field label="Proposed amount">
               <input
+                required
                 type="number"
+                min="0.01"
                 className={inputClass}
                 value={budgetForm.proposedAmount}
                 onChange={(event) =>
@@ -815,6 +897,7 @@ function FinancePage() {
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Supplier name">
               <input
+                required
                 className={inputClass}
                 value={supplierForm.supplierName}
                 onChange={(event) =>
@@ -856,6 +939,7 @@ function FinancePage() {
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Request number">
               <input
+                required
                 className={inputClass}
                 value={requestForm.requestNumber}
                 onChange={(event) =>
@@ -906,7 +990,9 @@ function FinancePage() {
             </Field>
             <Field label="Requested amount">
               <input
+                required
                 type="number"
+                min="0.01"
                 className={inputClass}
                 value={requestForm.requestedAmount}
                 onChange={(event) =>
@@ -916,6 +1002,7 @@ function FinancePage() {
             </Field>
             <Field label="Item description">
               <input
+                required
                 className={inputClass}
                 value={requestForm.itemDescription}
                 onChange={(event) =>

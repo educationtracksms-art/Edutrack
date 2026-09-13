@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
+  CreditCard,
   Landmark,
   FileBadge,
   GraduationCap,
@@ -71,6 +72,13 @@ const ALL: AppRole[] = [
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
   { to: "/schools", label: "Schools", icon: Building2, roles: ["super_admin"] },
+  { to: "/subscriptions", label: "Subscriptions", icon: CreditCard, roles: ["super_admin"] },
+  {
+    to: "/subscription",
+    label: "Subscription",
+    icon: CreditCard,
+    roles: ["school_admin", "head_teacher", "dos"],
+  },
   {
     to: "/students",
     label: "Students",

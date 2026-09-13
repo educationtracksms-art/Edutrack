@@ -82,6 +82,15 @@ type CoCurricularRow = {
   projects: string | null;
 };
 
+function readAssessmentMark(value: string, label: string, maximum: number) {
+  if (!value.trim()) throw new Error(`Add the ${label} mark before saving the assessment`);
+  const mark = Number(value);
+  if (!Number.isFinite(mark) || mark < 0 || mark > maximum) {
+    throw new Error(`${label} mark must be between 0 and ${maximum}`);
+  }
+  return mark;
+}
+
 type AssessmentsData = {
   assessments: AssessmentRow[];
   students: StudentRow[];
@@ -204,7 +213,6 @@ function AssessmentsPage() {
     formative: "",
     summative: "",
     teacherInitials: "",
-    missingMarks: false,
   });
   const [edits, setEdits] = useState<
     Record<string, { formative?: string; summative?: string; gradeDescriptor?: string }>
@@ -439,7 +447,6 @@ function AssessmentsPage() {
   }, [data?.classes, data?.students, entryForm.studentId]);
 
   const autoDescriptor = useMemo(() => {
-    if (entryForm.missingMarks) return "Missing marks";
     const total = Number(entryForm.formative || 0) + Number(entryForm.summative || 0);
     const hit = data?.gradingScales.find(
       (scale) =>
@@ -493,7 +500,6 @@ function AssessmentsPage() {
       formative: assessment.formative?.toString() ?? "",
       summative: assessment.summative?.toString() ?? "",
       teacherInitials: assessment.teacher_initials ?? "",
-      missingMarks: assessment.formative === null && assessment.summative === null,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -508,7 +514,6 @@ function AssessmentsPage() {
       summative: "",
       examType: "end_of_term",
       teacherInitials: "",
-      missingMarks: false,
     }));
   };
 
@@ -740,46 +745,31 @@ function AssessmentsPage() {
     mutationFn: async (id: string) => {
       const edit = edits[id] ?? {};
       const existing = assessmentLookup.get(id);
+      if (!existing) throw new Error("The selected assessment could not be found");
       const effectiveFormative =
         edit.formative !== undefined ? edit.formative : (existing?.formative?.toString() ?? "");
       const effectiveSummative =
         edit.summative !== undefined ? edit.summative : (existing?.summative?.toString() ?? "");
+      const formative = readAssessmentMark(effectiveFormative, "formative", 20);
+      const summative = readAssessmentMark(effectiveSummative, "summative", 80);
+      const teacherInitials = data?.teacherInitials.trim() || existing.teacher_initials?.trim() || "";
+      if (!teacherInitials) throw new Error("Add teacher initials before submitting the assessment");
       if (["draft", "rejected"].includes(existing?.status ?? "") && !existing?.locked) {
         await updateDraftEntry({
           data: {
             assessmentId: id,
             examType: existing.exam_type,
-            formative:
-              edit.formative !== undefined
-                ? edit.formative === ""
-                  ? null
-                  : Number(edit.formative)
-                : existing.formative,
-            summative:
-              edit.summative !== undefined
-                ? edit.summative === ""
-                  ? null
-                  : Number(edit.summative)
-                : existing.summative,
-            teacherInitials: existing.teacher_initials ?? null,
+            formative,
+            summative,
+            teacherInitials,
           },
         });
         await submitEntry({
           data: {
             assessmentId: id,
-            formative:
-              edit.formative !== undefined
-                ? edit.formative === ""
-                  ? null
-                  : Number(edit.formative)
-                : existing.formative,
-            summative:
-              edit.summative !== undefined
-                ? edit.summative === ""
-                  ? null
-                  : Number(edit.summative)
-                : existing.summative,
-            teacherInitials: existing.teacher_initials ?? null,
+            formative,
+            summative,
+            teacherInitials,
           },
         });
         return;
@@ -788,19 +778,9 @@ function AssessmentsPage() {
       await submitEntry({
         data: {
           assessmentId: id,
-          formative:
-            edit.formative !== undefined
-              ? edit.formative === ""
-                ? null
-                : Number(edit.formative)
-              : (existing?.formative ?? null),
-          summative:
-            edit.summative !== undefined
-              ? edit.summative === ""
-                ? null
-                : Number(edit.summative)
-              : (existing?.summative ?? null),
-          teacherInitials: existing?.teacher_initials ?? null,
+          formative,
+          summative,
+          teacherInitials,
         },
       });
     },
@@ -895,6 +875,10 @@ function AssessmentsPage() {
         const allowed = teacherStudents.some((student) => student.id === entryForm.studentId);
         if (!allowed) throw new Error("This learner is not assigned to you for this subject");
       }
+      const formative = readAssessmentMark(entryForm.formative, "formative", 20);
+      const summative = readAssessmentMark(entryForm.summative, "summative", 80);
+      const teacherInitials = entryForm.teacherInitials.trim();
+      if (!teacherInitials) throw new Error("Add teacher initials before saving the assessment");
 
       const payload = {
         studentId: entryForm.studentId,
@@ -902,11 +886,9 @@ function AssessmentsPage() {
         termId: entryForm.termId || data?.currentTermId || "",
         examType: entryForm.examType,
         gradeDescriptor: autoDescriptor || null,
-        formative:
-          entryForm.missingMarks || entryForm.formative === "" ? null : Number(entryForm.formative),
-        summative:
-          entryForm.missingMarks || entryForm.summative === "" ? null : Number(entryForm.summative),
-        teacherInitials: entryForm.teacherInitials || null,
+        formative,
+        summative,
+        teacherInitials,
       };
       if (editingAssessmentId) {
         await updateDraftEntry({
@@ -942,6 +924,10 @@ function AssessmentsPage() {
         const allowed = teacherStudents.some((student) => student.id === entryForm.studentId);
         if (!allowed) throw new Error("This learner is not assigned to you for this subject");
       }
+      const formative = readAssessmentMark(entryForm.formative, "formative", 20);
+      const summative = readAssessmentMark(entryForm.summative, "summative", 80);
+      const teacherInitials = entryForm.teacherInitials.trim();
+      if (!teacherInitials) throw new Error("Add teacher initials before submitting the assessment");
 
       const termId = entryForm.termId || data?.currentTermId || "";
       const existing = tableData?.assessments.find(
@@ -960,15 +946,9 @@ function AssessmentsPage() {
             termId,
             examType: entryForm.examType,
             gradeDescriptor: autoDescriptor || null,
-            formative:
-              entryForm.missingMarks || entryForm.formative === ""
-                ? null
-                : Number(entryForm.formative),
-            summative:
-              entryForm.missingMarks || entryForm.summative === ""
-                ? null
-                : Number(entryForm.summative),
-            teacherInitials: entryForm.teacherInitials || null,
+            formative,
+            summative,
+            teacherInitials,
           },
         });
       }
@@ -990,15 +970,9 @@ function AssessmentsPage() {
       await submitEntry({
         data: {
           assessmentId,
-          formative:
-            entryForm.missingMarks || entryForm.formative === ""
-              ? null
-              : Number(entryForm.formative),
-          summative:
-            entryForm.missingMarks || entryForm.summative === ""
-              ? null
-              : Number(entryForm.summative),
-          teacherInitials: entryForm.teacherInitials || null,
+          formative,
+          summative,
+          teacherInitials,
         },
       });
     },
@@ -1012,7 +986,6 @@ function AssessmentsPage() {
         summative: "",
         examType: "end_of_term",
         teacherInitials: "",
-        missingMarks: false,
       }));
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -1154,6 +1127,7 @@ function AssessmentsPage() {
                   const allocationCount = data?.allocations.length ?? 0;
                   return (
                     <select
+                      required
                       className={inputClass}
                       value={allocationKey}
                       onChange={(event) => setAllocationKey(event.target.value)}
@@ -1328,6 +1302,7 @@ function AssessmentsPage() {
             </div>
             <Field label="Subject">
               <select
+                required
                 className={inputClass}
                 value={entryForm.subjectId}
                 onChange={(event) => setEntryForm({ ...entryForm, subjectId: event.target.value })}
@@ -1343,6 +1318,7 @@ function AssessmentsPage() {
             </Field>
             <Field label="Term">
               <select
+                required={!data?.currentTermId}
                 className={inputClass}
                 value={entryForm.termId}
                 onChange={(event) => setEntryForm({ ...entryForm, termId: event.target.value })}
@@ -1365,8 +1341,6 @@ function AssessmentsPage() {
                 <option value="beginning_of_term">Beginning of term</option>
                 <option value="mid_term">Mid term</option>
                 <option value="end_of_term">End of term</option>
-                <option value="class_test">Class test</option>
-                <option value="assignment">Assignment</option>
               </select>
             </Field>
             <Field label="Formative / 20">
@@ -1375,10 +1349,11 @@ function AssessmentsPage() {
                 step="0.1"
                 min={0}
                 max={20}
+                required
                 className={inputClass}
                 value={entryForm.formative}
                 onChange={(event) =>
-                  setEntryForm({ ...entryForm, formative: event.target.value, missingMarks: false })
+                  setEntryForm({ ...entryForm, formative: event.target.value })
                 }
               />
             </Field>
@@ -1388,44 +1363,28 @@ function AssessmentsPage() {
                 step="0.1"
                 min={0}
                 max={80}
+                required
                 className={inputClass}
                 value={entryForm.summative}
                 onChange={(event) =>
-                  setEntryForm({ ...entryForm, summative: event.target.value, missingMarks: false })
+                  setEntryForm({ ...entryForm, summative: event.target.value })
                 }
               />
             </Field>
             <Field label="Marks status">
-              <label className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={entryForm.missingMarks}
-                  onChange={(event) =>
-                    setEntryForm((current) => ({
-                      ...current,
-                      missingMarks: event.target.checked,
-                      formative: event.target.checked ? "" : current.formative,
-                      summative: event.target.checked ? "" : current.summative,
-                    }))
-                  }
-                />
-                <span className="text-sm">
-                  Mark as missing marks
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    Use this when the learner was selected but no score was available yet.
-                  </span>
-                </span>
-              </label>
+              <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+                Both formative and summative marks are required before an assessment can be saved.
+              </p>
             </Field>
             <Field label="Grade descriptor">
               <input className={inputClass} value={autoDescriptor} readOnly />
               <p className="mt-1 text-xs text-muted-foreground">
-                Auto-generated from the current score total, or set to missing marks.
+                Auto-generated from the current score total.
               </p>
             </Field>
             <Field label="Teacher initials">
               <input
+                required
                 className={inputClass}
                 value={entryForm.teacherInitials}
                 onChange={(event) =>

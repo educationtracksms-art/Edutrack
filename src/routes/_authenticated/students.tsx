@@ -147,15 +147,27 @@ function StudentsPage() {
   const addMutation = useMutation({
     mutationFn: async () => {
       if (!me?.profile?.school_id) throw new Error("Your account is not linked to a school");
+      const fullName = form.full_name.trim();
+      if (!fullName) throw new Error("Enter the learner's full name first");
+      if (!form.class_id) throw new Error("Assign the learner to a class first");
+      const selectedClass = classes?.find((item) => item.id === form.class_id);
+      if (!selectedClass) throw new Error("The selected class is no longer available. Choose a class again");
+      const classStreams = (streams ?? []).filter((stream) => stream.class_id === form.class_id);
+      if (classStreams.length > 0 && !form.stream_id) {
+        throw new Error("Choose a stream for this class before saving the learner");
+      }
+      if (form.stream_id && !classStreams.some((stream) => stream.id === form.stream_id)) {
+        throw new Error("Choose a stream that belongs to the selected class");
+      }
       const photoUrl = photoFile
         ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`)
         : null;
       const { error } = await supabase.from("students").insert({
         school_id: me.profile.school_id,
-        full_name: form.full_name.trim(),
+        full_name: fullName,
         lin: form.lin || null,
         gender: form.gender,
-        class_id: form.class_id || null,
+        class_id: form.class_id,
         stream_id: form.stream_id || null,
         house: form.house || null,
         schpay_code: form.schpay_code || null,
@@ -177,16 +189,28 @@ function StudentsPage() {
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!me?.profile?.school_id || !editingStudentId) throw new Error("Select a learner to edit");
+      const fullName = form.full_name.trim();
+      if (!fullName) throw new Error("Enter the learner's full name first");
+      if (!form.class_id) throw new Error("Assign the learner to a class first");
+      const selectedClass = classes?.find((item) => item.id === form.class_id);
+      if (!selectedClass) throw new Error("The selected class is no longer available. Choose a class again");
+      const classStreams = (streams ?? []).filter((stream) => stream.class_id === form.class_id);
+      if (classStreams.length > 0 && !form.stream_id) {
+        throw new Error("Choose a stream for this class before saving the learner");
+      }
+      if (form.stream_id && !classStreams.some((stream) => stream.id === form.stream_id)) {
+        throw new Error("Choose a stream that belongs to the selected class");
+      }
       const photoUrl = photoFile
         ? await uploadImage(photoFile, `students/${me.profile.school_id}/photos`)
         : currentPhotoUrl === null
           ? null
           : undefined;
       const payload: Record<string, unknown> = {
-        full_name: form.full_name.trim(),
+        full_name: fullName,
         lin: form.lin || null,
         gender: form.gender,
-        class_id: form.class_id || null,
+        class_id: form.class_id,
         stream_id: form.stream_id || null,
         house: form.house || null,
         schpay_code: form.schpay_code || null,
@@ -386,6 +410,10 @@ function StudentsPage() {
 
         const classValue = valueFor("class_name").toLowerCase();
         const streamValue = valueFor("stream_name").toLowerCase();
+        if (!classValue) {
+          skipped.push(`Row ${rowNumber + 1}: add the learner's class`);
+          continue;
+        }
         const classMatch = classes?.find((item) => item.name.trim().toLowerCase() === classValue);
         const streamMatch = streams?.find((item) => {
           if (item.name.trim().toLowerCase() !== streamValue) return false;
@@ -393,6 +421,11 @@ function StudentsPage() {
         });
         if (classValue && !classMatch) {
           skipped.push(`Row ${rowNumber + 1}: class "${valueFor("class_name")}" was not found`);
+          continue;
+        }
+        const classStreams = (streams ?? []).filter((stream) => stream.class_id === classMatch?.id);
+        if (classStreams.length > 0 && !streamValue) {
+          skipped.push(`Row ${rowNumber + 1}: add the stream for class "${valueFor("class_name")}"`);
           continue;
         }
         if (streamValue && !streamMatch) {
@@ -404,7 +437,7 @@ function StudentsPage() {
           full_name: fullName,
           lin: valueFor("lin") || null,
           gender: valueFor("gender") || "Female",
-          class_id: classMatch?.id ?? null,
+          class_id: classMatch.id,
           stream_id: streamMatch?.id ?? null,
           house: valueFor("house") || null,
           schpay_code: valueFor("schpay_code") || null,
@@ -508,6 +541,7 @@ function StudentsPage() {
             </Field>
             <Field label="Class">
               <select
+                required
                 className={inputClass}
                 value={form.class_id}
                 disabled={isClassTeacher && !!assignedClass}
@@ -527,6 +561,7 @@ function StudentsPage() {
             </Field>
             <Field label="Stream">
               <select
+                required={Boolean((streams ?? []).some((stream) => stream.class_id === form.class_id))}
                 className={inputClass}
                 value={form.stream_id}
                 onChange={(e) => setForm({ ...form, stream_id: e.target.value })}

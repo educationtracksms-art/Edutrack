@@ -104,16 +104,22 @@ function UsersPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      createUser({
+    mutationFn: () => {
+      const fullName = form.fullName.trim();
+      const email = form.email.trim();
+      if (!fullName) throw new Error("Enter the user's full name first");
+      if (!email) throw new Error("Enter the user's email first");
+      if (isSuper && !form.schoolId) throw new Error("Select a school before creating the account");
+      return createUser({
         data: {
-          fullName: form.fullName,
-          email: form.email,
+          fullName,
+          email,
           role: form.role,
           initials: form.initials || undefined,
           schoolId: form.schoolId || undefined,
         },
-      }),
+      });
+    },
     onSuccess: (result) => {
       setIssued({ email: form.email, password: result.oneTimePassword });
       setForm({ ...form, fullName: "", email: "", initials: "" });
@@ -137,7 +143,19 @@ function UsersPage() {
       role: string;
       initials?: string;
       schoolId?: string;
-    }) => updateUser({ data: vars }),
+    }) => {
+      if (!vars.fullName.trim()) throw new Error("Enter the user's full name first");
+      if (!vars.email.trim()) throw new Error("Enter the user's email first");
+      if (isSuper && !vars.schoolId) throw new Error("Select a school before saving the account");
+      return updateUser({
+        data: {
+          ...vars,
+          fullName: vars.fullName.trim(),
+          email: vars.email.trim(),
+          initials: vars.initials?.trim() || undefined,
+        },
+      });
+    },
     onSuccess: () => {
       toast.success("User updated");
       queryClient.invalidateQueries({ queryKey: ["staff"] });
@@ -184,13 +202,16 @@ function UsersPage() {
   });
 
   const departmentMutation = useMutation({
-    mutationFn: () =>
-      createDepartmentFn({
+    mutationFn: () => {
+      const name = departmentForm.name.trim();
+      if (!name) throw new Error("Enter a department name first");
+      return createDepartmentFn({
         data: {
-          name: departmentForm.name,
-          description: departmentForm.description || null,
+          name,
+          description: departmentForm.description.trim() || null,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Department created");
       setDepartmentForm({ name: "", description: "" });
@@ -200,13 +221,22 @@ function UsersPage() {
   });
 
   const assignHodMutation = useMutation({
-    mutationFn: () =>
-      assignDepartmentHodFn({
+    mutationFn: () => {
+      if (!departmentAssign.departmentId) throw new Error("Select a department first");
+      if (!departmentAssign.hodUserId) throw new Error("Select a teacher to assign as HOD first");
+      if (!(departments ?? []).some((department: any) => department.id === departmentAssign.departmentId)) {
+        throw new Error("The selected department is no longer available. Choose it again");
+      }
+      if (!(people ?? []).some((person) => person.id === departmentAssign.hodUserId)) {
+        throw new Error("The selected teacher is no longer available. Choose a teacher again");
+      }
+      return assignDepartmentHodFn({
         data: {
           departmentId: departmentAssign.departmentId,
-          hodUserId: departmentAssign.hodUserId || null,
+          hodUserId: departmentAssign.hodUserId,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("HOD assigned");
       queryClient.invalidateQueries({ queryKey: ["departments"] });
@@ -279,6 +309,7 @@ function UsersPage() {
               </Field>
               <Field label="Assign HOD">
                 <select
+                  required
                   className={inputClass}
                   value={departmentAssign.hodUserId}
                   onChange={(e) =>
@@ -496,6 +527,7 @@ function UsersPage() {
             {isSuper && (
               <Field label="School">
                 <select
+                  required
                   className={inputClass}
                   value={form.schoolId}
                   onChange={(e) => setForm({ ...form, schoolId: e.target.value })}

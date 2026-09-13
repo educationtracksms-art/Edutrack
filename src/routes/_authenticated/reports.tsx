@@ -154,6 +154,13 @@ function ReportsPage() {
     mutationFn: async () => {
       const ids = selected.length ? selected : visible.map((student) => student.id);
       if (!ids.length) throw new Error("Select at least one learner");
+      if (!termId) throw new Error("Select a term before generating report cards");
+      if (!(terms ?? []).some((term) => term.id === termId)) {
+        throw new Error("The selected term is no longer available. Choose a term again");
+      }
+      if (ids.some((id) => !(students ?? []).some((student) => student.id === id))) {
+        throw new Error("One selected learner is no longer available. Refresh and select learners again");
+      }
       return build({ data: { studentIds: ids, termId: termId || undefined } });
     },
     onSuccess: (result) => {
@@ -203,6 +210,7 @@ function ReportsPage() {
             ))}
           </select>
           <select
+            required
             className={`${inputClass} max-w-xs`}
             value={termId}
             onChange={(event) => setTermId(event.target.value)}

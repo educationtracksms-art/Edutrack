@@ -400,11 +400,29 @@ function TimetablePage() {
       if (!currentTerm || !currentYear) throw new Error("Create an academic year and term first");
       if (!form.class_id || !form.subject_id || !form.teacher_id)
         throw new Error("Class, subject and teacher are required");
+      if (!(data?.classes ?? []).some((item) => item.id === form.class_id)) {
+        throw new Error("The selected class is no longer available. Choose a class again");
+      }
+      if (!(data?.subjects ?? []).some((item) => item.id === form.subject_id)) {
+        throw new Error("The selected subject is no longer available. Choose a subject again");
+      }
+      if (!(data?.teachers ?? []).some((item) => item.id === form.teacher_id)) {
+        throw new Error("The selected teacher is no longer available. Choose a teacher again");
+      }
       const classStreams = (data?.streams ?? []).filter(
         (stream) => stream.class_id === form.class_id,
       );
       if (classStreams.length && !form.stream_id) {
         throw new Error("Select a stream for this class. Streams must be scheduled separately.");
+      }
+      if (form.stream_id && !classStreams.some((stream) => stream.id === form.stream_id)) {
+        throw new Error("Choose a stream that belongs to the selected class");
+      }
+      if (!form.start_time || !form.end_time) {
+        throw new Error("Add both the lesson start time and end time first");
+      }
+      if (form.end_time <= form.start_time) {
+        throw new Error("Lesson end time must be after the start time");
       }
       const conflictingLesson = (data?.entries ?? []).find((entry) => {
         if (form.id && entry.id === form.id) return false;
@@ -450,6 +468,32 @@ function TimetablePage() {
   const saveTimings = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!periodDrafts.length) throw new Error("Add at least one timetable period first");
+      const periodOrders = new Set<number>();
+      for (const row of periodDrafts) {
+        if (!row.label.trim()) throw new Error("Every timetable period needs a title");
+        if (!Number.isInteger(Number(row.period_order)) || Number(row.period_order) < 1) {
+          throw new Error("Every timetable period needs a whole-number order greater than zero");
+        }
+        if (periodOrders.has(Number(row.period_order))) {
+          throw new Error("Each timetable period must have a unique order");
+        }
+        periodOrders.add(Number(row.period_order));
+        if (!row.start_time || !row.end_time) {
+          throw new Error(`Add start and end times for ${row.label || "each period"}`);
+        }
+        if (row.end_time <= row.start_time) {
+          throw new Error(`End time must be after start time for ${row.label}`);
+        }
+      }
+      const timePairs = [
+        [settingsDraft.break_start, settingsDraft.break_end, "break"],
+        [settingsDraft.lunch_start, settingsDraft.lunch_end, "lunch"],
+      ];
+      for (const [start, end, label] of timePairs) {
+        if (Boolean(start) !== Boolean(end)) throw new Error(`Add both ${label} start and end times`);
+        if (start && end && end <= start) throw new Error(`${label} end time must be after its start time`);
+      }
       const { error: settingsError } = await supabase.from("timetable_settings" as any).upsert(
         {
           school_id: schoolId,
@@ -468,7 +512,7 @@ function TimetablePage() {
             id: row.id,
             school_id: schoolId,
             period_order: Number(row.period_order),
-            label: row.label,
+            label: row.label.trim(),
             start_time: row.start_time,
             end_time: row.end_time,
             is_break: row.is_break,
@@ -507,6 +551,8 @@ function TimetablePage() {
         throw new Error("Create an academic year and term first");
       }
       const slots = periodRows.filter((row) => !row.is_break && !row.is_lunch);
+      if (!slots.length) throw new Error("Add active lesson periods before generating a timetable");
+      if (!(data?.allocations ?? []).length) throw new Error("Create teacher allocations before generating a timetable");
       const occupied = new Set(
         (data?.entries ?? []).flatMap((entry) => [
           `teacher:${entry.day_of_week}:${entry.period}:${entry.teacher_id}`,
@@ -1212,6 +1258,7 @@ function TimetablePage() {
               >
                 <Field label="Class">
                   <select
+                    required
                     className={inputClass}
                     value={form.class_id}
                     onChange={(e) => setForm({ ...form, class_id: e.target.value, stream_id: "" })}
@@ -1242,6 +1289,7 @@ function TimetablePage() {
                 </Field>
                 <Field label="Subject">
                   <select
+                    required
                     className={inputClass}
                     value={form.subject_id}
                     onChange={(e) => setForm({ ...form, subject_id: e.target.value })}
@@ -1256,6 +1304,7 @@ function TimetablePage() {
                 </Field>
                 <Field label="Teacher">
                   <select
+                    required
                     className={inputClass}
                     value={form.teacher_id}
                     onChange={(e) => setForm({ ...form, teacher_id: e.target.value })}
@@ -1299,6 +1348,7 @@ function TimetablePage() {
                 <div className="grid gap-3 md:grid-cols-2">
                   <Field label="Start time">
                     <input
+                      required
                       className={inputClass}
                       type="time"
                       value={form.start_time}
@@ -1307,6 +1357,7 @@ function TimetablePage() {
                   </Field>
                   <Field label="End time">
                     <input
+                      required
                       className={inputClass}
                       type="time"
                       value={form.end_time}

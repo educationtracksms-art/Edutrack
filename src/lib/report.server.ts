@@ -94,7 +94,12 @@ export async function buildReportCards(
   }
 
   const termFilterId = term?.id ?? "00000000-0000-0000-0000-000000000000";
-  const [{ data: assessments }, { data: attendance }, { data: activities }, { data: activePeriods }] = await Promise.all([
+  const [
+    { data: assessments },
+    { data: attendance },
+    { data: activities },
+    { data: activePeriods },
+  ] = await Promise.all([
     supabase
       .from("assessments")
       .select(
@@ -109,7 +114,12 @@ export async function buildReportCards(
       .in("student_id", ids)
       .eq("term_id", termFilterId),
     supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
-    (supabase as any).from("assessment_periods").select("exam_type").eq("school_id", schoolId).eq("term_id", termFilterId).eq("is_active", true),
+    (supabase as any)
+      .from("assessment_periods")
+      .select("exam_type")
+      .eq("school_id", schoolId)
+      .eq("term_id", termFilterId)
+      .eq("is_active", true),
   ]);
   const { data: commentRules } = await supabase
     .from("report_comment_rules")
@@ -181,59 +191,91 @@ export async function buildReportCards(
       .map((subject: any) => {
         const papers = (subjectPapers ?? []).filter((p: any) => p.subject_id === subject.id);
         const paperRows = papers.length ? papers : [null];
-        return paperRows.map((paper: any) => {
-        const subjectMarks = marks.filter((m: any) => m.subject_id === subject.id && (paper ? m.paper_id === paper.id : !m.paper_id));
-        const mark = subjectMarks[subjectMarks.length - 1];
-        const summativeMarks = subjectMarks
-          .map((m: any) => Number(m.summative))
-          .filter((value: number) => Number.isFinite(value));
-        const averageSummative = summativeMarks.length
-          ? summativeMarks.reduce((sum: number, value: number) => sum + value, 0) / summativeMarks.length
-          : null;
-        const subjectMaxPoints = Number(subject.points ?? 0);
-        if (!mark || (mark.formative == null && averageSummative == null)) {
-          return {
-            subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
-            subjectId: subject.id,
-            paperId: paper?.id ?? null,
-            isPaper: Boolean(paper),
-            formative: "",
-            summative: "",
-            total: "",
-            grade: "",
-            gradeDetail: "",
-            subjectPoints: educationLevel === "advanced" ? String(subjectMaxPoints) : "",
-            teacher: mark?.teacher_initials ?? "",
-          };
-        }
-        const formative = Number(mark.formative ?? 0);
-        const summative = averageSummative ?? 0;
-        const total = Math.round((formative + summative) * 10) / 10;
-        const g = gradeFor(total, educationLevel);
-        const weightedPoints =
-          educationLevel === "advanced"
-            ? subject.is_subsidiary
-              ? (total >= 50 ? 1 : 0)
-              : Math.min(subjectMaxPoints || 0, g.points || 0)
-            : 0;
-        totals.push(total);
-        return {
-          subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
-          subjectId: subject.id,
-          paperId: paper?.id ?? null,
-          isPaper: Boolean(paper),
-          formative: fmt(formative),
-          summative: fmt(summative),
-          total: fmt(total),
-          grade: g.grade,
-          gradeDetail: educationLevel === "advanced" ? "" : g.descriptor,
-          subjectPoints:
-            educationLevel === "advanced"
-              ? String(subject.is_subsidiary ? weightedPoints : weightedPoints || subjectMaxPoints || 0)
-              : "",
-          teacher: mark.teacher_initials ?? "",
-        };
-        }).flat();
+        return paperRows
+          .map((paper: any) => {
+            const subjectMarks = marks.filter(
+              (m: any) =>
+                m.subject_id === subject.id && (paper ? m.paper_id === paper.id : !m.paper_id),
+            );
+            const mark = subjectMarks[subjectMarks.length - 1];
+            const summativeMarks = subjectMarks
+              .map((m: any) => Number(m.summative))
+              .filter((value: number) => Number.isFinite(value));
+            const averageSummative = summativeMarks.length
+              ? summativeMarks.reduce((sum: number, value: number) => sum + value, 0) /
+                summativeMarks.length
+              : null;
+            const subjectMaxPoints = Number(subject.points ?? 0);
+            const isMissingMark =
+              Boolean(mark) && mark.formative == null && averageSummative == null;
+            if (isMissingMark) {
+              // An approved missing mark is a real result: show it on the report and
+              // include it as zero when calculating the learner's average.
+              totals.push(0);
+              return {
+                subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+                subjectId: subject.id,
+                paperId: paper?.id ?? null,
+                isPaper: Boolean(paper),
+                formative: "MISSING MARK",
+                summative: "MISSING MARK",
+                total: "MISSING MARK",
+                grade: "",
+                gradeDetail: "",
+                subjectPoints: educationLevel === "advanced" ? "0" : "",
+                teacher: mark?.teacher_initials ?? "",
+              };
+            }
+            if (!mark) {
+              return {
+                subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+                subjectId: subject.id,
+                paperId: paper?.id ?? null,
+                isPaper: Boolean(paper),
+                formative: "",
+                summative: "",
+                total: "",
+                grade: "",
+                gradeDetail: "",
+                subjectPoints: educationLevel === "advanced" ? String(subjectMaxPoints) : "",
+                teacher: mark?.teacher_initials ?? "",
+              };
+            }
+            const formative = Number(mark.formative ?? 0);
+            const summative = averageSummative ?? 0;
+            const total = Math.round((formative + summative) * 10) / 10;
+            const g = gradeFor(total, educationLevel);
+            const weightedPoints =
+              educationLevel === "advanced"
+                ? subject.is_subsidiary
+                  ? total >= 50
+                    ? 1
+                    : 0
+                  : Math.min(subjectMaxPoints || 0, g.points || 0)
+                : 0;
+            totals.push(total);
+            return {
+              subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+              subjectId: subject.id,
+              paperId: paper?.id ?? null,
+              isPaper: Boolean(paper),
+              formative: fmt(formative),
+              summative: fmt(summative),
+              total: fmt(total),
+              grade: g.grade,
+              gradeDetail: educationLevel === "advanced" ? "" : g.descriptor,
+              subjectPoints:
+                educationLevel === "advanced"
+                  ? String(
+                      subject.is_subsidiary
+                        ? weightedPoints
+                        : weightedPoints || subjectMaxPoints || 0,
+                    )
+                  : "",
+              teacher: mark.teacher_initials ?? "",
+            };
+          })
+          .flat();
       });
 
     const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
@@ -334,7 +376,7 @@ export async function buildReportCards(
           ? {
               present: att.days_present,
               absent: att.days_absent,
-              total: att.days_present + att.days_absent,
+              total: att.total_days ?? att.days_present + att.days_absent,
             }
           : attendanceEnabled
             ? { present: 0, absent: 0, total: 0 }

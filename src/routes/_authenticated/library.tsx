@@ -163,10 +163,15 @@ function LibraryPage() {
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!canManage) throw new Error("You do not have permission to manage library stock");
-      const copies = Math.max(1, Number(bookForm.total_copies) || 1);
+      const title = bookForm.title.trim();
+      if (!title) throw new Error("Enter the book title first");
+      const copies = Number(bookForm.total_copies);
+      if (!Number.isInteger(copies) || copies < 1) {
+        throw new Error("Copies must be a whole number greater than zero");
+      }
       const { error } = await supabase.from("library_books").insert({
         school_id: schoolId,
-        title: bookForm.title.trim(),
+        title,
         author: bookForm.author.trim() || null,
         isbn: bookForm.isbn.trim() || null,
         category: bookForm.category.trim() || null,
@@ -190,7 +195,12 @@ function LibraryPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!canManage) throw new Error("You do not have permission to manage library stock");
       if (!bookForm.id) throw new Error("No book selected for update");
-      const copies = Math.max(1, Number(bookForm.total_copies) || 1);
+      const title = bookForm.title.trim();
+      if (!title) throw new Error("Enter the book title first");
+      const copies = Number(bookForm.total_copies);
+      if (!Number.isInteger(copies) || copies < 1) {
+        throw new Error("Copies must be a whole number greater than zero");
+      }
       const { data: book, error: lookupError } = await supabase
         .from("library_books")
         .select("available_copies, total_copies")
@@ -203,7 +213,7 @@ function LibraryPage() {
       const { error } = await supabase
         .from("library_books")
         .update({
-          title: bookForm.title.trim(),
+          title,
           author: bookForm.author.trim() || null,
           isbn: bookForm.isbn.trim() || null,
           category: bookForm.category.trim() || null,
@@ -247,10 +257,20 @@ function LibraryPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!canManage) throw new Error("You do not have permission to issue books");
       if (!loanForm.book_id) throw new Error("Choose a book");
-      if (loanForm.borrower_type === "student" && !loanForm.student_id)
-        throw new Error("Choose a learner");
-      if (loanForm.borrower_type === "staff" && !loanForm.user_id)
-        throw new Error("Choose a staff member");
+      const selectedBook = books.find((book) => book.id === loanForm.book_id);
+      if (!selectedBook) throw new Error("The selected book is no longer available. Choose a book again");
+      if (loanForm.borrower_type === "student") {
+        if (!loanForm.student_id) throw new Error("Choose a learner before issuing the book");
+        if (!data?.students.some((student: { id: string }) => student.id === loanForm.student_id)) {
+          throw new Error("The selected learner is no longer available. Choose a learner again");
+        }
+      }
+      if (loanForm.borrower_type === "staff") {
+        if (!loanForm.user_id) throw new Error("Choose a staff member before issuing the book");
+        if (!data?.staff.some((person: { id: string }) => person.id === loanForm.user_id)) {
+          throw new Error("The selected staff member is no longer available. Choose a staff member again");
+        }
+      }
 
       const { data: book, error: bookError } = await supabase
         .from("library_books")
@@ -711,6 +731,7 @@ function LibraryPage() {
               </Field>
               <Field label="Copies">
                 <input
+                  required
                   type="number"
                   min="1"
                   className={inputClass}
@@ -735,6 +756,7 @@ function LibraryPage() {
             >
               <Field label="Book">
                 <select
+                  required
                   className={inputClass}
                   value={loanForm.book_id}
                   onChange={(e) => setLoanForm({ ...loanForm, book_id: e.target.value })}
@@ -767,6 +789,7 @@ function LibraryPage() {
               {loanForm.borrower_type === "student" ? (
                 <Field label="Student">
                   <select
+                    required
                     className={inputClass}
                     value={loanForm.student_id}
                     onChange={(e) => setLoanForm({ ...loanForm, student_id: e.target.value })}
@@ -782,6 +805,7 @@ function LibraryPage() {
               ) : (
                 <Field label="Staff member">
                   <select
+                    required
                     className={inputClass}
                     value={loanForm.user_id}
                     onChange={(e) => setLoanForm({ ...loanForm, user_id: e.target.value })}

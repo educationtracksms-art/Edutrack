@@ -86,11 +86,20 @@ function PromotionsPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       if (!data?.year) throw new Error("Create an academic year first");
       if (selected.length === 0) throw new Error("Select at least one learner");
-      if (outcome === "promoted" && !toClass)
-        throw new Error("Choose the class learners move into");
+      if (outcome === "promoted" && !toClass) throw new Error("Choose the class learners move into");
+      const targetClass = outcome === "promoted" ? data.classes.find((item) => item.id === toClass) : null;
+      if (outcome === "promoted" && !targetClass) throw new Error("The selected target class is no longer available. Choose a class again");
+      if (outcome === "promoted" && toStream) {
+        const targetStream = data.streams.find((item) => item.id === toStream);
+        if (!targetStream || targetStream.class_id !== toClass) throw new Error("Choose a stream that belongs to the target class");
+      }
+      if (outcome === "promoted" && targetClass && !toStream && data.streams.some((stream) => stream.class_id === targetClass.id)) {
+        throw new Error("Choose a target stream for this class before applying the promotion");
+      }
 
       for (const studentId of selected) {
-        const student = data.students.find((s) => s.id === studentId)!;
+        const student = data.students.find((s) => s.id === studentId);
+        if (!student) throw new Error("One selected learner is no longer available. Refresh and select learners again");
         const target = outcome === "promoted" ? toClass : student.class_id;
         const targetStream = outcome === "promoted" ? toStream || null : student.stream_id;
 
@@ -186,8 +195,9 @@ function PromotionsPage() {
               ))}
             </select>
           </Field>
-          <Field label="To class">
+            <Field label="To class">
             <select
+              required={outcome === "promoted"}
               className={inputClass}
               value={toClass}
               onChange={(e) => {

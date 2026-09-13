@@ -74,6 +74,8 @@ function SettingsPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("No school linked to your account");
+      const name = form.name.trim();
+      if (!name) throw new Error("Enter the school name before saving");
       const reportAccountNumber = form.report_account_number.trim();
       if (form.report_payment_reference_type === "account_number" && !reportAccountNumber) {
         throw new Error("Enter the school account number before saving");
@@ -85,6 +87,11 @@ function SettingsPage() {
         .from("schools")
         .update({
           ...form,
+          name,
+          address: form.address.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          motto: form.motto.trim(),
           logo_url: logoUrl,
           report_account_number:
             form.report_payment_reference_type === "account_number"
@@ -132,6 +139,7 @@ function SettingsPage() {
           >
             <Field label="Name">
               <input
+                required
                 className={inputClass}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}

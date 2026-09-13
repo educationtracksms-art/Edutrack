@@ -621,16 +621,27 @@ function CommentEditorPanel({
   }, [rules]);
 
   const saveMutation = useMutation({
-    mutationFn: async () =>
-      saveRule({
+    mutationFn: async () => {
+      const comment = draft.comment.trim();
+      if (!comment) throw new Error("Enter the comment text first");
+      if (draft.points) {
+        const points = Number(draft.points);
+        if (!Number.isInteger(points) || points < 3 || points > 17) {
+          throw new Error("Points must be a whole number between 3 and 17");
+        }
+      } else if (!draft.descriptor.trim()) {
+        throw new Error("Choose a descriptor first");
+      }
+      return saveRule({
         data: {
           id: draft.id || null,
           commentRole,
           descriptor: draft.points ? draft.points : draft.descriptor,
           points: draft.points ? Number(draft.points) : null,
-          comment: draft.comment,
+          comment,
         },
-      }),
+      });
+    },
     onSuccess: () => toast.success("Comment rule saved"),
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });

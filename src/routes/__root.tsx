@@ -252,7 +252,7 @@ function RootComponent() {
 function ValidationFeedback({ children }: { children: ReactNode }) {
   const lastMessageAt = useRef(0);
 
-  function handleInvalid(event: React.InvalidEvent<HTMLFormElement>) {
+  function handleInvalid(event: React.InvalidEvent<HTMLDivElement>) {
     const field = event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
     const now = Date.now();
 
@@ -260,11 +260,61 @@ function ValidationFeedback({ children }: { children: ReactNode }) {
     if (now - lastMessageAt.current < 500) return;
     lastMessageAt.current = now;
 
-    const label = field.labels?.[0]?.textContent?.trim() || field.getAttribute("aria-label");
-    toast.error("Please complete the required fields", {
-      description: label ? `${label.replace(/[*:]/g, "").trim()} is required.` : "Check the highlighted field and try again.",
-    });
+    showFieldValidationError(field);
   }
 
-  return <div onInvalidCapture={handleInvalid}>{children}</div>;
+  function handleSubmitCapture(event: React.FormEvent<HTMLDivElement>) {
+    const form = event.target as HTMLFormElement;
+    if (!(form instanceof HTMLFormElement)) return;
+
+    // The browser treats whitespace as a value. Required text fields should not, otherwise a
+    // record can be submitted with a value that is effectively missing.
+    const field = Array.from(form.elements).find((element) => {
+      if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)) {
+        return false;
+      }
+      if (element.disabled || !element.required) return false;
+      if (element instanceof HTMLInputElement && ["checkbox", "radio"].includes(element.type)) {
+        return !element.checked;
+      }
+      return !element.value.trim();
+    });
+
+    if (!field) return;
+    event.preventDefault();
+    event.stopPropagation();
+    showFieldValidationError(field as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement);
+    (field as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).focus();
+  }
+
+  return (
+    <div onInvalidCapture={handleInvalid} onSubmitCapture={handleSubmitCapture}>
+      {children}
+    </div>
+  );
+}
+
+function showFieldValidationError(field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+  const label =
+    field.labels?.[0]?.textContent?.trim() ||
+    field.getAttribute("aria-label") ||
+    field.getAttribute("placeholder") ||
+    "This field";
+  const cleanLabel = label.replace(/[*:]/g, "").trim();
+  const isEmptyRequiredValue =
+    field.required &&
+    (field instanceof HTMLInputElement && ["checkbox", "radio"].includes(field.type)
+      ? !field.checked
+      : !field.value.trim());
+  const description = field.validity.valueMissing || isEmptyRequiredValue
+    ? `${cleanLabel} is required. Add it before continuing.`
+    : field.validity.typeMismatch
+      ? `${cleanLabel} must be valid.`
+      : field.validity.tooShort
+        ? `${cleanLabel} is too short.`
+        : field.validity.rangeUnderflow || field.validity.rangeOverflow
+          ? `${cleanLabel} is outside the allowed range.`
+          : `Check ${cleanLabel} and correct it before continuing.`;
+
+  toast.error("Complete the missing information first", { description });
 }

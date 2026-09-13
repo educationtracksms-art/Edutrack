@@ -35,6 +35,173 @@ async function logAudit(
   });
 }
 
+async function notifySchoolBilling(supabase: any, schoolId: string, title: string, body: string) {
+  const { data: recipients } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("school_id", schoolId)
+    .eq("is_active", true);
+  if (!recipients?.length) return;
+  await supabase.from("notifications").insert(
+    recipients.map((recipient: { id: string }) => ({
+      school_id: schoolId,
+      user_id: recipient.id,
+      title,
+      body,
+    })),
+  );
+}
+
+const assessmentExamTypes = new Set(["beginning_of_term", "mid_term", "end_of_term"]);
+
+function requiredAssessmentScore(value: unknown, label: string, maximum: number) {
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+    throw new Error(`Add the ${label} mark before saving the assessment`);
+  }
+  const score = Number(value);
+  if (!Number.isFinite(score) || score < 0 || score > maximum) {
+    throw new Error(`${label} mark must be between 0 and ${maximum}`);
+  }
+  return score;
+}
+
+async function validateAssessmentRelationships(
+  supabase: any,
+  options: {
+    schoolId: string;
+    userId: string;
+    roles: string[];
+    studentId: string;
+    subjectId: string;
+    termId: string;
+    examType?: string | null;
+    formative?: number | null;
+    summative?: number | null;
+    teacherInitials?: string | null;
+  },
+) {
+  const studentId = options.studentId?.trim();
+  const subjectId = options.subjectId?.trim();
+  const termId = options.termId?.trim();
+  if (!studentId) throw new Error("Choose a learner before saving the assessment");
+  if (!subjectId) throw new Error("Choose a subject before saving the assessment");
+  if (!termId) throw new Error("Choose a term before saving the assessment");
+
+  const examType = options.examType?.trim() || "end_of_term";
+  if (!assessmentExamTypes.has(examType)) {
+    throw new Error("Choose a valid assessment period before saving the assessment");
+  }
+
+  const formative = requiredAssessmentScore(options.formative, "formative", 20);
+  const summative = requiredAssessmentScore(options.summative, "summative", 80);
+
+  const [studentResult, subjectResult, termResult, profileResult] = await Promise.all([
+    supabase
+      .from("students")
+      .select("id, school_id, class_id, stream_id, status")
+      .eq("id", studentId)
+      .maybeSingle(),
+    supabase
+      .from("subjects")
+      .select("id, school_id, education_level")
+      .eq("id", subjectId)
+      .maybeSingle(),
+    supabase.from("terms").select("id, school_id").eq("id", termId).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("id, school_id, initials")
+      .eq("id", options.userId)
+      .maybeSingle(),
+  ]);
+
+  if (studentResult.error) throw new Error(studentResult.error.message);
+  if (subjectResult.error) throw new Error(subjectResult.error.message);
+  if (termResult.error) throw new Error(termResult.error.message);
+  if (profileResult.error) throw new Error(profileResult.error.message);
+
+  const student = studentResult.data;
+  const subject = subjectResult.data;
+  const term = termResult.data;
+  const profile = profileResult.data;
+  if (!student || student.school_id !== options.schoolId) {
+    throw new Error("Choose a learner from your school");
+  }
+  if (student.status !== "active") {
+    throw new Error("Only verified learners can receive assessments");
+  }
+  if (!subject || subject.school_id !== options.schoolId) {
+    throw new Error("Choose a subject from your school");
+  }
+  if (!term || term.school_id !== options.schoolId) {
+    throw new Error("Choose a term from your school");
+  }
+  if (!profile || profile.school_id !== options.schoolId) {
+    throw new Error("Your teacher profile is not linked to this school");
+  }
+
+  if (!student.class_id) {
+    throw new Error("Assign this learner to a class before entering marks");
+  }
+  const { data: classRow, error: classError } = await supabase
+    .from("classes")
+    .select("id, school_id, education_level")
+    .eq("id", student.class_id)
+    .maybeSingle();
+  if (classError) throw new Error(classError.message);
+  if (!classRow || classRow.school_id !== options.schoolId) {
+    throw new Error("The learner's class is missing or belongs to another school");
+  }
+  if (
+    classRow.education_level &&
+    subject.education_level &&
+    classRow.education_level !== subject.education_level
+  ) {
+    throw new Error("Choose a subject that belongs to the learner's class level");
+  }
+
+  const { data: classStreams, error: streamError } = await supabase
+    .from("streams")
+    .select("id, class_id, school_id")
+    .eq("school_id", options.schoolId)
+    .eq("class_id", student.class_id);
+  if (streamError) throw new Error(streamError.message);
+  if (classStreams?.length && !student.stream_id) {
+    throw new Error("Assign this learner to a stream before entering marks");
+  }
+  if (student.stream_id) {
+    const stream = classStreams?.find((item: any) => item.id === student.stream_id);
+    if (!stream || stream.class_id !== student.class_id) {
+      throw new Error("The learner's stream must belong to the selected class");
+    }
+  }
+
+  const teacherRoles = new Set(["subject_teacher", "class_teacher", "dos"]);
+  if (options.roles.some((role) => teacherRoles.has(role))) {
+    const { data: allocations, error: allocationError } = await supabase
+      .from("teacher_allocations")
+      .select("subject_id, class_id, stream_id")
+      .eq("school_id", options.schoolId)
+      .eq("teacher_id", options.userId)
+      .eq("subject_id", subjectId);
+    if (allocationError) throw new Error(allocationError.message);
+    const hasAllocation = (allocations ?? []).some(
+      (allocation: any) =>
+        (!allocation.class_id || allocation.class_id === student.class_id) &&
+        (!allocation.stream_id || allocation.stream_id === student.stream_id),
+    );
+    if (!hasAllocation) {
+      throw new Error("Allocate this teacher to the learner's class, stream and subject first");
+    }
+  }
+
+  const teacherInitials = options.teacherInitials?.trim() || profile.initials?.trim() || "";
+  if (!teacherInitials) {
+    throw new Error("Add teacher initials to your profile before saving marks");
+  }
+
+  return { student, subject, term, examType, formative, summative, teacherInitials };
+}
+
 async function ensureFinanceAccounts(supabase: any, schoolId: string) {
   const defaults = [
     { code: "1000", name: "Cash", category: "Assets", account_type: "asset" },
@@ -599,11 +766,13 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       locked: data.status === "approved",
       rejection_reason:
         data.status === "rejected" ? (data.reason ?? "Returned for correction") : null,
-      submitted_by: data.status === "submitted" ? context.userId : null,
-      submitted_at: data.status === "submitted" ? new Date().toISOString() : null,
       approved_by: data.status === "approved" ? context.userId : null,
       approved_at: data.status === "approved" ? new Date().toISOString() : null,
     };
+    if (data.status === "submitted") {
+      patch.submitted_by = context.userId;
+      patch.submitted_at = new Date().toISOString();
+    }
 
     const { error } = await context.supabase
       .from("assessments")
@@ -629,60 +798,344 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
 
 export const updateAssessmentPeriod = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { termId: string; examType: string; isActive: boolean; isLocked: boolean }) => data)
+  .validator(
+    (data: { termId: string; examType: string; isActive: boolean; isLocked: boolean }) => data,
+  )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.includes("dos") && !roles.includes("super_admin")) throw new Error("Only the Director of Studies can manage assessment periods");
+    if (!roles.includes("dos") && !roles.includes("super_admin"))
+      throw new Error("Only the Director of Studies can manage assessment periods");
     const schoolId = await schoolOf(context.supabase, context.userId);
-    if (!schoolId || !["beginning_of_term", "mid_term", "end_of_term"].includes(data.examType)) throw new Error("Invalid assessment period");
-    const { error } = await (context.supabase as any).from("assessment_periods").upsert({ school_id: schoolId, term_id: data.termId, exam_type: data.examType, is_active: data.isActive, is_locked: data.isActive ? data.isLocked : false, updated_at: new Date().toISOString() }, { onConflict: "school_id,term_id,exam_type" });
+    if (!schoolId || !["beginning_of_term", "mid_term", "end_of_term"].includes(data.examType))
+      throw new Error("Invalid assessment period");
+    const { error } = await (context.supabase as any)
+      .from("assessment_periods")
+      .upsert(
+        {
+          school_id: schoolId,
+          term_id: data.termId,
+          exam_type: data.examType,
+          is_active: data.isActive,
+          is_locked: data.isActive ? data.isLocked : false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "school_id,term_id,exam_type" },
+      );
     if (error) throw new Error(error.message);
     const label = data.examType.replaceAll("_", " ");
-    const { data: recipients } = await context.supabase.from("profiles").select("id").eq("school_id", schoolId);
-    await context.supabase.from("notifications").insert((recipients ?? []).map((r: any) => ({ school_id: schoolId, user_id: r.id, title: `Assessment entry ${data.isLocked ? "locked" : "open"}`, body: `${label} assessment entry is now ${data.isLocked ? "locked" : "open"}.` })));
+    const { data: recipients } = await context.supabase
+      .from("profiles")
+      .select("id")
+      .eq("school_id", schoolId);
+    await context.supabase
+      .from("notifications")
+      .insert(
+        (recipients ?? []).map((r: any) => ({
+          school_id: schoolId,
+          user_id: r.id,
+          title: `Assessment entry ${data.isLocked ? "locked" : "open"}`,
+          body: `${label} assessment entry is now ${data.isLocked ? "locked" : "open"}.`,
+        })),
+      );
     return { ok: true };
   });
 
 export const manageSchoolSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: {
-    schoolId: string;
-    planId: string;
-    status: "trial" | "active" | "past_due" | "expired" | "cancelled";
-    startsAt: string;
-    endsAt?: string;
-    notes?: string;
-  }) => data)
+  .validator(
+    (data: {
+      schoolId: string;
+      planId: string;
+      status: "trial" | "active" | "past_due" | "expired" | "cancelled";
+      startsAt: string;
+      endsAt?: string;
+      notes?: string;
+      autoRenew?: boolean;
+    }) => data,
+  )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can manage subscriptions");
-    const { error: closeError } = await context.supabase
-      .from("school_subscriptions")
-      .update({ status: "expired", updated_at: new Date().toISOString() })
-      .eq("school_id", data.schoolId)
-      .in("status", ["trial", "active", "past_due"]);
-    if (closeError) throw new Error(closeError.message);
-    const { data: subscription, error } = await context.supabase
-      .from("school_subscriptions")
-      .insert({ school_id: data.schoolId, plan_id: data.planId, status: data.status, starts_at: data.startsAt, ends_at: data.endsAt || null, notes: data.notes || null, created_by: context.userId })
-      .select("id")
-      .single();
+    if (!roles.includes("super_admin"))
+      throw new Error("Only the Super Admin can manage subscriptions");
+    if (!data.schoolId || !data.planId || !data.startsAt) {
+      throw new Error("School, plan and start date are required");
+    }
+    if (data.endsAt && data.endsAt < data.startsAt) {
+      throw new Error("Subscription end date must be on or after the start date");
+    }
+
+    const { data: subscription, error } = await (context.supabase as any).rpc(
+      "replace_school_subscription",
+      {
+        p_school_id: data.schoolId,
+        p_plan_id: data.planId,
+        p_status: data.status,
+        p_starts_at: data.startsAt,
+        p_ends_at: data.endsAt || null,
+        p_notes: data.notes?.trim() || null,
+        p_auto_renew: !!data.autoRenew,
+      },
+    );
     if (error) throw new Error(error.message);
-    await context.supabase.from("schools").update({ subscription_plan: data.planId }).eq("id", data.schoolId);
-    await logAudit(context.supabase, context.userId, data.schoolId, "SUBSCRIPTION_UPDATED", "school_subscriptions", { status: data.status });
+    if (!subscription?.id) throw new Error("Subscription could not be saved");
+
+    const { data: plan } = await (context.supabase as any)
+      .from("subscription_plans")
+      .select("name")
+      .eq("id", data.planId)
+      .maybeSingle();
+    await context.supabase
+      .from("schools")
+      .update({ subscription_plan: plan?.name ?? "custom" })
+      .eq("id", data.schoolId);
+
+    await notifySchoolBilling(
+      context.supabase,
+      data.schoolId,
+      "Subscription updated",
+      `Your school subscription is now ${data.status.replaceAll("_", " ")}.`,
+    );
+    await logAudit(
+      context.supabase,
+      context.userId,
+      data.schoolId,
+      "SUBSCRIPTION_UPDATED",
+      "school_subscriptions",
+      {
+        subscription_id: subscription.id,
+        plan_id: data.planId,
+        status: data.status,
+        starts_at: data.startsAt,
+        ends_at: data.endsAt || null,
+      },
+    );
+    return subscription;
+  });
+
+export const changeOwnSchoolSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      planId: string;
+      status: "trial" | "active" | "past_due" | "expired" | "cancelled";
+      startsAt: string;
+      endsAt?: string;
+      autoRenew?: boolean;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((role) => ["school_admin", "head_teacher", "dos"].includes(role))) {
+      throw new Error(
+        "Only school administrators, head teachers and DOS users can change subscriptions",
+      );
+    }
+    const { data: subscription, error } = await (context.supabase as any).rpc(
+      "change_own_school_subscription",
+      {
+        p_plan_id: data.planId,
+        p_status: data.status,
+        p_starts_at: data.startsAt,
+        p_ends_at: data.endsAt || null,
+        p_auto_renew: !!data.autoRenew,
+      },
+    );
+    if (error) throw new Error(error.message);
     return subscription;
   });
 
 export const recordSchoolPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { schoolId: string; subscriptionId?: string; amount: number; currency: string; paymentDate: string; method: string; reference?: string; notes?: string }) => data)
+  .validator(
+    (data: {
+      schoolId: string;
+      subscriptionId?: string;
+      amount: number;
+      currency: string;
+      paymentDate: string;
+      method: string;
+      reference?: string;
+      status?: string;
+      notes?: string;
+    }) => data,
+  )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can record payments");
-    const { data: payment, error } = await context.supabase.from("school_payments").insert({ ...data, subscription_id: data.subscriptionId || null, recorded_by: context.userId }).select("id").single();
+    if (!Number.isFinite(Number(data.amount)) || Number(data.amount) <= 0) {
+      throw new Error("Payment amount must be greater than zero");
+    }
+    const { data: payment, error } = await (context.supabase as any).rpc("record_school_payment", {
+      p_school_id: data.schoolId,
+      p_subscription_id: data.subscriptionId || null,
+      p_amount: Number(data.amount),
+      p_currency: data.currency || "UGX",
+      p_payment_date: data.paymentDate,
+      p_method: data.method,
+      p_reference: data.reference?.trim() || null,
+      p_status: data.status || "confirmed",
+      p_notes: data.notes?.trim() || null,
+    });
     if (error) throw new Error(error.message);
-    await logAudit(context.supabase, context.userId, data.schoolId, "SCHOOL_PAYMENT_RECORDED", "school_payments", { amount: data.amount, reference: data.reference });
+    if (!payment?.id) throw new Error("Payment could not be saved");
+    await notifySchoolBilling(
+      context.supabase,
+      data.schoolId,
+      "Payment recorded",
+      `A ${data.currency || "UGX"} ${Number(data.amount).toLocaleString()} subscription payment was recorded.`,
+    );
+    await logAudit(
+      context.supabase,
+      context.userId,
+      data.schoolId,
+      "SCHOOL_PAYMENT_RECORDED",
+      "school_payments",
+      {
+        payment_id: payment.id,
+        amount: data.amount,
+        currency: data.currency || "UGX",
+        reference: data.reference || null,
+      },
+    );
     return payment;
+  });
+
+export const updateSchoolPaymentStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: { paymentId: string; status: "pending" | "confirmed" | "failed" | "refunded" }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can update payments");
+    const { data: payment, error } = await (context.supabase as any)
+      .from("school_payments")
+      .update({ status: data.status })
+      .eq("id", data.paymentId)
+      .select("id,school_id,amount,currency,reference,status")
+      .single();
+    if (error) throw new Error(error.message);
+    await notifySchoolBilling(
+      context.supabase,
+      payment.school_id,
+      "Payment status updated",
+      `Your ${payment.currency} ${Number(payment.amount).toLocaleString()} payment is now ${data.status}.`,
+    );
+    await logAudit(
+      context.supabase,
+      context.userId,
+      payment.school_id,
+      "SCHOOL_PAYMENT_STATUS_CHANGED",
+      "school_payments",
+      {
+        payment_id: data.paymentId,
+        status: data.status,
+        reference: payment.reference,
+      },
+    );
+    return payment;
+  });
+
+export const createSubscriptionPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      name: string;
+      price: number;
+      billingCycle: "monthly" | "termly" | "annual";
+      description?: string;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can manage plans");
+    const name = data.name.trim();
+    const price = Number(data.price);
+    if (!name) throw new Error("Plan name is required");
+    if (!Number.isFinite(price) || price < 0) throw new Error("Plan price cannot be negative");
+    const { data: plan, error } = await (context.supabase as any)
+      .from("subscription_plans")
+      .insert({
+        name,
+        price,
+        billing_cycle: data.billingCycle,
+        description: data.description?.trim() || null,
+      })
+      .select("id, name, price, billing_cycle, description, is_active")
+      .single();
+    if (error) throw new Error(error.message);
+    await logAudit(
+      context.supabase,
+      context.userId,
+      null,
+      "SUBSCRIPTION_PLAN_CREATED",
+      "subscription_plans",
+      { plan_id: plan.id, name },
+    );
+    return plan;
+  });
+
+export const updateSubscriptionPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      id: string;
+      name: string;
+      price: number;
+      billingCycle: "monthly" | "termly" | "annual";
+      description?: string;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can manage plans");
+    const name = data.name.trim();
+    const price = Number(data.price);
+    if (!data.id || !name) throw new Error("Plan name is required");
+    if (!Number.isFinite(price) || price < 0) throw new Error("Plan price cannot be negative");
+    const { data: plan, error } = await (context.supabase as any)
+      .from("subscription_plans")
+      .update({
+        name,
+        price,
+        billing_cycle: data.billingCycle,
+        description: data.description?.trim() || null,
+      })
+      .eq("id", data.id)
+      .select("id, name, price, billing_cycle, description, is_active")
+      .single();
+    if (error) throw new Error(error.message);
+    await logAudit(
+      context.supabase,
+      context.userId,
+      null,
+      "SUBSCRIPTION_PLAN_UPDATED",
+      "subscription_plans",
+      { plan_id: data.id, name },
+    );
+    return plan;
+  });
+
+export const setSubscriptionPlanStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { id: string; isActive: boolean }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("super_admin")) throw new Error("Only the Super Admin can manage plans");
+    const { error } = await (context.supabase as any)
+      .from("subscription_plans")
+      .update({ is_active: data.isActive })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await logAudit(
+      context.supabase,
+      context.userId,
+      null,
+      "SUBSCRIPTION_PLAN_STATUS_CHANGED",
+      "subscription_plans",
+      { plan_id: data.id, is_active: data.isActive },
+    );
+    return { ok: true };
   });
 
 export const upsertReportComment = createServerFn({ method: "POST" })
@@ -1069,58 +1522,28 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    const [studentResult, subjectResult, termResult, profileResult] = await Promise.all([
-      context.supabase
-        .from("students")
-        .select("id, school_id, class_id, stream_id, status")
-        .eq("id", data.studentId)
-        .maybeSingle(),
-      context.supabase
-        .from("subjects")
-        .select("id, school_id")
-        .eq("id", data.subjectId)
-        .maybeSingle(),
-      context.supabase.from("terms").select("id, school_id").eq("id", data.termId).maybeSingle(),
-      context.supabase.from("profiles").select("initials").eq("id", context.userId).maybeSingle(),
-    ]);
-
-    const student = studentResult.data;
-    const subject = subjectResult.data;
-    const term = termResult.data;
-    if (!student || student.school_id !== schoolId)
-      throw new Error("Student not found in your school");
-    if (!subject || subject.school_id !== schoolId)
-      throw new Error("Subject not found in your school");
-    if (!term || term.school_id !== schoolId) throw new Error("Term not found in your school");
-
-    if (student.status !== "active") {
-      throw new Error("Only verified students can receive assessments");
-    }
-    const examType = data.examType?.trim() || "end_of_term";
-    const { data: period } = await (context.supabase as any).from("assessment_periods").select("is_active, is_locked").eq("school_id", schoolId).eq("term_id", data.termId).eq("exam_type", examType).maybeSingle();
-    if (period && (!period.is_active || period.is_locked)) throw new Error("This assessment period is not open for entry");
-
-    const teacherRoles = new Set(["subject_teacher", "class_teacher", "dos"]);
-    if (roles.some((role) => teacherRoles.has(role))) {
-      const { data: allocations, error: allocationError } = await context.supabase
-        .from("teacher_allocations")
-        .select("subject_id, class_id, stream_id")
-        .eq("school_id", schoolId)
-        .eq("teacher_id", context.userId)
-        .eq("subject_id", data.subjectId);
-      if (allocationError) throw new Error(allocationError.message);
-      const matchesAllocation = (allocations ?? []).some(
-        (allocation) =>
-          (!allocation.class_id || allocation.class_id === student.class_id) &&
-          (!allocation.stream_id || allocation.stream_id === student.stream_id),
-      );
-      if (!matchesAllocation) {
-        throw new Error("You are not allocated to this learner's subject or class");
-      }
-    }
-
-    const teacherInitials =
-      data.teacherInitials?.trim() || profileResult.data?.initials?.trim() || null;
+    const validated = await validateAssessmentRelationships(context.supabase, {
+      schoolId,
+      userId: context.userId,
+      roles,
+      studentId: data.studentId,
+      subjectId: data.subjectId,
+      termId: data.termId,
+      examType: data.examType,
+      formative: data.formative,
+      summative: data.summative,
+      teacherInitials: data.teacherInitials,
+    });
+    const { student, subject, term, examType, formative, summative, teacherInitials } = validated;
+    const { data: period } = await (context.supabase as any)
+      .from("assessment_periods")
+      .select("is_active, is_locked")
+      .eq("school_id", schoolId)
+      .eq("term_id", term.id)
+      .eq("exam_type", examType)
+      .maybeSingle();
+    if (period && (!period.is_active || period.is_locked))
+      throw new Error("This assessment period is not open for entry");
     const { data: gradingScales } = await context.supabase
       .from("grading_scales")
       .select("grade, min_score, max_score, grade_descriptor")
@@ -1144,9 +1567,9 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       .from("assessments")
       .select("id")
       .eq("school_id", schoolId)
-      .eq("student_id", data.studentId)
-      .eq("subject_id", data.subjectId)
-      .eq("term_id", data.termId)
+      .eq("student_id", student.id)
+      .eq("subject_id", subject.id)
+      .eq("term_id", term.id)
       .eq("exam_type", examType)
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
@@ -1158,13 +1581,13 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
 
     const { error } = await context.supabase.from("assessments").insert({
       school_id: schoolId,
-      student_id: data.studentId,
-      subject_id: data.subjectId,
-      term_id: data.termId,
+      student_id: student.id,
+      subject_id: subject.id,
+      term_id: term.id,
       exam_type: examType,
       grade_descriptor: gradeMatch.descriptor || null,
-      formative: data.formative ?? null,
-      summative: data.summative ?? null,
+      formative,
+      summative,
       teacher_initials: teacherInitials,
       status: "draft",
       locked: false,
@@ -1183,9 +1606,9 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       "ASSESSMENT_DRAFT_SAVED",
       "assessments",
       {
-        student_id: data.studentId,
-        subject_id: data.subjectId,
-        term_id: data.termId,
+        student_id: student.id,
+        subject_id: subject.id,
+        term_id: term.id,
       },
     );
 
@@ -1227,7 +1650,9 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
 
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
-      .select("id, school_id, status, locked")
+      .select(
+        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials",
+      )
       .eq("id", data.assessmentId)
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
@@ -1238,12 +1663,23 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       throw new Error("Only draft or rejected assessments can be edited");
     }
 
-    const teacherInitials = data.teacherInitials?.trim() || null;
+    const validated = await validateAssessmentRelationships(context.supabase, {
+      schoolId,
+      userId: context.userId,
+      roles,
+      studentId: existingAssessment.student_id,
+      subjectId: existingAssessment.subject_id,
+      termId: existingAssessment.term_id,
+      examType: data.examType ?? existingAssessment.exam_type,
+      formative: data.formative !== undefined ? data.formative : existingAssessment.formative,
+      summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
+      teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
+    });
     const { data: gradingScales } = await context.supabase
       .from("grading_scales")
       .select("grade, min_score, max_score, grade_descriptor")
       .eq("school_id", schoolId);
-    const totalScore = Number(data.formative ?? 0) + Number(data.summative ?? 0);
+    const totalScore = validated.formative + validated.summative;
     const gradeMatch = (gradingScales ?? []).find(
       (scale: any) =>
         totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
@@ -1252,11 +1688,11 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("assessments")
       .update({
-        exam_type: data.examType?.trim() || "end_of_term",
+        exam_type: validated.examType,
         grade_descriptor: gradeMatch?.grade_descriptor ?? null,
-        formative: data.formative ?? null,
-        summative: data.summative ?? null,
-        teacher_initials: teacherInitials,
+        formative: validated.formative,
+        summative: validated.summative,
+        teacher_initials: validated.teacherInitials,
         rejection_reason: null,
         submitted_by: context.userId,
       })
@@ -1310,7 +1746,9 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
 
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
-      .select("id, school_id, status, locked")
+      .select(
+        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials",
+      )
       .eq("id", data.assessmentId)
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
@@ -1320,27 +1758,44 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     if (existingAssessment.locked) {
       throw new Error("Locked assessments cannot be submitted");
     }
-    const { data: assessmentDetails } = await context.supabase.from("assessments").select("term_id, exam_type").eq("id", data.assessmentId).maybeSingle();
-    const { data: period } = assessmentDetails ? await (context.supabase as any).from("assessment_periods").select("is_active, is_locked").eq("school_id", schoolId).eq("term_id", assessmentDetails.term_id).eq("exam_type", assessmentDetails.exam_type).maybeSingle() : { data: null };
-    if (period && (!period.is_active || period.is_locked)) throw new Error("This assessment period is not open for entry");
+    const validated = await validateAssessmentRelationships(context.supabase, {
+      schoolId,
+      userId: context.userId,
+      roles,
+      studentId: existingAssessment.student_id,
+      subjectId: existingAssessment.subject_id,
+      termId: existingAssessment.term_id,
+      examType: existingAssessment.exam_type,
+      formative: data.formative !== undefined ? data.formative : existingAssessment.formative,
+      summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
+      teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
+    });
+    const { data: period } = await (context.supabase as any)
+      .from("assessment_periods")
+      .select("is_active, is_locked")
+      .eq("school_id", schoolId)
+      .eq("term_id", validated.term.id)
+      .eq("exam_type", validated.examType)
+      .maybeSingle();
+    if (period && (!period.is_active || period.is_locked))
+      throw new Error("This assessment period is not open for entry");
 
     const { data: gradingScales } = await context.supabase
       .from("grading_scales")
       .select("grade, min_score, max_score, grade_descriptor")
       .eq("school_id", schoolId);
-    const totalScore = Number(data.formative ?? 0) + Number(data.summative ?? 0);
+    const totalScore = validated.formative + validated.summative;
     const gradeMatch = (gradingScales ?? []).find(
       (scale: any) =>
         totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
     );
 
-    const teacherInitials = data.teacherInitials?.trim() || null;
     const { error } = await context.supabase
       .from("assessments")
       .update({
-        formative: data.formative ?? null,
-        summative: data.summative ?? null,
-        teacher_initials: teacherInitials,
+        formative: validated.formative,
+        summative: validated.summative,
+        teacher_initials: validated.teacherInitials,
         grade_descriptor: gradeMatch?.grade_descriptor ?? null,
         status: "submitted",
         locked: false,
@@ -1396,7 +1851,9 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
 
     const { data: assessments, error: fetchError } = await context.supabase
       .from("assessments")
-      .select("id, school_id, status, locked, formative, summative")
+      .select(
+        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials",
+      )
       .in("id", data.assessmentIds);
     if (fetchError) throw new Error(fetchError.message);
     if (!assessments || assessments.length !== data.assessmentIds.length) {
@@ -1409,14 +1866,33 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
       throw new Error("Locked assessments cannot be submitted");
     }
 
-    const teacherInitials = data.teacherInitials?.trim() || null;
     const { data: gradingScales } = await context.supabase
       .from("grading_scales")
       .select("grade, min_score, max_score, grade_descriptor")
       .eq("school_id", schoolId);
 
-    const updates = assessments.map((assessment) => {
-      const totalScore = Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
+    const validatedAssessments = [] as Array<{
+      assessment: (typeof assessments)[number];
+      validated: Awaited<ReturnType<typeof validateAssessmentRelationships>>;
+    }>;
+    for (const assessment of assessments) {
+      const validated = await validateAssessmentRelationships(context.supabase, {
+        schoolId,
+        userId: context.userId,
+        roles,
+        studentId: assessment.student_id,
+        subjectId: assessment.subject_id,
+        termId: assessment.term_id,
+        examType: assessment.exam_type,
+        formative: assessment.formative,
+        summative: assessment.summative,
+        teacherInitials: data.teacherInitials ?? assessment.teacher_initials,
+      });
+      validatedAssessments.push({ assessment, validated });
+    }
+
+    const updates = validatedAssessments.map(({ assessment, validated }) => {
+      const totalScore = validated.formative + validated.summative;
       const gradeMatch = (gradingScales ?? []).find(
         (scale: any) =>
           totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
@@ -1429,7 +1905,9 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
           rejection_reason: null,
           submitted_by: context.userId,
           submitted_at: new Date().toISOString(),
-          teacher_initials: teacherInitials,
+          teacher_initials: validated.teacherInitials,
+          formative: validated.formative,
+          summative: validated.summative,
           grade_descriptor: gradeMatch?.grade_descriptor ?? null,
         })
         .eq("id", assessment.id)
@@ -3146,4 +3624,3 @@ export const deleteIdentifierScale = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
-
