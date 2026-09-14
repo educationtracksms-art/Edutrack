@@ -62,10 +62,10 @@ function AttendancePage() {
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const canSeeAllStudents = hasAny(me?.roles, [
     "dos",
+    "hod",
     "head_teacher",
     "deputy_head_teacher",
     "school_admin",
-    "super_admin",
   ]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [classFilter, setClassFilter] = useState("");
@@ -212,7 +212,9 @@ function AttendancePage() {
         totalDays: "0",
       };
       if (!data.students.some((student) => student.id === studentId)) {
-        throw new Error("The selected learner is no longer available. Refresh and choose a learner again");
+        throw new Error(
+          "The selected learner is no longer available. Refresh and choose a learner again",
+        );
       }
       const daysPresent = attendanceCount("days present", draft.daysPresent);
       const daysAbsent = attendanceCount("days absent", draft.daysAbsent);
@@ -347,11 +349,15 @@ function AttendancePage() {
                 ) : (
                   <option value="">All classes</option>
                 )}
-                {(data?.classes ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                {(data?.classes ?? [])
+                  .filter(
+                    (c) => !(isClassTeacher && !canSeeAllStudents && c.id === assignedClass?.id),
+                  )
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
               </select>
             </Field>
           </div>

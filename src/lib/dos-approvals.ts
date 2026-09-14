@@ -41,6 +41,13 @@ export async function fetchDosApprovalRows(schoolId: string) {
     supabase.from("profiles").select("id, full_name").eq("school_id", schoolId),
   ]);
 
+  const failedResult = [assessments, students, classes, streams, subjects, terms, profiles].find(
+    (result) => result.error,
+  );
+  if (failedResult?.error) {
+    throw new Error(`Unable to load approval records: ${failedResult.error.message}`);
+  }
+
   const studentRows = (students.data ?? []) as LookupRow[];
   const classRows = (classes.data ?? []) as LookupRow[];
   const streamRows = (streams.data ?? []) as LookupRow[];

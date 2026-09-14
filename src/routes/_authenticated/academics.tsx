@@ -8,6 +8,8 @@ import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui
 import { supabase } from "@/integrations/supabase/client";
 import { ACADEMIC_MANAGERS, hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { isModuleEnabled } from "@/lib/modules";
+import { friendlyAdminError } from "@/lib/admin-errors";
+import { updateAssessmentPeriod } from "@/lib/admin.functions";
 import {
   deleteClass,
   deleteIdentifierScale,
@@ -58,6 +60,26 @@ function AcademicsPage() {
   const saveGradingScaleFn = useServerFn(upsertGradingScale);
   const deleteGradingScaleFn = useServerFn(deleteGradingScale);
   const saveIdentifierScaleFn = useServerFn(upsertIdentifierScale);
+  const updatePeriod = useServerFn(updateAssessmentPeriod);
+  const periodsQuery = useQuery({
+    queryKey: ["assessment-periods", schoolId],
+    enabled: !!schoolId && hasAny(me?.roles, ["dos"]),
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("assessment_periods")
+        .select("term_id, exam_type, is_active, is_locked")
+        .eq("school_id", schoolId!);
+      return data ?? [];
+    },
+  });
+  const periodMutation = useMutation({
+    mutationFn: (values: any) => updatePeriod({ data: values }),
+    onSuccess: () => {
+      toast.success("Assessment period updated and staff notified");
+      queryClient.invalidateQueries({ queryKey: ["assessment-periods"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
   const deleteIdentifierScaleFn = useServerFn(deleteIdentifierScale);
   const canEditNextTermDate = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
 
@@ -78,6 +100,7 @@ function AcademicsPage() {
     id: string;
     name: string;
     code: string | null;
+    department_id: string;
     category: string | null;
     position: number | null;
     points: number | null;
@@ -101,6 +124,7 @@ function AcademicsPage() {
   const [subjectForm, setSubjectForm] = useState({
     name: "",
     code: "",
+    department_id: "",
     category: "",
     position: "",
     points: "1",
@@ -163,6 +187,7 @@ function AcademicsPage() {
         subjects,
         allocations,
         teachers,
+        departments,
         roles,
         academicYears,
         terms,
@@ -186,10 +211,14 @@ function AcademicsPage() {
         safeLoad(schoolQuery(supabase.from("teacher_allocations").select("*")), []),
         safeLoad(
           schoolQuery(
-            supabase.from("profiles").select("id, full_name, initials").order("full_name"),
+            supabase
+              .from("profiles")
+              .select("id, full_name, initials, department_id")
+              .order("full_name"),
           ),
           [],
         ),
+        safeLoad(schoolQuery(supabase.from("departments").select("id, name").order("name")), []),
         safeLoad(schoolQuery(supabase.from("user_roles").select("user_id, role")), []),
         safeLoad(schoolQuery(supabase.from("academic_years").select("*").order("name")), []),
         safeLoad(
@@ -224,6 +253,7 @@ function AcademicsPage() {
             [
               "class_teacher",
               "subject_teacher",
+              "hod",
               "dos",
               "head_teacher",
               "deputy_head_teacher",
@@ -237,6 +267,7 @@ function AcademicsPage() {
         subjects,
         allocations,
         teachers: teachers.filter((t) => teachingRoles.has(t.id)),
+        departments,
         academicYears,
         terms,
         gradingScales: scales,
@@ -293,7 +324,16 @@ function AcademicsPage() {
   }
 
   function resetSubjectForm() {
-    setSubjectForm({ name: "", code: "", category: "", position: "", points: "1", education_level: "ordinary", is_subsidiary: false });
+    setSubjectForm({
+      name: "",
+      code: "",
+      department_id: "",
+      category: "",
+      position: "",
+      points: "1",
+      education_level: "ordinary",
+      is_subsidiary: false,
+    });
     setEditingSubjectId(null);
   }
 
@@ -357,7 +397,10 @@ function AcademicsPage() {
       if (!data?.teachers.some((teacher) => teacher.id === classForm.class_teacher_id)) {
         throw new Error("Choose a class teacher from this school");
       }
-      if (classForm.level && (!Number.isInteger(Number(classForm.level)) || Number(classForm.level) < 1)) {
+      if (
+        classForm.level &&
+        (!Number.isInteger(Number(classForm.level)) || Number(classForm.level) < 1)
+      ) {
         throw new Error("Class order must be a whole number greater than zero");
       }
       const { error } = await supabase.from("classes").insert({
@@ -387,7 +430,10 @@ function AcademicsPage() {
       if (!data?.teachers.some((teacher) => teacher.id === classForm.class_teacher_id)) {
         throw new Error("Choose a class teacher from this school");
       }
-      if (classForm.level && (!Number.isInteger(Number(classForm.level)) || Number(classForm.level) < 1)) {
+      if (
+        classForm.level &&
+        (!Number.isInteger(Number(classForm.level)) || Number(classForm.level) < 1)
+      ) {
         throw new Error("Class order must be a whole number greater than zero");
       }
       const { error } = await supabase
@@ -477,16 +523,24 @@ function AcademicsPage() {
       if (!schoolId) throw new Error("Your account is not linked to a school");
       const name = subjectForm.name.trim();
       if (!name) throw new Error("Enter a subject name first");
+      if (!subjectForm.department_id) throw new Error("Choose the subject department first");
+      if (!data?.departments.some((department) => department.id === subjectForm.department_id)) {
+        throw new Error("The selected department is no longer available. Choose it again");
+      }
       const points = Number(subjectForm.points);
       if (Number.isNaN(points) || points < 1 || points > 5)
         throw new Error("Subject points must be between 1 and 5");
-      if (subjectForm.position && (!Number.isInteger(Number(subjectForm.position)) || Number(subjectForm.position) < 1)) {
+      if (
+        subjectForm.position &&
+        (!Number.isInteger(Number(subjectForm.position)) || Number(subjectForm.position) < 1)
+      ) {
         throw new Error("Subject position must be a whole number greater than zero");
       }
       const { error } = await supabase.from("subjects").insert({
         school_id: schoolId,
         name,
         code: subjectForm.code || null,
+        department_id: subjectForm.department_id,
         category: subjectForm.category || undefined,
         points,
         position: subjectForm.position
@@ -511,10 +565,17 @@ function AcademicsPage() {
       if (!editingSubjectId) throw new Error("No subject selected for update");
       const name = subjectForm.name.trim();
       if (!name) throw new Error("Enter a subject name first");
+      if (!subjectForm.department_id) throw new Error("Choose the subject department first");
+      if (!data?.departments.some((department) => department.id === subjectForm.department_id)) {
+        throw new Error("The selected department is no longer available. Choose it again");
+      }
       const points = Number(subjectForm.points);
       if (Number.isNaN(points) || points < 1 || points > 5)
         throw new Error("Subject points must be between 1 and 5");
-      if (subjectForm.position && (!Number.isInteger(Number(subjectForm.position)) || Number(subjectForm.position) < 1)) {
+      if (
+        subjectForm.position &&
+        (!Number.isInteger(Number(subjectForm.position)) || Number(subjectForm.position) < 1)
+      ) {
         throw new Error("Subject position must be a whole number greater than zero");
       }
       const { error } = await supabase
@@ -522,6 +583,7 @@ function AcademicsPage() {
         .update({
           name,
           code: subjectForm.code || null,
+          department_id: subjectForm.department_id,
           category: subjectForm.category || undefined,
           points,
           position: subjectForm.position
@@ -569,8 +631,16 @@ function AcademicsPage() {
       if (!data?.teachers.some((item) => item.id === allocForm.teacher_id)) {
         throw new Error("The selected teacher is no longer available. Choose a teacher again");
       }
-      if (!data?.subjects.some((item) => item.id === allocForm.subject_id)) {
+      const teacher = data?.teachers.find((item) => item.id === allocForm.teacher_id);
+      const subject = data?.subjects.find((item) => item.id === allocForm.subject_id);
+      if (!subject) {
         throw new Error("The selected subject is no longer available. Choose a subject again");
+      }
+      if (!teacher?.department_id) {
+        throw new Error("Assign the teacher to a department before creating an allocation");
+      }
+      if (teacher.department_id !== subject.department_id) {
+        throw new Error("The teacher and subject must belong to the same department");
       }
       if (!data?.classes.some((item) => item.id === allocForm.class_id)) {
         throw new Error("The selected class is no longer available. Choose a class again");
@@ -583,7 +653,8 @@ function AcademicsPage() {
       }
       if (allocForm.stream_id) {
         const stream = data?.streams.find((item) => item.id === allocForm.stream_id);
-        if (!stream) throw new Error("The selected stream is no longer available. Choose a stream again");
+        if (!stream)
+          throw new Error("The selected stream is no longer available. Choose a stream again");
         if (!allocForm.class_id || stream.class_id !== allocForm.class_id) {
           throw new Error("Choose the class that contains the selected stream first");
         }
@@ -607,7 +678,13 @@ function AcademicsPage() {
         .insert({ ...payload, action: "assigned", performed_by: me?.userId ?? null });
     },
     onSuccess: () => {
-      setAllocForm({ teacher_id: "", subject_id: "", class_id: "", stream_id: "", weekly_periods: "1" });
+      setAllocForm({
+        teacher_id: "",
+        subject_id: "",
+        class_id: "",
+        stream_id: "",
+        weekly_periods: "1",
+      });
       toast.success("Teacher allocated");
       refresh();
     },
@@ -897,6 +974,8 @@ function AcademicsPage() {
   };
   const streamName = (id: string | null) =>
     data?.streams.find((s) => s.id === id)?.name ?? "All streams";
+  const departmentName = (id: string | null | undefined) =>
+    data?.departments.find((department) => department.id === id)?.name ?? "Not assigned";
   const classTeacherName = (id: string | null) =>
     data?.teachers.find((t) => t.id === id)?.full_name ?? "Not assigned";
   const subjectName = (id: string) => data?.subjects.find((s) => s.id === id)?.name ?? "â€”";
@@ -937,6 +1016,7 @@ function AcademicsPage() {
     setSubjectForm({
       name: item.name ?? "",
       code: item.code ?? "",
+      department_id: item.department_id ?? "",
       category: item.category ?? "",
       position: item.position?.toString() ?? "",
       points: item.points?.toString() ?? "1",
@@ -945,12 +1025,42 @@ function AcademicsPage() {
     });
   }
 
+  const selectedAllocationTeacher = data?.teachers.find(
+    (teacher) => teacher.id === allocForm.teacher_id,
+  );
+  const selectedAllocationSubject = data?.subjects.find(
+    (subject) => subject.id === allocForm.subject_id,
+  );
+  const allocationSubjects = (data?.subjects ?? []).filter(
+    (subject) =>
+      !selectedAllocationTeacher?.department_id ||
+      subject.department_id === selectedAllocationTeacher.department_id,
+  );
+  const allocationTeachers = (data?.teachers ?? []).filter(
+    (teacher) =>
+      !selectedAllocationSubject?.department_id ||
+      teacher.department_id === selectedAllocationSubject.department_id,
+  );
+
   return (
     <div>
       <PageHeader
         title="Academic setup"
         description="Classes, streams, subjects and teaching allocations for the current academic year."
       />
+
+      {hasAny(me?.roles, ["dos"]) && (
+        <Panel title="Assessment periods" className="mb-4">
+          <p className="mb-3 text-sm text-muted-foreground">Activate a period for reports and open or lock mark entry.</p>
+          <div className="space-y-2">
+            {(periodsQuery.data ?? []).map((period: any) => {
+              const term = (data?.terms ?? []).find((item: any) => item.id === period.term_id)?.name ?? period.term_id;
+              const label = period.exam_type.replaceAll("_", " ");
+              return <div key={`${period.term_id}-${period.exam_type}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3"><span className="capitalize font-medium">{term} · {label}</span><div className="flex gap-2"><button className={`rounded-md border px-3 py-1 text-sm font-medium ${period.is_active ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`} onClick={() => periodMutation.mutate({ termId: period.term_id, examType: period.exam_type, isActive: !period.is_active, isLocked: false })}>{period.is_active ? "Deactivate" : "Activate"}</button>{period.is_active && <button className={`rounded-md border px-3 py-1 text-sm font-medium ${period.is_locked ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100" : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"}`} onClick={() => periodMutation.mutate({ termId: period.term_id, examType: period.exam_type, isActive: true, isLocked: !period.is_locked })}>{period.is_locked ? "Open entry" : "Lock entry"}</button>}</div></div>;
+            })}
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Next term date" className="mb-4">
         <form
@@ -1038,7 +1148,7 @@ function AcademicsPage() {
                 <option value="">Select class teacher</option>
                 {(data?.teachers ?? []).map((teacher) => (
                   <option key={teacher.id} value={teacher.id}>
-                    {teacher.full_name}
+                    {teacher.full_name} · {departmentName(teacher.department_id)}
                   </option>
                 ))}
               </select>
@@ -1141,7 +1251,7 @@ function AcademicsPage() {
                 <option value="">Select stream teacher</option>
                 {(data?.teachers ?? []).map((teacher) => (
                   <option key={teacher.id} value={teacher.id}>
-                    {teacher.full_name}
+                    {teacher.full_name} · {departmentName(teacher.department_id)}
                   </option>
                 ))}
               </select>
@@ -1207,6 +1317,21 @@ function AcademicsPage() {
                 onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })}
               />
             </Field>
+            <Field label="Department">
+              <select
+                required
+                className={inputClass}
+                value={subjectForm.department_id}
+                onChange={(e) => setSubjectForm({ ...subjectForm, department_id: e.target.value })}
+              >
+                <option value="">Select department</option>
+                {(data?.departments ?? []).map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="Code">
                 <input
@@ -1248,7 +1373,9 @@ function AcademicsPage() {
               <select
                 className={inputClass}
                 value={subjectForm.education_level}
-                onChange={(e) => setSubjectForm({ ...subjectForm, education_level: e.target.value })}
+                onChange={(e) =>
+                  setSubjectForm({ ...subjectForm, education_level: e.target.value })
+                }
               >
                 <option value="ordinary">O-Level</option>
                 <option value="advanced">A-Level</option>
@@ -1259,7 +1386,9 @@ function AcademicsPage() {
                 <input
                   type="checkbox"
                   checked={subjectForm.is_subsidiary}
-                  onChange={(e) => setSubjectForm({ ...subjectForm, is_subsidiary: e.target.checked })}
+                  onChange={(e) =>
+                    setSubjectForm({ ...subjectForm, is_subsidiary: e.target.checked })
+                  }
                 />
                 Subsidiary subject (50+ = 1 point, below 50 = 0)
               </label>
@@ -1285,6 +1414,7 @@ function AcademicsPage() {
                 <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Subject</th>
+                    <th className="px-4 py-3 font-semibold">Department</th>
                     <th className="px-4 py-3 font-semibold">Code</th>
                     <th className="px-4 py-3 font-semibold">Level</th>
                     <th className="px-4 py-3 font-semibold">Category</th>
@@ -1302,6 +1432,9 @@ function AcademicsPage() {
                           {item.is_subsidiary && <Pill tone="info">SUB</Pill>}
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {departmentName(item.department_id)}
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                         {item.code || "—"}
                       </td>
@@ -1312,7 +1445,9 @@ function AcademicsPage() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{item.category || "—"}</td>
                       <td className="px-4 py-3 text-center font-medium">{item.points ?? 1}</td>
-                      <td className="px-4 py-3 text-center text-muted-foreground">{item.position ?? "—"}</td>
+                      <td className="px-4 py-3 text-center text-muted-foreground">
+                        {item.position ?? "—"}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
                           <Btn variant="ghost" onClick={() => startEditingSubject(item)}>
@@ -1892,12 +2027,24 @@ function AcademicsPage() {
               required
               className={inputClass}
               value={allocForm.teacher_id}
-              onChange={(e) => setAllocForm({ ...allocForm, teacher_id: e.target.value })}
+              onChange={(e) => {
+                const teacherId = e.target.value;
+                const teacher = data?.teachers.find((item) => item.id === teacherId);
+                const subject = data?.subjects.find((item) => item.id === allocForm.subject_id);
+                setAllocForm((current) => ({
+                  ...current,
+                  teacher_id: teacherId,
+                  subject_id:
+                    teacher && subject && teacher.department_id === subject.department_id
+                      ? current.subject_id
+                      : "",
+                }));
+              }}
             >
               <option value="">Select</option>
-              {(data?.teachers ?? []).map((t) => (
+              {allocationTeachers.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.full_name}
+                  {t.full_name} · {departmentName(t.department_id)}
                 </option>
               ))}
             </select>
@@ -1907,12 +2054,24 @@ function AcademicsPage() {
               required
               className={inputClass}
               value={allocForm.subject_id}
-              onChange={(e) => setAllocForm({ ...allocForm, subject_id: e.target.value })}
+              onChange={(e) => {
+                const subjectId = e.target.value;
+                const subject = data?.subjects.find((item) => item.id === subjectId);
+                const teacher = data?.teachers.find((item) => item.id === allocForm.teacher_id);
+                setAllocForm((current) => ({
+                  ...current,
+                  subject_id: subjectId,
+                  teacher_id:
+                    subject && teacher && subject.department_id === teacher.department_id
+                      ? current.teacher_id
+                      : "",
+                }));
+              }}
             >
               <option value="">Select</option>
-              {(data?.subjects ?? []).map((s) => (
+              {allocationSubjects.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {s.name} · {departmentName(s.department_id)}
                 </option>
               ))}
             </select>
@@ -1976,6 +2135,7 @@ function AcademicsPage() {
               <tr>
                 <th className="pb-2">Teacher</th>
                 <th className="pb-2">Subject</th>
+                <th className="pb-2">Department</th>
                 <th className="pb-2">Class</th>
                 <th className="pb-2">Stream</th>
                 <th className="pb-2">Periods / week</th>
@@ -1987,6 +2147,11 @@ function AcademicsPage() {
                 <tr key={a.id} className="border-t border-border">
                   <td className="py-2 font-medium">{teacherName(a.teacher_id)}</td>
                   <td>{subjectName(a.subject_id)}</td>
+                  <td>
+                    {departmentName(
+                      data?.subjects.find((s) => s.id === a.subject_id)?.department_id,
+                    )}
+                  </td>
                   <td>{className(a.class_id)}</td>
                   <td>{streamName(a.stream_id)}</td>
                   <td>{a.weekly_periods}</td>
@@ -1999,7 +2164,7 @@ function AcademicsPage() {
               ))}
               {(data?.allocations ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={7} className="py-6 text-center text-muted-foreground">
                     No allocations yet.
                   </td>
                 </tr>

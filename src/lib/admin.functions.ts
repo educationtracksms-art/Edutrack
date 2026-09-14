@@ -54,6 +54,19 @@ async function notifySchoolBilling(supabase: any, schoolId: string, title: strin
 
 const assessmentExamTypes = new Set(["beginning_of_term", "mid_term", "end_of_term"]);
 
+// Keep role assignment closed on the server. The client role selector is only
+// a convenience and must not be treated as an authorization boundary.
+const assignableStaffRoles = new Set([
+  "school_admin",
+  "head_teacher",
+  "deputy_head_teacher",
+  "dos",
+  "hod",
+  "class_teacher",
+  "subject_teacher",
+  "librarian",
+]);
+
 function requiredAssessmentScore(value: unknown, label: string, maximum: number) {
   if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
     throw new Error(`Add the ${label} mark before saving the assessment`);
@@ -175,7 +188,14 @@ async function validateAssessmentRelationships(
     }
   }
 
-  const teacherRoles = new Set(["subject_teacher", "class_teacher", "dos"]);
+  const teacherRoles = new Set([
+    "head_teacher",
+    "deputy_head_teacher",
+    "dos",
+    "hod",
+    "class_teacher",
+    "subject_teacher",
+  ]);
   if (options.roles.some((role) => teacherRoles.has(role))) {
     const { data: allocations, error: allocationError } = await supabase
       .from("teacher_allocations")
@@ -199,7 +219,65 @@ async function validateAssessmentRelationships(
     throw new Error("Add teacher initials to your profile before saving marks");
   }
 
-  return { student, subject, term, examType, formative, summative, teacherInitials };
+  return {
+    student,
+    subject,
+    term,
+    examType,
+    educationLevel: (classRow.education_level ?? "ordinary") as "ordinary" | "advanced",
+    formative,
+    summative,
+    teacherInitials,
+  };
+}
+
+function gradeFromScale(
+  scales: Array<{
+    grade?: string | null;
+    min_score?: number | string | null;
+    max_score?: number | string | null;
+    grade_descriptor?: string | null;
+    education_level?: string | null;
+  }>,
+  total: number,
+  educationLevel: "ordinary" | "advanced",
+) {
+  const hit = scales.find(
+    (scale) =>
+      (scale.education_level ?? "ordinary") === educationLevel &&
+      total >= Number(scale.min_score) &&
+      total <= Number(scale.max_score),
+  );
+  const grade = hit?.grade?.trim() ?? "";
+  const descriptor = hit?.grade_descriptor?.trim() ?? "";
+  if (!hit || !grade || !descriptor) {
+    throw new Error(
+      `Configure a complete ${educationLevel} grading-scale row covering a total score of ${total}`,
+    );
+  }
+  return { grade, descriptor };
+}
+
+async function requireOpenAssessmentPeriod(
+  supabase: any,
+  schoolId: string,
+  termId: string,
+  examType: string,
+) {
+  const { data: period, error } = await supabase
+    .from("assessment_periods")
+    .select("is_active, is_locked")
+    .eq("school_id", schoolId)
+    .eq("term_id", termId)
+    .eq("exam_type", examType)
+    .maybeSingle();
+  if (error) throw new Error(`Unable to check the assessment period: ${error.message}`);
+  if (!period) {
+    throw new Error("This assessment period has not been configured for the selected term");
+  }
+  if (!period.is_active || period.is_locked) {
+    throw new Error("This assessment period is not open for entry");
+  }
 }
 
 async function ensureFinanceAccounts(supabase: any, schoolId: string) {
@@ -402,9 +480,34 @@ export const createStaffUser = createServerFn({ method: "POST" })
       .maybeSingle();
     const schoolId = isSuper ? (data.schoolId ?? profile?.school_id) : profile?.school_id;
     if (!schoolId) throw new Error("A school must be selected");
-    if (data.role === "super_admin") throw new Error("Super Admin accounts cannot be created here");
+    if (!assignableStaffRoles.has(data.role)) {
+      throw new Error("That role cannot be assigned to a staff account");
+    }
+
+    const teacherRoles = new Set([
+      "head_teacher",
+      "deputy_head_teacher",
+      "dos",
+      "hod",
+      "class_teacher",
+      "subject_teacher",
+    ]);
+    const departmentId = data.departmentId ?? null;
+    if (teacherRoles.has(data.role) && !departmentId) {
+      throw new Error("Assign this teacher to a department before creating the account");
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (departmentId) {
+      const { data: department, error: departmentError } = await supabaseAdmin
+        .from("departments")
+        .select("id")
+        .eq("id", departmentId)
+        .eq("school_id", schoolId)
+        .maybeSingle();
+      if (departmentError) throw new Error(departmentError.message);
+      if (!department) throw new Error("The selected department does not belong to this school");
+    }
     const password = otp();
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
@@ -425,6 +528,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
       full_name: data.fullName,
       email: data.email,
       initials: data.initials ?? null,
+      department_id: departmentId,
       must_change_password: true,
     };
 
@@ -476,10 +580,34 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       ? (data.schoolId ?? target.school_id ?? profile?.school_id)
       : profile?.school_id;
     if (!schoolId) throw new Error("A school must be selected");
-    if (data.role === "super_admin")
-      throw new Error("Super Admin accounts cannot be assigned here");
+    if (!assignableStaffRoles.has(data.role)) {
+      throw new Error("That role cannot be assigned to a staff account");
+    }
+
+    const teacherRoles = new Set([
+      "head_teacher",
+      "deputy_head_teacher",
+      "dos",
+      "hod",
+      "class_teacher",
+      "subject_teacher",
+    ]);
+    const departmentId = data.departmentId ?? null;
+    if (teacherRoles.has(data.role) && !departmentId) {
+      throw new Error("Assign this teacher to a department before saving the account");
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (departmentId) {
+      const { data: department, error: departmentError } = await supabaseAdmin
+        .from("departments")
+        .select("id")
+        .eq("id", departmentId)
+        .eq("school_id", schoolId)
+        .maybeSingle();
+      if (departmentError) throw new Error(departmentError.message);
+      if (!department) throw new Error("The selected department does not belong to this school");
+    }
     const { error: profileError } = await context.supabase
       .from("profiles")
       .update({
@@ -487,7 +615,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
         full_name: data.fullName,
         email: data.email,
         initials: data.initials ?? null,
-        department_id: data.departmentId ?? null,
+        department_id: departmentId,
       })
       .eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
@@ -596,6 +724,9 @@ export const reviewAssessments = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data, context }) => {
+    if (!data.ids.length || new Set(data.ids).size !== data.ids.length) {
+      throw new Error("Select at least one unique assessment");
+    }
     const roles = await rolesOf(context.supabase, context.userId);
     const canReviewAny = roles.some((r) => ["dos", "super_admin"].includes(r));
     const isClassTeacher = roles.includes("class_teacher");
@@ -702,6 +833,7 @@ export const reviewAssessments = createServerFn({ method: "POST" })
         ? {
             status: "approved",
             locked: true,
+            rejection_reason: null,
             approved_by: context.userId,
             approved_at: new Date().toISOString(),
           }
@@ -709,13 +841,21 @@ export const reviewAssessments = createServerFn({ method: "POST" })
             status: "rejected",
             locked: false,
             rejection_reason: data.reason ?? "Returned for correction",
+            approved_by: null,
+            approved_at: null,
           };
 
-    const { error } = await context.supabase
+    const { data: updatedRows, error } = await context.supabase
       .from("assessments")
       .update(patch as never)
-      .in("id", data.ids);
+      .eq("school_id", schoolId)
+      .eq("status", "submitted")
+      .in("id", data.ids)
+      .select("id");
     if (error) throw new Error(error.message);
+    if ((updatedRows ?? []).length !== data.ids.length) {
+      throw new Error("Only submitted assessments can be reviewed");
+    }
 
     const { data: profile } = await context.supabase
       .from("profiles")
@@ -753,12 +893,25 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
 
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
-      .select("id, school_id")
+      .select("id, school_id, status, submitted_by, locked")
       .eq("id", data.assessmentId)
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
     if (!existingAssessment || existingAssessment.school_id !== schoolId) {
       throw new Error("Assessment not found in your school");
+    }
+
+    if (data.status === "approved" && existingAssessment.status !== "submitted") {
+      throw new Error("Only submitted assessments can be approved");
+    }
+    if (
+      data.status === "submitted" &&
+      !["draft", "rejected"].includes(existingAssessment.status)
+    ) {
+      throw new Error("Only draft or rejected assessments can be submitted");
+    }
+    if (existingAssessment.status === "approved" && data.status === "draft") {
+      throw new Error("Approved assessments must be returned for correction before editing");
     }
 
     const patch: Record<string, unknown> = {
@@ -770,16 +923,19 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       approved_at: data.status === "approved" ? new Date().toISOString() : null,
     };
     if (data.status === "submitted") {
-      patch.submitted_by = context.userId;
+      patch.submitted_by = existingAssessment.submitted_by ?? context.userId;
       patch.submitted_at = new Date().toISOString();
     }
 
-    const { error } = await context.supabase
+    const { data: updatedRows, error } = await context.supabase
       .from("assessments")
       .update(patch as never)
       .eq("id", data.assessmentId)
-      .eq("school_id", schoolId);
+      .eq("school_id", schoolId)
+      .eq("status", existingAssessment.status)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!updatedRows?.length) throw new Error("The assessment changed before it was updated");
 
     await logAudit(
       context.supabase,
@@ -1161,7 +1317,6 @@ export const upsertReportComment = createServerFn({ method: "POST" })
           "deputy_head_teacher",
           "dos",
           "school_admin",
-          "super_admin",
         ].includes(r),
       )
     ) {
@@ -1196,7 +1351,7 @@ export const upsertReportComment = createServerFn({ method: "POST" })
     if (
       roles.includes("class_teacher") &&
       !roles.some((r) =>
-        ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"].includes(r),
+        ["head_teacher", "deputy_head_teacher", "dos", "school_admin"].includes(r),
       )
     ) {
       const { data: assignedClasses } = await context.supabase
@@ -1218,7 +1373,7 @@ export const upsertReportComment = createServerFn({ method: "POST" })
     const canEditCoCurricular =
       !roles.includes("class_teacher") ||
       roles.some((r) =>
-        ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"].includes(r),
+        ["head_teacher", "deputy_head_teacher", "dos", "school_admin"].includes(r),
       );
     if (!canEditCoCurricular) {
       const { data: assignedClasses } = await context.supabase
@@ -1306,9 +1461,8 @@ export const upsertReportCommentRule = createServerFn({ method: "POST" })
             "school_admin",
             "head_teacher",
             "deputy_head_teacher",
-            "super_admin",
           ]
-        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"];
+        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin"];
     if (!roles.some((role) => allowedRoles.includes(role))) {
       throw new Error("Not allowed to manage report comment rules");
     }
@@ -1349,9 +1503,8 @@ export const deleteReportCommentRule = createServerFn({ method: "POST" })
             "school_admin",
             "head_teacher",
             "deputy_head_teacher",
-            "super_admin",
           ]
-        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"];
+        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin"];
     if (!roles.some((role) => allowedRoles.includes(role))) {
       throw new Error("Not allowed to manage report comment rules");
     }
@@ -1384,7 +1537,6 @@ export const deleteReportComment = createServerFn({ method: "POST" })
           "deputy_head_teacher",
           "dos",
           "school_admin",
-          "super_admin",
         ].includes(r),
       )
     ) {
@@ -1420,7 +1572,7 @@ export const deleteReportComment = createServerFn({ method: "POST" })
     const canManageComment =
       !roles.includes("class_teacher") ||
       roles.some((r) =>
-        ["head_teacher", "deputy_head_teacher", "dos", "school_admin", "super_admin"].includes(r),
+        ["head_teacher", "deputy_head_teacher", "dos", "school_admin"].includes(r),
       );
     if (!canManageComment) {
       const { data: assignedClasses } = await context.supabase
@@ -1508,6 +1660,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
         [
           "subject_teacher",
           "class_teacher",
+          "hod",
           "dos",
           "school_admin",
           "head_teacher",
@@ -1534,35 +1687,26 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       summative: data.summative,
       teacherInitials: data.teacherInitials,
     });
-    const { student, subject, term, examType, formative, summative, teacherInitials } = validated;
-    const { data: period } = await (context.supabase as any)
-      .from("assessment_periods")
-      .select("is_active, is_locked")
-      .eq("school_id", schoolId)
-      .eq("term_id", term.id)
-      .eq("exam_type", examType)
-      .maybeSingle();
-    if (period && (!period.is_active || period.is_locked))
-      throw new Error("This assessment period is not open for entry");
-    const { data: gradingScales } = await context.supabase
+    const {
+      student,
+      subject,
+      term,
+      examType,
+      educationLevel,
+      formative,
+      summative,
+      teacherInitials,
+    } = validated;
+    await requireOpenAssessmentPeriod(context.supabase, schoolId, term.id, examType);
+    const { data: gradingScales, error: gradingScaleError } = await context.supabase
       .from("grading_scales")
-      .select("grade, min_score, max_score, grade_descriptor")
+      .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
-    const gradeFor = (total: number) => {
-      const hit = (gradingScales ?? []).find(
-        (scale: any) => total >= Number(scale.min_score) && total <= Number(scale.max_score),
-      );
-      return hit
-        ? {
-            grade: hit.grade as string,
-            descriptor: hit.grade_descriptor as string,
-          }
-        : { grade: "", descriptor: "" };
-    };
+    if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
     const formativeScore = Number(data.formative ?? 0);
     const summativeScore = Number(data.summative ?? 0);
     const totalScore = formativeScore + summativeScore;
-    const gradeMatch = gradeFor(totalScore);
+    const gradeMatch = gradeFromScale(gradingScales ?? [], totalScore, educationLevel);
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
       .select("id")
@@ -1585,7 +1729,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       subject_id: subject.id,
       term_id: term.id,
       exam_type: examType,
-      grade_descriptor: gradeMatch.descriptor || null,
+      grade_descriptor: gradeMatch.descriptor,
       formative,
       summative,
       teacher_initials: teacherInitials,
@@ -1634,6 +1778,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
         [
           "subject_teacher",
           "class_teacher",
+          "hod",
           "dos",
           "school_admin",
           "head_teacher",
@@ -1651,7 +1796,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials",
+        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials, submitted_by",
       )
       .eq("id", data.assessmentId)
       .maybeSingle();
@@ -1675,26 +1820,30 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
       teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
     });
-    const { data: gradingScales } = await context.supabase
-      .from("grading_scales")
-      .select("grade, min_score, max_score, grade_descriptor")
-      .eq("school_id", schoolId);
-    const totalScore = validated.formative + validated.summative;
-    const gradeMatch = (gradingScales ?? []).find(
-      (scale: any) =>
-        totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+    await requireOpenAssessmentPeriod(
+      context.supabase,
+      schoolId,
+      validated.term.id,
+      validated.examType,
     );
+    const { data: gradingScales, error: gradingScaleError } = await context.supabase
+      .from("grading_scales")
+      .select("grade, min_score, max_score, grade_descriptor, education_level")
+      .eq("school_id", schoolId);
+    if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
+    const totalScore = validated.formative + validated.summative;
+    const gradeMatch = gradeFromScale(gradingScales ?? [], totalScore, validated.educationLevel);
 
     const { error } = await context.supabase
       .from("assessments")
       .update({
         exam_type: validated.examType,
-        grade_descriptor: gradeMatch?.grade_descriptor ?? null,
+        grade_descriptor: gradeMatch.descriptor,
         formative: validated.formative,
         summative: validated.summative,
         teacher_initials: validated.teacherInitials,
         rejection_reason: null,
-        submitted_by: context.userId,
+        submitted_by: existingAssessment.submitted_by ?? context.userId,
       })
       .eq("id", data.assessmentId);
     if (error) throw new Error(error.message);
@@ -1730,6 +1879,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
         [
           "subject_teacher",
           "class_teacher",
+          "hod",
           "dos",
           "school_admin",
           "head_teacher",
@@ -1747,7 +1897,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials",
+        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials, submitted_by",
       )
       .eq("id", data.assessmentId)
       .maybeSingle();
@@ -1757,6 +1907,9 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     }
     if (existingAssessment.locked) {
       throw new Error("Locked assessments cannot be submitted");
+    }
+    if (!['draft', 'rejected'].includes(existingAssessment.status)) {
+      throw new Error("Only draft or rejected assessments can be submitted");
     }
     const validated = await validateAssessmentRelationships(context.supabase, {
       schoolId,
@@ -1770,25 +1923,20 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
       teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
     });
-    const { data: period } = await (context.supabase as any)
-      .from("assessment_periods")
-      .select("is_active, is_locked")
-      .eq("school_id", schoolId)
-      .eq("term_id", validated.term.id)
-      .eq("exam_type", validated.examType)
-      .maybeSingle();
-    if (period && (!period.is_active || period.is_locked))
-      throw new Error("This assessment period is not open for entry");
-
-    const { data: gradingScales } = await context.supabase
-      .from("grading_scales")
-      .select("grade, min_score, max_score, grade_descriptor")
-      .eq("school_id", schoolId);
-    const totalScore = validated.formative + validated.summative;
-    const gradeMatch = (gradingScales ?? []).find(
-      (scale: any) =>
-        totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+    await requireOpenAssessmentPeriod(
+      context.supabase,
+      schoolId,
+      validated.term.id,
+      validated.examType,
     );
+
+    const { data: gradingScales, error: gradingScaleError } = await context.supabase
+      .from("grading_scales")
+      .select("grade, min_score, max_score, grade_descriptor, education_level")
+      .eq("school_id", schoolId);
+    if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
+    const totalScore = validated.formative + validated.summative;
+    const gradeMatch = gradeFromScale(gradingScales ?? [], totalScore, validated.educationLevel);
 
     const { error } = await context.supabase
       .from("assessments")
@@ -1796,11 +1944,11 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
         formative: validated.formative,
         summative: validated.summative,
         teacher_initials: validated.teacherInitials,
-        grade_descriptor: gradeMatch?.grade_descriptor ?? null,
+        grade_descriptor: gradeMatch.descriptor,
         status: "submitted",
         locked: false,
         rejection_reason: null,
-        submitted_by: context.userId,
+        submitted_by: existingAssessment.submitted_by ?? context.userId,
         submitted_at: new Date().toISOString(),
       })
       .eq("id", data.assessmentId)
@@ -1831,6 +1979,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
         [
           "subject_teacher",
           "class_teacher",
+          "hod",
           "dos",
           "school_admin",
           "head_teacher",
@@ -1862,14 +2011,19 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     if (assessments.some((item) => item.school_id !== schoolId)) {
       throw new Error("One or more assessments were not found in your school");
     }
-    if (assessments.some((item) => item.locked)) {
-      throw new Error("Locked assessments cannot be submitted");
+    if (
+      assessments.some(
+        (item) => item.locked || !["draft", "rejected"].includes(item.status),
+      )
+    ) {
+      throw new Error("Only unlocked draft or rejected assessments can be submitted");
     }
 
-    const { data: gradingScales } = await context.supabase
+    const { data: gradingScales, error: gradingScaleError } = await context.supabase
       .from("grading_scales")
-      .select("grade, min_score, max_score, grade_descriptor")
+      .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
+    if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
 
     const validatedAssessments = [] as Array<{
       assessment: (typeof assessments)[number];
@@ -1891,31 +2045,28 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
       validatedAssessments.push({ assessment, validated });
     }
 
-    const updates = validatedAssessments.map(({ assessment, validated }) => {
+    const entries = validatedAssessments.map(({ assessment, validated }) => {
       const totalScore = validated.formative + validated.summative;
-      const gradeMatch = (gradingScales ?? []).find(
-        (scale: any) =>
-          totalScore >= Number(scale.min_score) && totalScore <= Number(scale.max_score),
+      const gradeMatch = gradeFromScale(
+        gradingScales ?? [],
+        totalScore,
+        validated.educationLevel,
       );
-      return context.supabase
-        .from("assessments")
-        .update({
-          status: "submitted",
-          locked: false,
-          rejection_reason: null,
-          submitted_by: context.userId,
-          submitted_at: new Date().toISOString(),
-          teacher_initials: validated.teacherInitials,
-          formative: validated.formative,
-          summative: validated.summative,
-          grade_descriptor: gradeMatch?.grade_descriptor ?? null,
-        })
-        .eq("id", assessment.id)
-        .eq("school_id", schoolId);
+      return {
+        assessment_id: assessment.id,
+        teacher_initials: validated.teacherInitials,
+        formative: validated.formative,
+        summative: validated.summative,
+        grade_descriptor: gradeMatch.descriptor,
+      };
     });
-    const results = await Promise.all(updates);
-    const firstError = results.find((result) => result.error);
-    if (firstError?.error) throw new Error(firstError.error.message);
+    const { data: submittedCount, error: batchError } = await (
+      context.supabase as any
+    ).rpc("submit_assessment_batch", { p_entries: entries });
+    if (batchError) throw new Error(batchError.message);
+    if (Number(submittedCount) !== entries.length) {
+      throw new Error("The selected assessments could not be submitted");
+    }
 
     await logAudit(
       context.supabase,
@@ -1957,11 +2108,14 @@ export const deleteAssessmentEntry = createServerFn({ method: "POST" })
 
     const { data: existing } = await context.supabase
       .from("assessments")
-      .select("id, school_id, student_id, subject_id, term_id")
+      .select("id, school_id, student_id, subject_id, term_id, status, locked, submitted_by")
       .eq("id", data.assessmentId)
       .maybeSingle();
     if (!existing || existing.school_id !== schoolId)
       throw new Error("Assessment not found in your school");
+    if (!['draft', 'rejected'].includes(existing.status) || existing.locked) {
+      throw new Error("Only unlocked draft or rejected assessments can be deleted");
+    }
 
     const { error } = await context.supabase
       .from("assessments")
@@ -3486,13 +3640,24 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
+    const grade = data.grade.trim().toUpperCase();
+    const gradeDescriptor = data.gradeDescriptor.trim();
+    if (!grade) throw new Error("Enter a grade before saving the grading scale");
+    if (!gradeDescriptor) throw new Error("Enter a grade descriptor before saving the grading scale");
+    if (!Number.isFinite(data.minScore) || !Number.isFinite(data.maxScore)) {
+      throw new Error("Enter valid minimum and maximum scores");
+    }
+    if (data.minScore > data.maxScore) {
+      throw new Error("The minimum score cannot exceed the maximum score");
+    }
+
     const payload = {
       school_id: schoolId,
       education_level: data.educationLevel ?? "ordinary",
-      grade: data.grade.trim().toUpperCase(),
+      grade,
       min_score: data.minScore,
       max_score: data.maxScore,
-      grade_descriptor: data.gradeDescriptor.trim(),
+      grade_descriptor: gradeDescriptor,
       points: data.points ?? null,
     };
 

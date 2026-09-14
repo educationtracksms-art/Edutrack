@@ -240,7 +240,7 @@ function SubscriptionPage() {
         </div>
       )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(18rem,0.75fr)_minmax(0,1.25fr)]">
         <Panel title="Subscription details">
           <div className="space-y-4 text-sm">
             <div className="flex items-center justify-between gap-3">

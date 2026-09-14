@@ -10,34 +10,34 @@ export async function buildReportCards(
   supabase: AnyClient,
   studentIds: string[],
   termId: string | null,
+  requestedLevel?: "ordinary" | "advanced",
 ): Promise<ReportCardData[]> {
   if (studentIds.length === 0) return [];
 
-  const { data: students } = await supabase
+  const requestedStudentIds = Array.from(new Set(studentIds.filter(Boolean)));
+  if (requestedStudentIds.length === 0) return [];
+
+  const { data: students, error: studentsError } = await supabase
     .from("students")
     .select(
       "id, school_id, lin, student_number, full_name, house, schpay_code, fees_balance, photo_url, class_id, stream_id",
     )
-    .in("id", studentIds);
-  if (!students || students.length === 0) return [];
+    .in("id", requestedStudentIds);
+  if (studentsError) throw new Error(`Unable to load learners for report cards: ${studentsError.message}`);
+  if (!students || students.length === 0) {
+    throw new Error("No selected learners were found in your school");
+  }
+  if (students.length !== requestedStudentIds.length) {
+    throw new Error("One or more selected learners are no longer available");
+  }
 
   const schoolId = students[0].school_id as string;
+  if (students.some((student: any) => student.school_id !== schoolId)) {
+    throw new Error("Selected learners must belong to the same school");
+  }
   const ids = students.map((s: any) => s.id);
 
-  const [
-    { data: school },
-    { data: classes },
-    { data: profiles },
-    { data: roles },
-    { data: streams },
-    { data: subjects },
-    { data: subjectPapers },
-    { data: studentSubjects },
-    { data: scales },
-    { data: identifierScales },
-    { data: toggles },
-    { data: terms },
-  ] = await Promise.all([
+  const setupResults = await Promise.all([
     supabase.from("schools").select("*").eq("id", schoolId).maybeSingle(),
     supabase
       .from("classes")
@@ -76,44 +76,92 @@ export async function buildReportCards(
       .from("terms")
       .select("id, name, is_current, academic_year_id")
       .eq("school_id", schoolId),
+    supabase
+      .from("report_comments")
+      .select("student_id, term_id, class_teacher_comment, head_teacher_comment")
+      .in("student_id", ids),
   ]);
 
-  const term =
-    (termId ? terms?.find((t: any) => t.id === termId) : terms?.find((t: any) => t.is_current)) ??
-    terms?.[0] ??
-    null;
+  const setupError = setupResults.find((result) => result.error);
+  if (setupError?.error) {
+    throw new Error(`Unable to load report-card setup: ${setupError.error.message}`);
+  }
+
+  const [
+    { data: school },
+    { data: classes },
+    { data: profiles },
+    { data: roles },
+    { data: streams },
+    { data: subjects },
+    { data: subjectPapers },
+    { data: studentSubjects },
+    { data: scales },
+    { data: identifierScales },
+    { data: toggles },
+    { data: terms },
+    { data: reportComments },
+  ] = setupResults;
+
+  const levelStudents = students.filter((student: any) => {
+    const classRow = (classes ?? []).find((item: any) => item.id === student.class_id);
+    const level = classRow?.education_level === "advanced" ? "advanced" : "ordinary";
+    return requestedLevel ? level === requestedLevel : true;
+  });
+  const levelSet = new Set(
+    students.map((student: any) => {
+      const classRow = (classes ?? []).find((item: any) => item.id === student.class_id);
+      return classRow?.education_level === "advanced" ? "advanced" : "ordinary";
+    }),
+  );
+  if (!requestedLevel && levelSet.size > 1) {
+    throw new Error("Generate O-Level and A-Level reports separately");
+  }
+  if (requestedLevel && levelStudents.length !== students.length) {
+    throw new Error("The selected learners must all belong to the selected report level");
+  }
+  if (!levelStudents.length) {
+    throw new Error("No learners were found for the selected report level");
+  }
+  const reportStudentIds = levelStudents.map((student: any) => student.id);
+
+  const term = termId
+    ? terms?.find((t: any) => t.id === termId) ?? null
+    : terms?.find((t: any) => t.is_current) ?? terms?.[0] ?? null;
+  if (termId && !term) throw new Error("The selected term is not available in your school");
+  if (!term) throw new Error("Create an academic term before generating report cards");
 
   let yearName = "";
-  if (term) {
-    const { data: year } = await supabase
+  {
+    const { data: year, error: yearError } = await supabase
       .from("academic_years")
       .select("name")
       .eq("id", term.academic_year_id)
       .maybeSingle();
+    if (yearError) throw new Error(`Unable to load the academic year: ${yearError.message}`);
     yearName = year?.name ?? "";
   }
 
   const termFilterId = term?.id ?? "00000000-0000-0000-0000-000000000000";
-  const [
-    { data: assessments },
-    { data: attendance },
-    { data: activities },
-    { data: activePeriods },
-  ] = await Promise.all([
+  const resultResults = await Promise.all([
     supabase
       .from("assessments")
       .select(
         "student_id, subject_id, paper_id, exam_type, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
       )
-      .in("student_id", ids)
+      .in("student_id", reportStudentIds)
       .eq("term_id", termFilterId)
       .eq("status", "approved"),
     supabase
       .from("attendance_summaries")
       .select("*")
-      .in("student_id", ids)
+      .in("student_id", reportStudentIds)
       .eq("term_id", termFilterId),
-    supabase.from("co_curricular").select("*").in("student_id", ids).eq("term_id", termFilterId),
+    supabase
+      .from("co_curricular")
+      .select("*")
+      .in("student_id", reportStudentIds)
+      .eq("term_id", termFilterId),
     (supabase as any)
       .from("assessment_periods")
       .select("exam_type")
@@ -121,12 +169,28 @@ export async function buildReportCards(
       .eq("term_id", termFilterId)
       .eq("is_active", true),
   ]);
-  const { data: commentRules } = await supabase
+  const resultError = resultResults.find((result) => result.error);
+  if (resultError?.error) {
+    throw new Error(`Unable to load report-card results: ${resultError.error.message}`);
+  }
+  const [
+    { data: assessments },
+    { data: attendance },
+    { data: activities },
+    { data: activePeriods },
+  ] = resultResults;
+  const { data: commentRules, error: commentRulesError } = await supabase
     .from("report_comment_rules")
     .select("comment_role, points, descriptor, comment")
     .eq("school_id", schoolId);
+  if (commentRulesError) {
+    throw new Error(`Unable to load report comment rules: ${commentRulesError.message}`);
+  }
 
   const activeTypes = new Set((activePeriods ?? []).map((p: any) => p.exam_type));
+  if (activeTypes.size === 0) {
+    throw new Error("Activate at least one assessment period before generating report cards");
+  }
   const approvedAssessments = (assessments ?? []).filter(
     (assessment: any) => assessment.status === "approved" && activeTypes.has(assessment.exam_type),
   );
@@ -149,13 +213,14 @@ export async function buildReportCards(
         total >= Number(s.min_score) &&
         total <= Number(s.max_score),
     );
-    return hit
-      ? {
-          grade: hit.grade as string,
-          descriptor: hit.grade_descriptor as string,
-          points: Number(hit.points ?? 0),
-        }
-      : { grade: "", descriptor: "", points: 0 };
+    const grade = hit?.grade?.trim() ?? "";
+    const descriptor = hit?.grade_descriptor?.trim() ?? "";
+    if (!hit || !grade || !descriptor) {
+      throw new Error(
+        `No complete ${educationLevel} grading-scale row covers a total score of ${total}`,
+      );
+    }
+    return { grade, descriptor, points: Number(hit.points ?? 0) };
   };
 
   const schoolInitials =
@@ -166,7 +231,7 @@ export async function buildReportCards(
   const headTeacherName =
     (profiles ?? []).find((p: any) => headTeacherIds.has(p.id))?.full_name ?? "";
 
-  return students.map((student: any) => {
+  return levelStudents.map((student: any) => {
     const cls = classes?.find((c: any) => c.id === student.class_id);
     const educationLevel = (cls?.education_level ?? "ordinary") as "ordinary" | "advanced";
     const className = cls?.name ?? "";
@@ -187,9 +252,16 @@ export async function buildReportCards(
     const totals: number[] = [];
 
     const rows: SubjectRow[] = (subjects ?? [])
-      .filter((subject: any) => subjectIdsToRender.has(subject.id))
+      .filter(
+        (subject: any) =>
+          subjectIdsToRender.has(subject.id) &&
+          (subject.education_level ?? "ordinary") === educationLevel,
+      )
       .map((subject: any) => {
-        const papers = (subjectPapers ?? []).filter((p: any) => p.subject_id === subject.id);
+        const papers =
+          educationLevel === "advanced"
+            ? (subjectPapers ?? []).filter((p: any) => p.subject_id === subject.id)
+            : [];
         const paperRows = papers.length ? papers : [null];
         return paperRows
           .map((paper: any) => {
@@ -293,6 +365,9 @@ export async function buildReportCards(
         : null;
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
+    const savedComments = (reportComments ?? []).find(
+      (comment: any) => comment.student_id === student.id && comment.term_id === term.id,
+    );
     const approvedAssessment = marks.find((mark: any) => mark.approved_by || mark.approved_at);
     const approvedByName = approvedAssessment?.approved_by
       ? ((profiles ?? []).find((p: any) => p.id === approvedAssessment.approved_by)?.full_name ??
@@ -422,8 +497,10 @@ export async function buildReportCards(
         projects: coCurricularEnabled ? (activity?.projects ?? "") : "",
       },
       comments: {
-        classTeacher: resolveComment("class_teacher"),
-        headTeacher: resolveComment("head_teacher"),
+        classTeacher:
+          savedComments?.class_teacher_comment?.trim() || resolveComment("class_teacher"),
+        headTeacher:
+          savedComments?.head_teacher_comment?.trim() || resolveComment("head_teacher"),
       },
       staff: {
         classTeacher: classTeacherName,

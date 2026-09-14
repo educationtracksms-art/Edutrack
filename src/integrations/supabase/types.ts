@@ -446,6 +446,51 @@ export type Database = {
           },
         ];
       };
+      departments: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          hod_user_id: string | null;
+          id: string;
+          name: string;
+          school_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          hod_user_id?: string | null;
+          id?: string;
+          name: string;
+          school_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          hod_user_id?: string | null;
+          id?: string;
+          name?: string;
+          school_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "departments_hod_user_id_fkey";
+            columns: ["hod_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "departments_school_id_fkey";
+            columns: ["school_id"];
+            isOneToOne: false;
+            referencedRelation: "schools";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       feature_toggles: {
         Row: {
           enabled: boolean;
@@ -596,6 +641,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string;
+          department_id: string | null;
           email: string | null;
           full_name: string;
           id: string;
@@ -612,6 +658,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          department_id?: string | null;
           email?: string | null;
           full_name?: string;
           id: string;
@@ -628,6 +675,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          department_id?: string | null;
           email?: string | null;
           full_name?: string;
           id?: string;
@@ -643,6 +691,13 @@ export type Database = {
           teacher_number?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "profiles_department_id_fkey";
+            columns: ["department_id"];
+            isOneToOne: false;
+            referencedRelation: "departments";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "profiles_school_id_fkey";
             columns: ["school_id"];
@@ -1365,6 +1420,7 @@ export type Database = {
           category: string;
           code: string | null;
           created_at: string;
+          department_id: string;
           id: string;
           name: string;
           position: number;
@@ -1375,6 +1431,7 @@ export type Database = {
           category?: string;
           code?: string | null;
           created_at?: string;
+          department_id: string;
           id?: string;
           name: string;
           position?: number;
@@ -1385,6 +1442,7 @@ export type Database = {
           category?: string;
           code?: string | null;
           created_at?: string;
+          department_id?: string;
           id?: string;
           name?: string;
           position?: number;
@@ -1392,6 +1450,13 @@ export type Database = {
           school_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "subjects_department_id_fkey";
+            columns: ["department_id"];
+            isOneToOne: false;
+            referencedRelation: "departments";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "subjects_school_id_fkey";
             columns: ["school_id"];
@@ -1800,10 +1865,14 @@ export type Database = {
         | "super_admin"
         | "school_admin"
         | "head_teacher"
+        | "bursar"
+        | "hod"
         | "deputy_head_teacher"
         | "dos"
         | "class_teacher"
-        | "subject_teacher";
+        | "subject_teacher"
+        | "library"
+        | "librarian";
       assessment_status: "draft" | "submitted" | "approved" | "rejected";
       school_status: "active" | "suspended";
       student_status: "pending" | "active" | "inactive";
@@ -1932,10 +2001,14 @@ export const Constants = {
         "super_admin",
         "school_admin",
         "head_teacher",
+        "bursar",
+        "hod",
         "deputy_head_teacher",
         "dos",
         "class_teacher",
         "subject_teacher",
+        "library",
+        "librarian",
       ],
       assessment_status: ["draft", "submitted", "approved", "rejected"],
       school_status: ["active", "suspended"],

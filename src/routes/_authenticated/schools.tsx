@@ -16,6 +16,7 @@ import {
   updateSubscriptionPlan,
 } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
+import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   Btn,
   Field,
@@ -117,6 +118,8 @@ export function SchoolsPage({
   description?: string;
 }) {
   const queryClient = useQueryClient();
+  const { data: me } = useCurrentUser();
+  const isSuperAdmin = hasAny(me?.roles, ["super_admin"]);
   const createSchool = useServerFn(createSchoolWithAdmin);
   const changeStatus = useServerFn(setSchoolStatus);
   const changeSubscription = useServerFn(manageSchoolSubscription);
@@ -160,6 +163,7 @@ export function SchoolsPage({
 
   const { data: schools = [], isLoading: schoolsLoading } = useQuery({
     queryKey: ["schools"],
+    enabled: isSuperAdmin,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schools")
@@ -171,6 +175,7 @@ export function SchoolsPage({
   });
   const { data: plans = [] } = useQuery({
     queryKey: ["subscription-plans", "all"],
+    enabled: isSuperAdmin,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("subscription_plans")
@@ -183,6 +188,7 @@ export function SchoolsPage({
   });
   const { data: subscriptions = [] } = useQuery({
     queryKey: ["school-subscriptions"],
+    enabled: isSuperAdmin,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("school_subscriptions")
@@ -194,7 +200,7 @@ export function SchoolsPage({
   });
   const { data: payments = [] } = useQuery({
     queryKey: ["school-payments", billingSchoolId],
-    enabled: !!billingSchoolId,
+    enabled: isSuperAdmin && !!billingSchoolId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("school_payments")
@@ -345,6 +351,21 @@ export function SchoolsPage({
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
+  if (!me || !isSuperAdmin) {
+    return (
+      <Panel>
+        <PageHeader
+          title="Platform administration"
+          description={
+            me
+              ? "Only the Super Admin can manage schools, subscriptions and platform billing."
+              : "Loading platform permissions..."
+          }
+        />
+      </Panel>
+    );
+  }
+
   async function saveBilling(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!billingSchoolId) return toast.error("Select a school before saving billing");
@@ -425,7 +446,7 @@ export function SchoolsPage({
         />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(20rem,0.8fr)]">
         <Panel title="Registered schools">
           <ResponsiveTable
             desktop={
@@ -612,7 +633,7 @@ export function SchoolsPage({
               Close
             </Btn>
           </div>
-          <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
             <form className="space-y-3" onSubmit={saveBilling}>
               <p className="text-sm font-semibold">Assign subscription</p>
               <Field label="Plan">
@@ -842,7 +863,7 @@ export function SchoolsPage({
       )}
 
       <Panel title="Subscription plans" className="mt-4">
-        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
           <form
             className="space-y-3"
             onSubmit={(event) => {

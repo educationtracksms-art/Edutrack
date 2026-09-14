@@ -45,7 +45,9 @@ export function Panel({
     <section
       className={`min-w-0 rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-6 ${className}`}
     >
-      {title && <h2 className="mb-5 text-base font-bold tracking-tight text-foreground">{title}</h2>}
+      {title && (
+        <h2 className="mb-5 text-base font-bold tracking-tight text-foreground">{title}</h2>
+      )}
       {children}
     </section>
   );
@@ -62,7 +64,9 @@ export function Stat({
 }) {
   return (
     <div className="group rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:border-primary/25 sm:p-6">
-      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
@@ -122,9 +126,17 @@ export function Btn({
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <label className="block text-sm">
+    <label className={`block text-sm ${className}`}>
       <span className="font-medium">{label}</span>
       <div className="mt-1">{children}</div>
     </label>
@@ -134,16 +146,15 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 export const inputClass =
   "w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-ring focus:ring-4 focus:ring-ring/10";
 
-export function PasswordInput({ className = inputClass, ...props }: Omit<ComponentProps<"input">, "type">) {
+export function PasswordInput({
+  className = inputClass,
+  ...props
+}: Omit<ComponentProps<"input">, "type">) {
   const [visible, setVisible] = useState(false);
 
   return (
     <div className="relative">
-      <input
-        {...props}
-        type={visible ? "text" : "password"}
-        className={`${className} pr-10`}
-      />
+      <input {...props} type={visible ? "text" : "password"} className={`${className} pr-10`} />
       <button
         type="button"
         onClick={() => setVisible((current) => !current)}
@@ -151,7 +162,11 @@ export function PasswordInput({ className = inputClass, ...props }: Omit<Compone
         title={visible ? "Hide password" : "Show password"}
         className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset"
       >
-        {visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+        {visible ? (
+          <EyeOff className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Eye className="h-4 w-4" aria-hidden="true" />
+        )}
       </button>
     </div>
   );

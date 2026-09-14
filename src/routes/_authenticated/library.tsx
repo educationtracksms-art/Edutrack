@@ -258,7 +258,8 @@ function LibraryPage() {
       if (!canManage) throw new Error("You do not have permission to issue books");
       if (!loanForm.book_id) throw new Error("Choose a book");
       const selectedBook = books.find((book) => book.id === loanForm.book_id);
-      if (!selectedBook) throw new Error("The selected book is no longer available. Choose a book again");
+      if (!selectedBook)
+        throw new Error("The selected book is no longer available. Choose a book again");
       if (loanForm.borrower_type === "student") {
         if (!loanForm.student_id) throw new Error("Choose a learner before issuing the book");
         if (!data?.students.some((student: { id: string }) => student.id === loanForm.student_id)) {
@@ -268,7 +269,9 @@ function LibraryPage() {
       if (loanForm.borrower_type === "staff") {
         if (!loanForm.user_id) throw new Error("Choose a staff member before issuing the book");
         if (!data?.staff.some((person: { id: string }) => person.id === loanForm.user_id)) {
-          throw new Error("The selected staff member is no longer available. Choose a staff member again");
+          throw new Error(
+            "The selected staff member is no longer available. Choose a staff member again",
+          );
         }
       }
 
@@ -459,7 +462,7 @@ function LibraryPage() {
         <Stat label="Overdue loans" value={overdueLoans.length} hint="Due date passed" />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22.5rem]">
         <Panel title="Library stock">
           <ResponsiveTable
             desktop={

@@ -41,21 +41,19 @@ function StudentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const canAccessStudents = hasAny(me?.roles, ["super_admin", ...SCHOOL_ROLES]);
+  const canAccessStudents = hasAny(me?.roles, SCHOOL_ROLES);
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const canManageStudents = hasAny(me?.roles, [
     "school_admin",
     "head_teacher",
     "deputy_head_teacher",
     "dos",
-    "super_admin",
   ]);
   const canRegisterOrEditStudents = canManageStudents || isClassTeacher;
   const canChangeStatus = hasAny(me?.roles, [
     "school_admin",
     "head_teacher",
     "deputy_head_teacher",
-    "super_admin",
   ]);
   const canVerify = canManageStudents || isClassTeacher;
   const verify = useServerFn(verifyStudent);
@@ -83,14 +81,24 @@ function StudentsPage() {
 
   const { data: classes } = useQuery({
     queryKey: ["classes"],
-    queryFn: async () =>
-      (await supabase.from("classes").select("id, name, class_teacher_id").order("name")).data ??
-      [],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("classes")
+        .select("id, name, class_teacher_id")
+        .order("name");
+      if (error) throw new Error(`Unable to load classes: ${error.message}`);
+      return data ?? [];
+    },
   });
   const { data: streams } = useQuery({
     queryKey: ["streams"],
-    queryFn: async () =>
-      (await supabase.from("streams").select("id, name, class_id, stream_teacher_id")).data ?? [],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("streams")
+        .select("id, name, class_id, stream_teacher_id");
+      if (error) throw new Error(`Unable to load streams: ${error.message}`);
+      return data ?? [];
+    },
   });
   const { data: modules } = useQuery({
     queryKey: ["enabled-modules", schoolId],
@@ -100,9 +108,15 @@ function StudentsPage() {
   const feesEnabled = modules?.get("fees") ?? true;
   const { data: students } = useQuery({
     queryKey: ["students"],
-    queryFn: async () =>
-      (await supabase.from("students").select("*").is("deleted_at", null).order("full_name"))
-        .data ?? [],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("students")
+        .select("*")
+        .is("deleted_at", null)
+        .order("full_name");
+      if (error) throw new Error(`Unable to load learners: ${error.message}`);
+      return data ?? [];
+    },
   });
 
   const filtered = useMemo(() => {

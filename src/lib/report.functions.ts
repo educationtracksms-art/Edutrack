@@ -13,17 +13,13 @@ export const getOLevelReportCards = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: { studentIds: string[]; termId?: string | null }) => data)
   .handler(async ({ data, context }) =>
-    (await buildReportCards(context.supabase, data.studentIds, data.termId ?? null)).filter(
-      (card) => card.gradingLevel === "ordinary",
-    ),
+    buildReportCards(context.supabase, data.studentIds, data.termId ?? null, "ordinary"),
   );
 
 export const getALevelReportCards = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: { studentIds: string[]; termId?: string | null }) => data)
   .handler(async ({ data, context }) =>
-    (await buildReportCards(context.supabase, data.studentIds, data.termId ?? null)).filter(
-      (card) => card.gradingLevel === "advanced",
-    ),
+    buildReportCards(context.supabase, data.studentIds, data.termId ?? null, "advanced"),
   );
 

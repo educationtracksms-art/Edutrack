@@ -24,6 +24,7 @@ import {
   Settings2,
   Users,
   X,
+  Workflow,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -57,6 +58,7 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>;
   roles: AppRole[];
   module?: string;
+  section?: string;
 };
 
 const ALL: AppRole[] = [
@@ -65,53 +67,73 @@ const ALL: AppRole[] = [
   "head_teacher",
   "deputy_head_teacher",
   "dos",
+  "hod",
   "class_teacher",
   "subject_teacher",
 ];
 
+const WORKFLOW_ROLES: AppRole[] = [...ALL, "bursar", "librarian"];
+
 const NAV: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
-  { to: "/schools", label: "Schools", icon: Building2, roles: ["super_admin"] },
-  { to: "/subscriptions", label: "Subscriptions", icon: CreditCard, roles: ["super_admin"] },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL, section: "Home" },
+  {
+    to: "/workflow",
+    label: "School workflow",
+    icon: Workflow,
+    roles: WORKFLOW_ROLES,
+    section: "Home",
+  },
+  {
+    to: "/schools",
+    label: "Schools",
+    icon: Building2,
+    roles: ["super_admin"],
+    section: "Administration",
+  },
+  {
+    to: "/subscriptions",
+    label: "Subscriptions",
+    icon: CreditCard,
+    roles: ["super_admin"],
+    section: "Administration",
+  },
   {
     to: "/subscription",
     label: "Subscription",
     icon: CreditCard,
     roles: ["school_admin", "head_teacher", "dos"],
+    section: "Administration",
   },
   {
     to: "/students",
-    label: "Students",
+    label: "Learners",
     icon: GraduationCap,
-    roles: ["super_admin", ...SCHOOL_ROLES],
+    roles: SCHOOL_ROLES,
+    section: "Setup",
   },
   {
     to: "/finance",
     label: "Finance",
     icon: Landmark,
-    roles: ["super_admin", "school_admin", "head_teacher", "bursar", "hod"],
+    roles: ["school_admin", "head_teacher", "bursar", "hod"],
     module: "finance",
+    section: "Operations",
   },
   {
     to: "/academics",
-    label: "Academic setup",
+    label: "School setup",
     icon: Library,
     roles: ACADEMIC_MANAGERS,
     module: "academics",
+    section: "Setup",
   },
   {
     to: "/library",
     label: "Library",
     icon: Library,
-    roles: [
-      "super_admin",
-      "school_admin",
-      "head_teacher",
-      "deputy_head_teacher",
-      "dos",
-      "librarian",
-    ],
+    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "librarian"],
     module: "library",
+    section: "Operations",
   },
   {
     to: "/timetable",
@@ -119,15 +141,29 @@ const NAV: NavItem[] = [
     icon: CalendarClock,
     roles: SCHOOL_ROLES,
     module: "timetable",
+    section: "Teaching & results",
   },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays, roles: SCHOOL_ROLES },
-  { to: "/events", label: "Events", icon: CalendarDays, roles: SCHOOL_ROLES },
+  {
+    to: "/calendar",
+    label: "Calendar",
+    icon: CalendarDays,
+    roles: SCHOOL_ROLES,
+    section: "Operations",
+  },
+  {
+    to: "/events",
+    label: "Events",
+    icon: CalendarDays,
+    roles: SCHOOL_ROLES,
+    section: "Operations",
+  },
   {
     to: "/assessments",
-    label: "Assessments",
+    label: "Enter marks",
     icon: ClipboardCheck,
     roles: [
       "dos",
+      "hod",
       "school_admin",
       "head_teacher",
       "deputy_head_teacher",
@@ -135,69 +171,87 @@ const NAV: NavItem[] = [
       "class_teacher",
     ],
     module: "academics",
+    section: "Teaching & results",
   },
   {
     to: "/approval",
-    label: "Approvals for DOS",
+    label: "Marks approval",
     icon: ClipboardCheck,
     roles: ["dos"],
     module: "academics",
+    section: "Teaching & results",
   },
   {
     to: "/approved",
-    label: "Approved",
+    label: "Approved results",
     icon: ClipboardCheck,
     roles: ["dos"],
     module: "academics",
+    section: "Teaching & results",
   },
   {
     to: "/attendance",
     label: "Attendance",
     icon: CalendarCheck,
-    roles: ["class_teacher", "dos", "school_admin", "head_teacher", "deputy_head_teacher"],
+    roles: ["class_teacher", "hod", "dos", "school_admin", "head_teacher", "deputy_head_teacher"],
     module: "attendance",
+    section: "Teaching & results",
   },
   {
     to: "/reports",
-    label: "Report Cards",
+    label: "Report cards",
     icon: FileBadge,
-    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "class_teacher"],
+    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "hod", "class_teacher"],
     module: "report_cards",
+    section: "Teaching & results",
   },
   {
     to: "/marksheet",
-    label: "Marksheet",
+    label: "Marks overview",
     icon: NotebookText,
-    roles: ["head_teacher", "deputy_head_teacher", "dos", "class_teacher", "subject_teacher"],
+    roles: ["head_teacher", "deputy_head_teacher", "dos", "hod", "class_teacher", "subject_teacher"],
     module: "academics",
+    section: "Teaching & results",
   },
   {
     to: "/promotions",
-    label: "Promotions",
+    label: "Promote learners",
     icon: MoveUpRight,
     roles: ACADEMIC_MANAGERS,
     module: "students",
+    section: "Teaching & results",
   },
-  { to: "/users", label: "Users & Roles", icon: Users, roles: ["super_admin", "school_admin"] },
+  {
+    to: "/users",
+    label: "Staff & roles",
+    icon: Users,
+    roles: ["super_admin", "school_admin"],
+    section: "Setup",
+  },
   {
     to: "/account-settings",
     label: "My settings",
     icon: Settings2,
     roles: ["super_admin", ...SCHOOL_ROLES, "bursar"],
+    section: "Administration",
   },
   {
     to: "/settings",
     label: "Settings",
     icon: Settings2,
-    roles: ["super_admin", ...SCHOOL_ROLES, "bursar"],
+    roles: [...SCHOOL_ROLES, "bursar"],
+    section: "Administration",
   },
   {
     to: "/audit-logs",
     label: "Audit Logs",
     icon: ScrollText,
-    roles: ["super_admin", "school_admin", "head_teacher"],
+    roles: ["school_admin", "head_teacher"],
+    section: "Administration",
   },
 ];
+
+const NAV_SECTION_ORDER = ["Home", "Setup", "Teaching & results", "Operations", "Administration"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: me } = useCurrentUser();
@@ -216,10 +270,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
   const searchInputRef = React.useRef<HTMLInputElement>(null);
-  const preloadPage = React.useCallback(
-    (to: string) => void router.preloadRoute({ to }),
-    [router],
-  );
+  const preloadPage = React.useCallback((to: string) => void router.preloadRoute({ to }), [router]);
 
   React.useEffect(() => {
     setLabelsVisible(!isMobile);
@@ -280,9 +331,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [isMobile, pathname]);
 
-  const items = NAV.filter((item) => hasAny(me?.roles, item.roles)).filter((item) =>
-    item.module ? (moduleMap?.get(item.module) ?? true) : true,
-  );
+  const items = NAV.filter((item) => hasAny(me?.roles, item.roles))
+    .filter((item) => (item.module ? (moduleMap?.get(item.module) ?? true) : true))
+    .sort(
+      (a, b) =>
+        (NAV_SECTION_ORDER.indexOf(a.section ?? "") + 1 || 999) -
+          (NAV_SECTION_ORDER.indexOf(b.section ?? "") + 1 || 999) ||
+        NAV.indexOf(a) - NAV.indexOf(b),
+    );
   const searchResults = items.filter((item) =>
     item.label.toLowerCase().includes(searchTerm.trim().toLowerCase()),
   );
@@ -351,26 +407,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-            {items.map((item) => {
+            {items.map((item, index) => {
               const active = pathname.startsWith(item.to);
+              const showSection = item.section && item.section !== items[index - 1]?.section;
               return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  preload="intent"
-                  onPointerDown={() => preloadPage(item.to)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors",
-                    active
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    !labelsVisible && "justify-center px-2",
+                <React.Fragment key={item.to}>
+                  {showSection && labelsVisible && (
+                    <p className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/50 first:pt-0">
+                      {item.section}
+                    </p>
                   )}
-                  title={!labelsVisible ? item.label : undefined}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {labelsVisible && <span className="truncate">{item.label}</span>}
-                </Link>
+                  <Link
+                    to={item.to}
+                    preload="intent"
+                    onPointerDown={() => preloadPage(item.to)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors",
+                      active
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      !labelsVisible && "justify-center px-2",
+                    )}
+                    title={!labelsVisible ? item.label : undefined}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {labelsVisible && <span className="truncate">{item.label}</span>}
+                  </Link>
+                </React.Fragment>
               );
             })}
           </nav>
@@ -432,25 +495,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className="flex min-h-0 flex-1 flex-col">
               <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
-                {items.map((item) => {
+                {items.map((item, index) => {
                   const active = pathname.startsWith(item.to);
                   return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      preload="intent"
-                      onPointerDown={() => preloadPage(item.to)}
-                      onClick={() => setMobileNavOpen(false)}
-                      className={cn(
-                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-colors",
-                        active
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    <React.Fragment key={item.to}>
+                      {item.section && item.section !== items[index - 1]?.section && (
+                        <p className="px-4 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/50 first:pt-0">
+                          {item.section}
+                        </p>
                       )}
-                    >
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
+                      <Link
+                        to={item.to}
+                        preload="intent"
+                        onPointerDown={() => preloadPage(item.to)}
+                        onClick={() => setMobileNavOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-colors",
+                          active
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        )}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    </React.Fragment>
                   );
                 })}
               </nav>
@@ -576,9 +645,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               <NotificationPanel />
               <div className="hidden items-center gap-2 md:flex">
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                {primaryRole ? ROLE_LABELS[primaryRole] : "No role"}
-              </span>
+                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+                  {primaryRole ? ROLE_LABELS[primaryRole] : "No role"}
+                </span>
               </div>
             </div>
           </div>

@@ -9,12 +9,12 @@ import { OLevelReportCard } from "@/components/report/OLevelReportCard";
 import { Btn, PageHeader, Panel, inputClass } from "@/components/ui-kit";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { logReportPrint } from "@/lib/admin.functions";
-import { getReportCards } from "@/lib/report.functions";
+import { getALevelReportCards, getOLevelReportCards } from "@/lib/report.functions";
 import { isModuleEnabled } from "@/lib/modules";
 import type { ReportCardData } from "@/lib/report-types";
 import { supabase } from "@/integrations/supabase/client";
 
-type ClassRow = { id: string; name: string };
+type ClassRow = { id: string; name: string; education_level: "ordinary" | "advanced" | null };
 type StreamRow = { id: string; name: string; class_id: string | null };
 type StudentRow = {
   id: string;
@@ -57,19 +57,21 @@ export const Route = createFileRoute("/_authenticated/reports")({
 });
 
 function ReportsPage() {
-  const build = useServerFn(getReportCards);
+  const buildOLevel = useServerFn(getOLevelReportCards);
+  const buildALevel = useServerFn(getALevelReportCards);
   const logPrint = useServerFn(logReportPrint);
   const [classId, setClassId] = useState("");
   const [streamId, setStreamId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
   const [termId, setTermId] = useState("");
+  const [reportLevel, setReportLevel] = useState<"ordinary" | "advanced">("ordinary");
   const [selected, setSelected] = useState<string[]>([]);
   const [cards, setCards] = useState<ReportCardData[]>([]);
 
   const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["classes"],
     queryFn: async () =>
-      (await supabase.from("classes").select("id, name").order("name")).data ?? [],
+      (await supabase.from("classes").select("id, name, education_level").order("name")).data ?? [],
   });
   const { data: streams } = useQuery<StreamRow[]>({
     queryKey: ["report-streams"],
@@ -117,10 +119,22 @@ function ReportsPage() {
     if (!termId && currentTermId) setTermId(currentTermId);
   }, [currentTermId, termId]);
 
+  useEffect(() => {
+    setClassId("");
+    setStreamId("");
+    setSelected([]);
+    setCards([]);
+  }, [reportLevel]);
+
   const visible = useMemo(() => {
     return (students ?? [])
       .filter((student) => (classId ? student.class_id === classId : true))
       .filter((student) => (streamId ? student.stream_id === streamId : true))
+      .filter((student) => {
+        const classRow = classes?.find((item) => item.id === student.class_id);
+        const level = classRow?.education_level === "advanced" ? "advanced" : "ordinary";
+        return level === reportLevel;
+      })
       .sort((a, b) => {
         const classA = classes?.find((item) => item.id === a.class_id)?.name ?? "";
         const classB = classes?.find((item) => item.id === b.class_id)?.name ?? "";
@@ -132,7 +146,19 @@ function ReportsPage() {
           a.full_name.localeCompare(b.full_name)
         );
       });
-  }, [classId, classes, streamId, students, streams]);
+  }, [classId, classes, reportLevel, streamId, students, streams]);
+
+  const reportStreams = useMemo(
+    () =>
+      (streams ?? []).filter((stream) => {
+        if (classId && stream.class_id !== classId) return false;
+        const streamClass = classes?.find((item) => item.id === stream.class_id);
+        return (
+          (streamClass?.education_level === "advanced" ? "advanced" : "ordinary") === reportLevel
+        );
+      }),
+    [classId, classes, reportLevel, streams],
+  );
 
   const visibleStudentIds = useMemo(() => visible.map((student) => student.id), [visible]);
 
@@ -142,6 +168,36 @@ function ReportsPage() {
       academicYearId ? term.academic_year_id === academicYearId : true,
     );
   }, [academicYearId, terms]);
+
+  useEffect(() => {
+    if (
+      classId &&
+      !classes?.some(
+        (item) =>
+          item.id === classId &&
+          (item.education_level === "advanced" ? "advanced" : "ordinary") === reportLevel,
+      )
+    ) {
+      setClassId("");
+      setStreamId("");
+      setSelected([]);
+    }
+  }, [classId, classes, reportLevel]);
+
+  useEffect(() => {
+    if (streamId && !reportStreams.some((stream) => stream.id === streamId)) {
+      setStreamId("");
+      setSelected([]);
+    }
+  }, [reportStreams, streamId]);
+
+  useEffect(() => {
+    if (termId && !filteredTerms.some((term) => term.id === termId)) {
+      setTermId("");
+      setSelected([]);
+      setCards([]);
+    }
+  }, [filteredTerms, termId]);
 
   useEffect(() => {
     if (!academicYearId && currentTermId) {
@@ -159,9 +215,13 @@ function ReportsPage() {
         throw new Error("The selected term is no longer available. Choose a term again");
       }
       if (ids.some((id) => !(students ?? []).some((student) => student.id === id))) {
-        throw new Error("One selected learner is no longer available. Refresh and select learners again");
+        throw new Error(
+          "One selected learner is no longer available. Refresh and select learners again",
+        );
       }
-      return build({ data: { studentIds: ids, termId: termId || undefined } });
+      return reportLevel === "advanced"
+        ? buildALevel({ data: { studentIds: ids, termId: termId || undefined } })
+        : buildOLevel({ data: { studentIds: ids, termId: termId || undefined } });
     },
     onSuccess: (result) => {
       setCards(result);
@@ -191,7 +251,17 @@ function ReportsPage() {
       />
 
       <Panel className="no-print mb-6">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={reportLevel}
+            onChange={(event) =>
+              setReportLevel(event.target.value === "advanced" ? "advanced" : "ordinary")
+            }
+          >
+            <option value="ordinary">O-Level report</option>
+            <option value="advanced">A-Level report</option>
+          </select>
           <select
             className={`${inputClass} max-w-xs`}
             value={academicYearId}
@@ -233,11 +303,16 @@ function ReportsPage() {
             }}
           >
             <option value="">All classes</option>
-            {(classes ?? []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
+            {(classes ?? [])
+              .filter(
+                (item) =>
+                  (item.education_level === "advanced" ? "advanced" : "ordinary") === reportLevel,
+              )
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
           </select>
           <select
             className={`${inputClass} max-w-xs`}
@@ -249,7 +324,7 @@ function ReportsPage() {
           >
             <option value="">All streams</option>
             {(streams ?? [])
-              .filter((stream) => !classId || stream.class_id === classId)
+              .filter((stream) => reportStreams.some((available) => available.id === stream.id))
               .map((stream) => (
                 <option key={stream.id} value={stream.id}>
                   {stream.name}

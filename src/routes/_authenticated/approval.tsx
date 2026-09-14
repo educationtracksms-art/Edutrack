@@ -8,7 +8,7 @@ import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { fetchDosApprovalRows, type ApprovalRow } from "@/lib/dos-approvals";
-import { updateAssessmentPeriod, updateAssessmentStatus } from "@/lib/admin.functions";
+import { updateAssessmentStatus } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type SubmissionSummaryRow = {
@@ -58,9 +58,6 @@ function ApprovalsPage() {
   const schoolId = me?.profile?.school_id ?? null;
   const isDos = hasAny(me?.roles, ["dos"]);
   const updateStatus = useServerFn(updateAssessmentStatus);
-  const updatePeriod = useServerFn(updateAssessmentPeriod);
-  const { data: periods = [] } = useQuery({ queryKey: ["assessment-periods", schoolId], enabled: !!schoolId && isDos, queryFn: async () => { const { data } = await (supabase as any).from("assessment_periods").select("term_id, exam_type, is_active, is_locked").eq("school_id", schoolId!); return data ?? []; } });
-  const periodMutation = useMutation({ mutationFn: (v: any) => updatePeriod({ data: v }), onSuccess: () => { toast.success("Assessment period updated and staff notified"); queryClient.invalidateQueries({ queryKey: ["assessment-periods"] }); }, onError: (e: Error) => toast.error(friendlyAdminError(e)) });
 
   const { data: allRows, isLoading } = useQuery({
     queryKey: ["dos-assessment-rows", schoolId],
@@ -213,17 +210,6 @@ function ApprovalsPage() {
         title="Approvals for DOS"
         description="Review submitted assessments and approve or return them for correction."
       />
-
-      <Panel title="Assessment periods">
-        <p className="mb-3 text-sm text-muted-foreground">Activate a period for reports and open or lock mark entry.</p>
-        <div className="space-y-2">
-          {(periods as any[]).map((period) => {
-            const term = (allRows ?? []).find((r) => r.term_id === period.term_id)?.term_name ?? period.term_id;
-            const label = period.exam_type.replaceAll("_", " ");
-            return <div key={`${period.term_id}-${period.exam_type}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3"><span className="capitalize font-medium">{term} · {label}</span><div className="flex gap-2"><button className="rounded-md border px-3 py-1 text-sm" onClick={() => periodMutation.mutate({ termId: period.term_id, examType: period.exam_type, isActive: !period.is_active, isLocked: false })}>{period.is_active ? "Deactivate" : "Activate"}</button>{period.is_active && <button className="rounded-md border px-3 py-1 text-sm" onClick={() => periodMutation.mutate({ termId: period.term_id, examType: period.exam_type, isActive: true, isLocked: !period.is_locked })}>{period.is_locked ? "Open entry" : "Lock entry"}</button>}</div></div>;
-          })}
-        </div>
-      </Panel>
 
       <Panel title="Submission coverage">
         <div className="overflow-x-auto">

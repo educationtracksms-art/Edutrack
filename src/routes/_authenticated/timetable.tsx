@@ -105,10 +105,13 @@ function TimetablePage() {
           .order("period"),
         supabase.from("classes").select("id, name, school_id").eq("school_id", schoolId!),
         supabase.from("streams").select("id, name, class_id, school_id").eq("school_id", schoolId!),
-        supabase.from("subjects").select("id, name, school_id").eq("school_id", schoolId!),
+        supabase
+          .from("subjects")
+          .select("id, name, school_id, department_id")
+          .eq("school_id", schoolId!),
         supabase
           .from("profiles")
-          .select("id, full_name, initials, school_id")
+          .select("id, full_name, initials, school_id, department_id")
           .eq("school_id", schoolId!),
         supabase
           .from("terms")
@@ -116,7 +119,7 @@ function TimetablePage() {
           .eq("school_id", schoolId!),
         supabase
           .from("teacher_allocations")
-          .select("id, teacher_id, subject_id, class_id, stream_id, school_id")
+          .select("id, teacher_id, subject_id, class_id, stream_id, school_id, weekly_periods")
           .eq("school_id", schoolId!),
         supabase
           .from("academic_years")
@@ -265,14 +268,14 @@ function TimetablePage() {
   }, [data?.periods]);
 
   const classStreamGroups = useMemo(() => {
-    const teacherScoped =
-      !canEdit && hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
+    const teacherScoped = !canEdit && hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
     const teacherAllocations = teacherScoped
       ? (data?.allocations ?? []).filter((allocation) => allocation.teacher_id === me?.userId)
       : [];
     const classes = [...(data?.classes ?? [])].filter(
       (item) =>
-        (!teacherScoped || teacherAllocations.some((allocation) => allocation.class_id === item.id)) &&
+        (!teacherScoped ||
+          teacherAllocations.some((allocation) => allocation.class_id === item.id)) &&
         (!classFilter || item.id === classFilter),
     );
     return classes.map((item) => ({
@@ -295,7 +298,16 @@ function TimetablePage() {
           label: stream.name,
         })),
     }));
-  }, [canEdit, data?.allocations, data?.classes, data?.streams, classFilter, streamFilter, me?.roles, me?.userId]);
+  }, [
+    canEdit,
+    data?.allocations,
+    data?.classes,
+    data?.streams,
+    classFilter,
+    streamFilter,
+    me?.roles,
+    me?.userId,
+  ]);
 
   const streamColumns = useMemo(
     () =>
@@ -314,8 +326,7 @@ function TimetablePage() {
   const dayEntries = useMemo(
     () =>
       (data?.entries ?? []).filter((entry) => {
-        const teacherScoped =
-          !canEdit && hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
+        const teacherScoped = !canEdit && hasAny(me?.roles, ["subject_teacher", "class_teacher"]);
         const teacherAllocations = teacherScoped
           ? (data?.allocations ?? []).filter((allocation) => allocation.teacher_id === me?.userId)
           : [];
@@ -332,7 +343,16 @@ function TimetablePage() {
         if (streamFilter && entry.stream_id !== streamFilter) return false;
         return true;
       }),
-    [canEdit, data?.allocations, data?.entries, dayFilter, classFilter, streamFilter, me?.roles, me?.userId],
+    [
+      canEdit,
+      data?.allocations,
+      data?.entries,
+      dayFilter,
+      classFilter,
+      streamFilter,
+      me?.roles,
+      me?.userId,
+    ],
   );
   const visibleDayLabels = useMemo(
     () => visibleDays.map((day) => ({ day, label: DAYS[Number(day) - 1] ?? `Day ${day}` })),
@@ -394,6 +414,35 @@ function TimetablePage() {
     );
   }, [data, periodRows]);
 
+  const matchesAllocation = (
+    teacherId: string,
+    subjectId: string,
+    classId: string,
+    streamId: string,
+  ) =>
+    (data?.allocations ?? []).some(
+      (allocation) =>
+        allocation.teacher_id === teacherId &&
+        allocation.subject_id === subjectId &&
+        allocation.class_id === classId &&
+        (!allocation.stream_id || allocation.stream_id === streamId),
+    );
+
+  const timetableSubjects = (data?.subjects ?? []).filter((subject) =>
+    !form.teacher_id || !form.class_id
+      ? true
+      : matchesAllocation(form.teacher_id, subject.id, form.class_id, form.stream_id),
+  );
+  const timetableTeachers = (data?.teachers ?? []).filter((teacher) =>
+    !form.subject_id || !form.class_id
+      ? true
+      : matchesAllocation(teacher.id, form.subject_id, form.class_id, form.stream_id),
+  );
+  const teacherDepartment = (teacherId: string) =>
+    (data?.teachers ?? []).find((teacher) => teacher.id === teacherId)?.department_id ?? null;
+  const subjectDepartment = (subjectId: string) =>
+    (data?.subjects ?? []).find((subject) => subject.id === subjectId)?.department_id ?? null;
+
   const saveEntry = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
@@ -408,6 +457,14 @@ function TimetablePage() {
       }
       if (!(data?.teachers ?? []).some((item) => item.id === form.teacher_id)) {
         throw new Error("The selected teacher is no longer available. Choose a teacher again");
+      }
+      if (!matchesAllocation(form.teacher_id, form.subject_id, form.class_id, form.stream_id)) {
+        throw new Error(
+          "Choose a teacher allocated to this subject, class and stream before saving the timetable",
+        );
+      }
+      if (teacherDepartment(form.teacher_id) !== subjectDepartment(form.subject_id)) {
+        throw new Error("The teacher and subject must belong to the same department");
       }
       const classStreams = (data?.streams ?? []).filter(
         (stream) => stream.class_id === form.class_id,
@@ -491,8 +548,10 @@ function TimetablePage() {
         [settingsDraft.lunch_start, settingsDraft.lunch_end, "lunch"],
       ];
       for (const [start, end, label] of timePairs) {
-        if (Boolean(start) !== Boolean(end)) throw new Error(`Add both ${label} start and end times`);
-        if (start && end && end <= start) throw new Error(`${label} end time must be after its start time`);
+        if (Boolean(start) !== Boolean(end))
+          throw new Error(`Add both ${label} start and end times`);
+        if (start && end && end <= start)
+          throw new Error(`${label} end time must be after its start time`);
       }
       const { error: settingsError } = await supabase.from("timetable_settings" as any).upsert(
         {
@@ -552,7 +611,8 @@ function TimetablePage() {
       }
       const slots = periodRows.filter((row) => !row.is_break && !row.is_lunch);
       if (!slots.length) throw new Error("Add active lesson periods before generating a timetable");
-      if (!(data?.allocations ?? []).length) throw new Error("Create teacher allocations before generating a timetable");
+      if (!(data?.allocations ?? []).length)
+        throw new Error("Create teacher allocations before generating a timetable");
       const occupied = new Set(
         (data?.entries ?? []).flatMap((entry) => [
           `teacher:${entry.day_of_week}:${entry.period}:${entry.teacher_id}`,
@@ -569,7 +629,8 @@ function TimetablePage() {
           continue;
         }
         const streams = (data?.streams ?? []).filter(
-          (stream) => stream.class_id === allocation.class_id &&
+          (stream) =>
+            stream.class_id === allocation.class_id &&
             (!allocation.stream_id || stream.id === allocation.stream_id),
         );
         const targets = streams.length
@@ -579,7 +640,8 @@ function TimetablePage() {
             : [{ id: null }];
         for (const stream of targets) {
           const existingCount = (data?.entries ?? []).filter(
-            (entry) => entry.teacher_id === allocation.teacher_id &&
+            (entry) =>
+              entry.teacher_id === allocation.teacher_id &&
               entry.subject_id === allocation.subject_id &&
               entry.class_id === allocation.class_id &&
               entry.stream_id === stream.id,
@@ -623,7 +685,9 @@ function TimetablePage() {
     },
     onSuccess: ({ generated, skipped }) => {
       queryClient.invalidateQueries({ queryKey: ["timetable", schoolId] });
-      toast.success(`Generated ${generated} lessons${skipped ? `; ${skipped} could not be placed` : ""}`);
+      toast.success(
+        `Generated ${generated} lessons${skipped ? `; ${skipped} could not be placed` : ""}`,
+      );
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -771,12 +835,12 @@ function TimetablePage() {
         <Stat label="Conflicts" value={stats.conflicts} />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.8fr_1fr]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(20rem,1fr)]">
         <Panel title="Daily timetable">
           {allocationGaps.length > 0 && (
             <p className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
-              {allocationGaps.length} teacher allocation{allocationGaps.length === 1 ? "" : "s"} still
-              {" "}need timetable periods. Every allocation must reach its weekly target before a
+              {allocationGaps.length} teacher allocation{allocationGaps.length === 1 ? "" : "s"}{" "}
+              still need timetable periods. Every allocation must reach its weekly target before a
               class distribution is complete.
             </p>
           )}
@@ -785,7 +849,10 @@ function TimetablePage() {
               <select
                 className={inputClass}
                 value={classFilter}
-                onChange={(e) => setClassFilter(e.target.value)}
+                onChange={(e) => {
+                  setClassFilter(e.target.value);
+                  setStreamFilter("");
+                }}
               >
                 <option value="">All classes</option>
                 {(data?.classes ?? []).map((item) => (
@@ -802,11 +869,13 @@ function TimetablePage() {
                 onChange={(e) => setStreamFilter(e.target.value)}
               >
                 <option value="">All streams</option>
-                {(data?.streams ?? []).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
+                {(data?.streams ?? [])
+                  .filter((item) => !classFilter || item.class_id === classFilter)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
               </select>
             </Field>
             <Field label="Day">
@@ -941,8 +1010,7 @@ function TimetablePage() {
                           (draft) => draft.period_order === slot.period_order,
                         );
                         const displayedLabel = periodDraft?.label ?? slot.label;
-                        const isEditingPeriod =
-                          canEdit && editingPeriodOrder === slot.period_order;
+                        const isEditingPeriod = canEdit && editingPeriodOrder === slot.period_order;
                         const periodLabelCell = (
                           <td
                             className={`border border-border px-2 py-2 text-center font-semibold leading-tight ${
@@ -1261,7 +1329,15 @@ function TimetablePage() {
                     required
                     className={inputClass}
                     value={form.class_id}
-                    onChange={(e) => setForm({ ...form, class_id: e.target.value, stream_id: "" })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        class_id: e.target.value,
+                        stream_id: "",
+                        subject_id: "",
+                        teacher_id: "",
+                      })
+                    }
                   >
                     <option value="">Select</option>
                     {(data?.classes ?? []).map((item) => (
@@ -1275,7 +1351,14 @@ function TimetablePage() {
                   <select
                     className={inputClass}
                     value={form.stream_id}
-                    onChange={(e) => setForm({ ...form, stream_id: e.target.value })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        stream_id: e.target.value,
+                        subject_id: "",
+                        teacher_id: "",
+                      })
+                    }
                   >
                     <option value="">Whole class</option>
                     {(data?.streams ?? [])
@@ -1295,7 +1378,7 @@ function TimetablePage() {
                     onChange={(e) => setForm({ ...form, subject_id: e.target.value })}
                   >
                     <option value="">Select</option>
-                    {(data?.subjects ?? []).map((item) => (
+                    {timetableSubjects.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
                       </option>
@@ -1310,7 +1393,7 @@ function TimetablePage() {
                     onChange={(e) => setForm({ ...form, teacher_id: e.target.value })}
                   >
                     <option value="">Select</option>
-                    {(data?.teachers ?? []).map((item) => (
+                    {timetableTeachers.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.full_name} ({teacherInitials(byId, item.id)})
                       </option>

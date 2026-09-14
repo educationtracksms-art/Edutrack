@@ -13,7 +13,13 @@ import {
   resetUserPassword,
   updateStaffUser,
 } from "@/lib/admin.functions";
-import { ROLE_LABELS, hasAny, useCurrentUser, type AppRole } from "@/hooks/useCurrentUser";
+import {
+  ROLE_HIERARCHY_LEVELS,
+  ROLE_LABELS,
+  hasAny,
+  useCurrentUser,
+  type AppRole,
+} from "@/hooks/useCurrentUser";
 import {
   Btn,
   Field,
@@ -44,6 +50,7 @@ const ASSIGNABLE: AppRole[] = [
   "head_teacher",
   "deputy_head_teacher",
   "dos",
+  "hod",
   "class_teacher",
   "subject_teacher",
   "librarian",
@@ -65,6 +72,7 @@ function UsersPage() {
     role: "subject_teacher",
     initials: "",
     schoolId: "",
+    departmentId: "",
   });
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -84,7 +92,9 @@ function UsersPage() {
       const [{ data: profiles }, { data: roles }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, email, initials, is_active, must_change_password, school_id"),
+          .select(
+            "id, full_name, email, initials, is_active, must_change_password, school_id, department_id",
+          ),
         supabase.from("user_roles").select("user_id, role"),
       ]);
       return (profiles ?? []).map((profile) => ({
@@ -98,9 +108,14 @@ function UsersPage() {
     (schools ?? []).find((school) => school.id === schoolId)?.name ?? null;
 
   const { data: departments } = useQuery({
-    queryKey: ["departments"],
-    queryFn: async () =>
-      (await supabase.from("departments").select("id, name, hod_user_id").order("name")).data ?? [],
+    queryKey: ["departments", isSuper ? form.schoolId : (me?.profile?.school_id ?? null)],
+    enabled: !isSuper || !!form.schoolId,
+    queryFn: async () => {
+      let query = supabase.from("departments").select("id, name, hod_user_id").order("name");
+      const schoolId = isSuper ? form.schoolId : me?.profile?.school_id;
+      if (schoolId) query = query.eq("school_id", schoolId);
+      return (await query).data ?? [];
+    },
   });
 
   const createMutation = useMutation({
@@ -117,12 +132,13 @@ function UsersPage() {
           role: form.role,
           initials: form.initials || undefined,
           schoolId: form.schoolId || undefined,
+          departmentId: form.departmentId || undefined,
         },
       });
     },
     onSuccess: (result) => {
       setIssued({ email: form.email, password: result.oneTimePassword });
-      setForm({ ...form, fullName: "", email: "", initials: "" });
+      setForm({ ...form, fullName: "", email: "", initials: "", departmentId: "" });
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       toast.success("Account created");
     },
@@ -143,6 +159,7 @@ function UsersPage() {
       role: string;
       initials?: string;
       schoolId?: string;
+      departmentId?: string | null;
     }) => {
       if (!vars.fullName.trim()) throw new Error("Enter the user's full name first");
       if (!vars.email.trim()) throw new Error("Enter the user's email first");
@@ -224,7 +241,11 @@ function UsersPage() {
     mutationFn: () => {
       if (!departmentAssign.departmentId) throw new Error("Select a department first");
       if (!departmentAssign.hodUserId) throw new Error("Select a teacher to assign as HOD first");
-      if (!(departments ?? []).some((department: any) => department.id === departmentAssign.departmentId)) {
+      if (
+        !(departments ?? []).some(
+          (department: any) => department.id === departmentAssign.departmentId,
+        )
+      ) {
         throw new Error("The selected department is no longer available. Choose it again");
       }
       if (!(people ?? []).some((person) => person.id === departmentAssign.hodUserId)) {
@@ -252,9 +273,58 @@ function UsersPage() {
         description="Accounts are created by administrators — never self-registered."
       />
 
-      <div className={isSuper ? "grid gap-4" : "grid gap-4 lg:grid-cols-[1fr_340px]"}>
+      <Panel title="System hierarchy" className="mb-4">
+        <div className="rounded-2xl border border-primary/10 bg-primary-soft/40 p-4">
+          <p className="text-sm font-semibold text-foreground">Suggested accountability flow</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+            Use this structure to understand who owns each area of the school. Roles remain
+            module-specific, so one person can hold more than one role where the school needs it.
+          </p>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {ROLE_HIERARCHY_LEVELS.map((level, index) => (
+            <div key={level.level} className="relative flex gap-3 sm:gap-4">
+              {index < ROLE_HIERARCHY_LEVELS.length - 1 && (
+                <div className="absolute left-4 top-9 h-[calc(100%+0.75rem)] w-px bg-border" />
+              )}
+              <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {level.level}
+              </div>
+              <div className="min-w-0 flex-1 rounded-2xl border border-border bg-background p-3 sm:p-4">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="text-sm font-semibold">{level.label}</h3>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                    Level {level.level}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{level.summary}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {level.roles.map((role) => (
+                    <div key={role} className="rounded-xl bg-muted/60 px-3 py-2">
+                      <p className="text-sm font-medium">{ROLE_LABELS[role]}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {role === "super_admin"
+                          ? "Platform-wide access"
+                          : "School-scoped responsibility"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-4 text-xs text-muted-foreground">
+          Access is still enforced by role and module. This hierarchy provides a clear operating
+          model without granting permissions that a role does not already have.
+        </p>
+      </Panel>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)]">
         {!isSuper && (
-          <Panel title="Departments">
+          <Panel title="Departments" className="order-1">
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Department name">
                 <input
@@ -320,8 +390,11 @@ function UsersPage() {
                   {(people ?? [])
                     .filter(
                       (person) =>
-                        person.roles.includes("subject_teacher") ||
-                        person.roles.includes("class_teacher"),
+                        person.department_id === departmentAssign.departmentId &&
+                        (person.roles.includes("subject_teacher") ||
+                          person.roles.includes("class_teacher") ||
+                          person.roles.includes("hod") ||
+                          person.roles.includes("dos")),
                     )
                     .map((person) => (
                       <option key={person.id} value={person.id}>
@@ -339,7 +412,7 @@ function UsersPage() {
           </Panel>
         )}
 
-        <Panel title="Accounts">
+        <Panel title="Accounts" className="order-3 lg:col-span-2">
           <ResponsiveTable
             desktop={
               <div className="overflow-x-auto">
@@ -400,6 +473,7 @@ function UsersPage() {
                                   role: (person.roles[0] ?? "subject_teacher") as AppRole,
                                   initials: person.initials ?? "",
                                   schoolId: person.school_id ?? "",
+                                  departmentId: person.department_id ?? "",
                                 });
                               }}
                             >
@@ -480,6 +554,7 @@ function UsersPage() {
                             role: (person.roles[0] ?? "subject_teacher") as AppRole,
                             initials: person.initials ?? "",
                             schoolId: person.school_id ?? "",
+                            departmentId: person.department_id ?? "",
                           });
                         }}
                       >
@@ -505,7 +580,10 @@ function UsersPage() {
           />
         </Panel>
 
-        <Panel title={editingUser ? "Edit account" : "Create an account"}>
+        <Panel
+          title={editingUser ? "Edit account" : "Create an account"}
+          className={`order-2 ${isSuper ? "lg:col-span-2 lg:max-w-2xl" : ""}`}
+        >
           <form
             className="space-y-3"
             onSubmit={(event) => {
@@ -518,6 +596,7 @@ function UsersPage() {
                   role: form.role,
                   initials: form.initials || undefined,
                   schoolId: form.schoolId || undefined,
+                  departmentId: form.departmentId || undefined,
                 });
               } else {
                 createMutation.mutate();
@@ -530,7 +609,7 @@ function UsersPage() {
                   required
                   className={inputClass}
                   value={form.schoolId}
-                  onChange={(e) => setForm({ ...form, schoolId: e.target.value })}
+                  onChange={(e) => setForm({ ...form, schoolId: e.target.value, departmentId: "" })}
                 >
                   <option value="">Select a school</option>
                   {(schools ?? []).map((school) => (
@@ -569,11 +648,25 @@ function UsersPage() {
               <select
                 className={inputClass}
                 value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                onChange={(e) => setForm({ ...form, role: e.target.value, departmentId: "" })}
               >
                 {ASSIGNABLE.map((role) => (
                   <option key={role} value={role}>
                     {ROLE_LABELS[role]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Department">
+              <select
+                className={inputClass}
+                value={form.departmentId}
+                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+              >
+                <option value="">Select department</option>
+                {(departments ?? []).map((department: any) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
                   </option>
                 ))}
               </select>
@@ -599,6 +692,7 @@ function UsersPage() {
                     role: "subject_teacher",
                     initials: "",
                     schoolId: "",
+                    departmentId: "",
                   });
                 }}
               >

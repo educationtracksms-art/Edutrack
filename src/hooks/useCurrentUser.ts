@@ -26,6 +26,52 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   librarian: "Librarian",
 };
 
+export type RoleHierarchyLevel = {
+  level: number;
+  label: string;
+  summary: string;
+  roles: AppRole[];
+};
+
+/**
+ * The reporting shape shown to school administrators. This is intentionally
+ * separate from module permissions: a staff member can still hold more than
+ * one role, and each module continues to apply its own access rules.
+ */
+export const ROLE_HIERARCHY_LEVELS: RoleHierarchyLevel[] = [
+  {
+    level: 1,
+    label: "Platform governance",
+    summary:
+      "Controls the EduTrack platform, school tenants and subscription oversight—not day-to-day school activities.",
+    roles: ["super_admin"],
+  },
+  {
+    level: 2,
+    label: "School leadership",
+    summary: "Owns school-wide administration, daily school activities, leadership decisions and staff access.",
+    roles: ["school_admin", "head_teacher", "deputy_head_teacher"],
+  },
+  {
+    level: 3,
+    label: "Academic leadership",
+    summary: "Coordinates academic planning, approvals, departments and teaching quality.",
+    roles: ["dos"],
+  },
+  {
+    level: 4,
+    label: "Departments and operations",
+    summary: "Leads subject departments and specialist school services.",
+    roles: ["hod", "bursar", "librarian"],
+  },
+  {
+    level: 5,
+    label: "Teaching delivery",
+    summary: "Delivers classroom, subject, attendance and assessment workflows.",
+    roles: ["class_teacher", "subject_teacher"],
+  },
+];
+
 export function useCurrentUser() {
   return useQuery({
     queryKey: ["current-user"],
@@ -39,7 +85,9 @@ export function useCurrentUser() {
       const [{ data: profile }, { data: roles }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, email, initials, phone, school_id, department_id, is_active, must_change_password")
+          .select(
+            "id, full_name, email, initials, phone, school_id, department_id, is_active, must_change_password",
+          )
           .eq("id", user.id)
           .maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", user.id),
@@ -87,6 +135,7 @@ export const SCHOOL_ROLES: AppRole[] = [
   "head_teacher",
   "deputy_head_teacher",
   "dos",
+  "hod",
   "class_teacher",
   "subject_teacher",
   "librarian",

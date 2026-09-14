@@ -159,16 +159,22 @@ function MarksheetPage() {
   const { data: gradingScales } = useQuery<GradingScaleRow[]>({
     queryKey: ["marksheet-grading-scales", schoolId],
     enabled: !!schoolId,
-    queryFn: async () =>
-      (
-        await schoolQuery(
-          supabase
-            .from("grading_scales")
-            .select("grade, min_score, max_score, descriptor, education_level, points")
-            .eq("school_id", schoolId)
-            .order("min_score", { ascending: false }),
-        )
-      ).data ?? [],
+    queryFn: async () => {
+      const { data, error } = await schoolQuery(
+        supabase
+          .from("grading_scales")
+          .select("grade, min_score, max_score, grade_descriptor, education_level, points")
+          .eq("school_id", schoolId)
+          .order("min_score", { ascending: false }),
+      );
+      if (error) throw new Error(`Unable to load grading scales: ${error.message}`);
+      return ((data ?? []) as Array<
+        Omit<GradingScaleRow, "descriptor"> & { grade_descriptor: string }
+      >).map((scale) => ({
+        ...scale,
+        descriptor: scale.grade_descriptor,
+      }));
+    },
   });
 
   const visibleStudents = useMemo(

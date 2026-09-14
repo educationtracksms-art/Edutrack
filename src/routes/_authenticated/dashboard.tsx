@@ -610,8 +610,7 @@ function CommentEditorPanel({
   useEffect(() => {
     if (!rules) return;
     const first = rules[0] as
-      | { id: string; descriptor: string; points: number | null; comment: string }
-      | undefined;
+      { id: string; descriptor: string; points: number | null; comment: string } | undefined;
     setDraft((current) => ({
       id: first?.id ?? current.id ?? "",
       descriptor: first?.descriptor ?? current.descriptor,
@@ -744,7 +743,12 @@ function CommentEditorPanel({
           </thead>
           <tbody>
             {(rules ?? []).map(
-              (rule: { id: string; descriptor: string; points: number | null; comment: string }) => (
+              (rule: {
+                id: string;
+                descriptor: string;
+                points: number | null;
+                comment: string;
+              }) => (
                 <tr key={rule.id} className="border-t border-border">
                   <td className="py-2 pr-4">
                     {rule.points != null ? `Points ${rule.points}` : rule.descriptor}
@@ -806,14 +810,12 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     "school_admin",
     "head_teacher",
     "deputy_head_teacher",
-    "super_admin",
   ]);
   const canEditHeadComments = hasAny(me?.roles, [
     "head_teacher",
     "deputy_head_teacher",
     "dos",
     "school_admin",
-    "super_admin",
   ]);
   const { data: moduleMap } = useQuery({
     queryKey: ["enabled-modules", schoolId],
@@ -995,7 +997,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
       const student = data.students.find((item) => item.id === assessment.student_id);
       const subject = data.subjects.find((item) => item.id === assessment.subject_id);
       const classId = student?.class_id ?? null;
-      const className = classId ? classById.get(classId) ?? "Unknown class" : null;
+      const className = classId ? (classById.get(classId) ?? "Unknown class") : null;
       if (!student || !subject || !className) return null;
       if (reviewClassId && classId !== reviewClassId) return null;
       if (reviewStreamId && student.stream_id !== reviewStreamId) return null;
@@ -1052,8 +1054,17 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   return (
     <div>
       <PageHeader
+        eyebrow="Home"
         title="School dashboard"
         description="Performance, approvals and learner status for your school."
+        actions={
+          <Link
+            to="/workflow"
+            className="inline-flex min-h-10 items-center justify-center rounded-xl bg-accent px-3.5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-all hover:-translate-y-px hover:brightness-95"
+          >
+            Open school workflow
+          </Link>
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -53,6 +53,7 @@ function FinancePage() {
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const canView = hasAny(me?.roles, [
+    "school_admin",
     "head_teacher",
     "bursar",
     "hod",

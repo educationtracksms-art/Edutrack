@@ -34,10 +34,12 @@ type AssessmentRow = {
   student_id: string;
   subject_id: string;
   term_id: string;
+  exam_type?: string;
   submitted_by?: string | null;
   submitted_by_name?: string | null;
   formative: number | null;
   summative: number | null;
+  teacher_initials?: string | null;
   status: "draft" | "submitted" | "approved" | "rejected";
   locked: boolean;
   grade_descriptor: string | null;
@@ -153,10 +155,11 @@ function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const isAssignedTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher", "dos"]);
+  const isAssignedTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher", "hod", "dos"]);
   const isTeacher = isAssignedTeacher;
   const canViewAllAssessments = hasAny(me?.roles, [
     "dos",
+    "hod",
     "school_admin",
     "head_teacher",
     "deputy_head_teacher",
@@ -166,6 +169,7 @@ function AssessmentsPage() {
     hasAny(me?.roles, [
       "subject_teacher",
       "class_teacher",
+      "hod",
       "dos",
       "school_admin",
       "head_teacher",
@@ -275,6 +279,20 @@ function AssessmentsPage() {
           : Promise.resolve({ data: null as ProfileRow | null }),
       ])) as any[];
 
+      const failedResult = [
+        assessmentsResult,
+        studentsResult,
+        subjectsResult,
+        termsResult,
+        classesResult,
+        streamsResult,
+        allocationsResult,
+        gradingScalesResult,
+        profilesResult,
+        profileResult,
+      ].find((result) => result.error);
+      if (failedResult?.error) throw new Error(`Unable to load assessments: ${failedResult.error.message}`);
+
       const assessmentRows = (assessmentsResult.data ?? []) as AssessmentRow[];
       const studentRows = (studentsResult.data ?? []) as StudentRow[];
       const subjectRows = (subjectsResult.data ?? []) as SubjectRow[];
@@ -298,7 +316,7 @@ function AssessmentsPage() {
       );
       const teacherInitials = (profileResult.data?.initials ?? "") as string;
       const currentTermId = termRows.find((term) => term.is_current)?.id ?? termRows[0]?.id ?? "";
-      const { data: coCurricularData } = currentTermId
+      const { data: coCurricularData, error: coCurricularError } = currentTermId
         ? await supabase
             .from("co_curricular")
             .select("student_id, games, clubs, projects")
@@ -308,6 +326,9 @@ function AssessmentsPage() {
               studentRows.map((student) => student.id),
             )
         : { data: [] as CoCurricularRow[] };
+      if (coCurricularError) {
+        throw new Error(`Unable to load co-curricular records: ${coCurricularError.message}`);
+      }
       const coCurricularRows = (coCurricularData ?? []) as CoCurricularRow[];
 
       const allocationOptions: TeacherAllocationView[] = isTeacher
@@ -392,11 +413,21 @@ function AssessmentsPage() {
         schoolQuery(
           supabase
             .from("grading_scales")
-            .select("grade, min_score, max_score, grade_descriptor")
+            .select("grade, min_score, max_score, grade_descriptor, education_level, points")
             .order("min_score", { ascending: false }),
         ),
         schoolQuery(supabase.from("profiles").select("id, full_name")),
       ])) as any[];
+      const failedResult = [
+        assessmentsResult,
+        studentsResult,
+        subjectsResult,
+        termsResult,
+        classesResult,
+        gradingScalesResult,
+        profilesResult,
+      ].find((result) => result.error);
+      if (failedResult?.error) throw new Error(`Unable to load assessment records: ${failedResult.error.message}`);
       const staffProfiles = (profilesResult.data ?? []) as StaffProfileRow[];
       const staffProfileMap = new Map(
         staffProfiles.map((profile) => [profile.id, profile.full_name]),
@@ -1030,8 +1061,19 @@ function AssessmentsPage() {
     if (!tableData) return [];
     return tableData.assessments
       .filter((assessment) => assessment.status === "submitted")
-      .map((assessment) => ({
-        ...assessment,
+      .map((assessment) => {
+        const student = tableData.students.find((item) => item.id === assessment.student_id);
+        const studentClass = tableData.classes.find((item) => item.id === student?.class_id);
+        const studentLevel = studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
+        const total = Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
+        const scale = tableData.gradingScales.find(
+          (item) =>
+            (item.education_level ?? "ordinary") === studentLevel &&
+            total >= Number(item.min_score) &&
+            total <= Number(item.max_score),
+        );
+        return {
+          ...assessment,
         studentName:
           tableData.students.find((student: StudentRow) => student.id === assessment.student_id)
             ?.full_name ?? "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â",
@@ -1041,11 +1083,17 @@ function AssessmentsPage() {
         termName:
           tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ??
           "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â",
-        gradeDescriptor: assessment.grade_descriptor ?? "",
+          gradeDescriptor:
+            studentLevel === "advanced"
+              ? scale?.points != null
+                ? String(scale.points)
+                : assessment.grade_descriptor ?? ""
+              : scale?.descriptor ?? "",
         submitted_by_name: assessment.submitted_by
           ? (tableData.staffProfileMap.get(assessment.submitted_by) ?? "Unknown teacher")
           : "Not submitted",
-      }));
+        };
+      });
   }, [tableData]);
   const scopedPendingIds = useMemo(() => {
     if (!reviewClassId && !reviewStreamId) return pendingIds;

@@ -40,6 +40,7 @@ import { Route as AuthenticatedSubscriptionRouteImport } from './routes/_authent
 import { Route as AuthenticatedSubscriptionsRouteImport } from './routes/_authenticated/subscriptions'
 import { Route as AuthenticatedTimetableRouteImport } from './routes/_authenticated/timetable'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedWorkflowRouteImport } from './routes/_authenticated/workflow'
 import { Route as WebsitePagesIndexRouteImport } from './routes/website-pages/index'
 import { Route as WebsitePagesAboutRouteImport } from './routes/website-pages/about'
 import { Route as WebsitePagesBlogsRouteImport } from './routes/website-pages/blogs'
@@ -209,6 +210,11 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedWorkflowRoute = AuthenticatedWorkflowRouteImport.update({
+  id: '/workflow',
+  path: '/workflow',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const WebsitePagesIndexRoute = WebsitePagesIndexRouteImport.update({
   id: '/website-pages/',
   path: '/website-pages/',
@@ -284,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/workflow': typeof AuthenticatedWorkflowRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
@@ -324,6 +331,7 @@ export interface FileRoutesByTo {
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/workflow': typeof AuthenticatedWorkflowRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
@@ -366,6 +374,7 @@ export interface FileRoutesById {
   '/_authenticated/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/_authenticated/timetable': typeof AuthenticatedTimetableRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
+  '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
@@ -408,6 +417,7 @@ export interface FileRouteTypes {
     | '/subscriptions'
     | '/timetable'
     | '/users'
+    | '/workflow'
     | '/website-pages/about'
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
@@ -448,6 +458,7 @@ export interface FileRouteTypes {
     | '/subscriptions'
     | '/timetable'
     | '/users'
+    | '/workflow'
     | '/website-pages/about'
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
@@ -489,6 +500,7 @@ export interface FileRouteTypes {
     | '/_authenticated/subscriptions'
     | '/_authenticated/timetable'
     | '/_authenticated/users'
+    | '/_authenticated/workflow'
     | '/website-pages/about'
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
@@ -732,6 +744,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/workflow': {
+      id: '/_authenticated/workflow'
+      path: '/workflow'
+      fullPath: '/workflow'
+      preLoaderRoute: typeof AuthenticatedWorkflowRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/website-pages/': {
       id: '/website-pages/'
       path: '/website-pages'
@@ -829,6 +848,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSubscriptionsRoute: typeof AuthenticatedSubscriptionsRoute
   AuthenticatedTimetableRoute: typeof AuthenticatedTimetableRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
+  AuthenticatedWorkflowRoute: typeof AuthenticatedWorkflowRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -858,6 +878,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSubscriptionsRoute: AuthenticatedSubscriptionsRoute,
   AuthenticatedTimetableRoute: AuthenticatedTimetableRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
+  AuthenticatedWorkflowRoute: AuthenticatedWorkflowRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
