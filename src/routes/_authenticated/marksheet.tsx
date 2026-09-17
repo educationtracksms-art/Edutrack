@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { BookOpen, Filter, LayoutGrid, Users } from "lucide-react";
-import ExcelJS from "exceljs";
 
 import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -267,6 +266,8 @@ function MarksheetPage() {
 
   async function downloadExcel() {
     if (!subjects?.length || (!classId && !streamId)) return;
+    // Keep the spreadsheet engine out of the initial marksheet route chunk.
+    const { default: ExcelJS } = await import("exceljs");
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "EduTrack";
     workbook.lastModifiedBy = "EduTrack";

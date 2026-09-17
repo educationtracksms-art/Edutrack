@@ -52,6 +52,51 @@ async function notifySchoolBilling(supabase: any, schoolId: string, title: strin
   );
 }
 
+/** Notify every DOS user in the school that marks have been submitted. */
+async function notifyDosOfSubmission(supabase: any, schoolId: string, count: number, byUserId: string) {
+  const [{ data: dosUsers, error: roleError }, { data: submitterName }] = await Promise.all([
+    supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("school_id", schoolId)
+      .eq("role", "dos"),
+    supabase.from("profiles").select("full_name").eq("id", byUserId).maybeSingle(),
+  ]);
+  if (roleError) return;
+  const recipientIds = (dosUsers ?? []).map((row: { user_id: string }) => row.user_id);
+  // Don't notify the DOS themselves if they also submitted.
+  const title = "Marks submitted for your approval";
+  const body = `${submitterName?.full_name ?? "A teacher"} submitted ${count} mark${count === 1 ? "" : "s"} for your review.`;
+  const rows = recipientIds
+    .filter((userId: string) => userId !== byUserId)
+    .map((userId: string) => ({
+      school_id: schoolId,
+      user_id: userId,
+      title,
+      body,
+    }));
+  if (rows.length) {
+    await supabase.from("notifications").insert(rows);
+  }
+}
+
+/** Notify the teacher who originally submitted marks that they have been approved. */
+async function notifyTeacherOfApproval(supabase: any, schoolId: string, submittedById: string, count: number) {
+  if (!submittedById) return;
+  const { data: recipient, error } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", submittedById)
+    .maybeSingle();
+  if (error || !recipient) return;
+  await supabase.from("notifications").insert({
+    school_id: schoolId,
+    user_id: submittedById,
+    title: "Marks approved",
+    body: `Your ${count} submitted ${count === 1 ? "mark" : "marks"} have been approved by the Director of Studies.`,
+  });
+}
+
 const assessmentExamTypes = new Set(["beginning_of_term", "mid_term", "end_of_term"]);
 
 // Keep role assignment closed on the server. The client role selector is only
@@ -86,10 +131,12 @@ async function validateAssessmentRelationships(
     roles: string[];
     studentId: string;
     subjectId: string;
+    paperId?: string | null;
     termId: string;
     examType?: string | null;
     formative?: number | null;
     summative?: number | null;
+    isMissing?: boolean;
     teacherInitials?: string | null;
   },
 ) {
@@ -105,10 +152,13 @@ async function validateAssessmentRelationships(
     throw new Error("Choose a valid assessment period before saving the assessment");
   }
 
-  const formative = requiredAssessmentScore(options.formative, "formative", 20);
-  const summative = requiredAssessmentScore(options.summative, "summative", 80);
+  // A missing mark is deliberately stored as zero with its own flag so it is
+  // never confused with a learner who genuinely scored zero.
+  const isMissing = Boolean(options.isMissing);
+  const formative = isMissing ? 0 : requiredAssessmentScore(options.formative, "formative", 20);
+  const summative = isMissing ? 0 : requiredAssessmentScore(options.summative, "summative", 80);
 
-  const [studentResult, subjectResult, termResult, profileResult] = await Promise.all([
+  const [studentResult, subjectResult, paperResult, subjectPapersResult, termResult, profileResult, currentYearResult, currentTermResult] = await Promise.all([
     supabase
       .from("students")
       .select("id, school_id, class_id, stream_id, status")
@@ -116,21 +166,50 @@ async function validateAssessmentRelationships(
       .maybeSingle(),
     supabase
       .from("subjects")
-      .select("id, school_id, education_level")
+      .select("id, school_id, education_level, department_id")
       .eq("id", subjectId)
       .maybeSingle(),
-    supabase.from("terms").select("id, school_id").eq("id", termId).maybeSingle(),
+    options.paperId
+      ? supabase
+          .from("subject_papers")
+          .select("id, school_id, subject_id")
+          .eq("id", options.paperId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    (supabase as any)
+      .from("subject_papers")
+      .select("id")
+      .eq("school_id", options.schoolId)
+      .eq("subject_id", subjectId)
+      .limit(1),
+    supabase.from("terms").select("id, school_id, academic_year_id").eq("id", termId).maybeSingle(),
     supabase
       .from("profiles")
-      .select("id, school_id, initials")
+      .select("id, school_id, initials, department_id")
       .eq("id", options.userId)
+      .maybeSingle(),
+    supabase
+      .from("academic_years")
+      .select("id")
+      .eq("school_id", options.schoolId)
+      .eq("is_current", true)
+      .maybeSingle(),
+    supabase
+      .from("terms")
+      .select("id, academic_year_id")
+      .eq("school_id", options.schoolId)
+      .eq("is_current", true)
       .maybeSingle(),
   ]);
 
   if (studentResult.error) throw new Error(studentResult.error.message);
   if (subjectResult.error) throw new Error(subjectResult.error.message);
+  if (paperResult.error) throw new Error(paperResult.error.message);
+  if (subjectPapersResult.error) throw new Error(subjectPapersResult.error.message);
   if (termResult.error) throw new Error(termResult.error.message);
   if (profileResult.error) throw new Error(profileResult.error.message);
+  if (currentYearResult.error) throw new Error(currentYearResult.error.message);
+  if (currentTermResult.error) throw new Error(currentTermResult.error.message);
 
   const student = studentResult.data;
   const subject = subjectResult.data;
@@ -145,8 +224,38 @@ async function validateAssessmentRelationships(
   if (!subject || subject.school_id !== options.schoolId) {
     throw new Error("Choose a subject from your school");
   }
+  const paperId = options.paperId?.trim() || null;
+  if (paperId) {
+    if (subject.education_level !== "advanced") {
+      throw new Error("Papers can only be used with A-Level subjects");
+    }
+    if (!paperResult.data || paperResult.data.school_id !== options.schoolId || paperResult.data.subject_id !== subject.id) {
+      throw new Error("Choose a paper belonging to the selected subject");
+    }
+  } else if (subject.education_level === "advanced" && (subjectPapersResult.data?.length ?? 0) > 0) {
+    throw new Error("Choose an A-Level paper before saving this assessment");
+  }
+  if (
+    options.roles.some((role) =>
+      ["head_teacher", "deputy_head_teacher", "dos", "hod", "class_teacher", "subject_teacher"].includes(role),
+    ) &&
+    profile?.department_id &&
+    subject.department_id !== profile.department_id
+  ) {
+    throw new Error("You can only enter marks for subjects in your assigned department");
+  }
   if (!term || term.school_id !== options.schoolId) {
     throw new Error("Choose a term from your school");
+  }
+  if (!currentYearResult.data || !currentTermResult.data) {
+    throw new Error("Set a current academic year and current term before entering marks");
+  }
+  if (
+    term.id !== currentTermResult.data.id ||
+    term.academic_year_id !== currentYearResult.data.id ||
+    currentTermResult.data.academic_year_id !== currentYearResult.data.id
+  ) {
+    throw new Error("Marks can only be entered for the current academic year and term");
   }
   if (!profile || profile.school_id !== options.schoolId) {
     throw new Error("Your teacher profile is not linked to this school");
@@ -199,13 +308,16 @@ async function validateAssessmentRelationships(
   if (options.roles.some((role) => teacherRoles.has(role))) {
     const { data: allocations, error: allocationError } = await supabase
       .from("teacher_allocations")
-      .select("subject_id, class_id, stream_id")
+      .select("subject_id, paper_id, class_id, stream_id")
       .eq("school_id", options.schoolId)
       .eq("teacher_id", options.userId)
       .eq("subject_id", subjectId);
     if (allocationError) throw new Error(allocationError.message);
     const hasAllocation = (allocations ?? []).some(
       (allocation: any) =>
+        (subject.education_level !== "advanced"
+          ? !allocation.paper_id
+          : allocation.paper_id === paperId) &&
         (!allocation.class_id || allocation.class_id === student.class_id) &&
         (!allocation.stream_id || allocation.stream_id === student.stream_id),
     );
@@ -227,7 +339,9 @@ async function validateAssessmentRelationships(
     educationLevel: (classRow.education_level ?? "ordinary") as "ordinary" | "advanced",
     formative,
     summative,
+    isMissing,
     teacherInitials,
+    paperId,
   };
 }
 
@@ -250,12 +364,25 @@ function gradeFromScale(
   );
   const grade = hit?.grade?.trim() ?? "";
   const descriptor = hit?.grade_descriptor?.trim() ?? "";
-  if (!hit || !grade || !descriptor) {
+  if (!hit || !grade || (educationLevel === "ordinary" && !descriptor)) {
     throw new Error(
-      `Configure a complete ${educationLevel} grading-scale row covering a total score of ${total}`,
+      educationLevel === "advanced"
+        ? `Configure an A-level grade and points row covering a total score of ${total}`
+        : `Configure a complete ordinary-level grading-scale row covering a total score of ${total}`,
     );
   }
   return { grade, descriptor };
+}
+
+function gradeForAssessment(
+  scales: Parameters<typeof gradeFromScale>[0],
+  total: number,
+  educationLevel: "ordinary" | "advanced",
+  isMissing: boolean,
+) {
+  return isMissing
+    ? { grade: "", descriptor: "MISSING MARK" }
+    : gradeFromScale(scales, total, educationLevel);
 }
 
 async function requireOpenAssessmentPeriod(
@@ -851,10 +978,23 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       .eq("school_id", schoolId)
       .eq("status", "submitted")
       .in("id", data.ids)
-      .select("id");
+      .select("id, submitted_by");
     if (error) throw new Error(error.message);
     if ((updatedRows ?? []).length !== data.ids.length) {
       throw new Error("Only submitted assessments can be reviewed");
+    }
+
+    // Notify each teacher whose marks were approved.
+    if (data.action === "approve") {
+      const submitterCounts = new Map<string, number>();
+      for (const row of updatedRows ?? []) {
+        if (row.submitted_by) {
+          submitterCounts.set(row.submitted_by, (submitterCounts.get(row.submitted_by) ?? 0) + 1);
+        }
+      }
+      for (const [submitterId, count] of submitterCounts) {
+        await notifyTeacherOfApproval(context.supabase, schoolId, submitterId, count);
+      }
     }
 
     const { data: profile } = await context.supabase
@@ -893,7 +1033,7 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
 
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
-      .select("id, school_id, status, submitted_by, locked")
+      .select("id, school_id, status, submitted_by, locked, term_id, exam_type")
       .eq("id", data.assessmentId)
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
@@ -912,6 +1052,18 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
     }
     if (existingAssessment.status === "approved" && data.status === "draft") {
       throw new Error("Approved assessments must be returned for correction before editing");
+    }
+
+    // Draft → submitted is data entry; the assessment period must be open.
+    // Approval and rejection remain possible after the period is locked so the
+    // DOS can finish the workflow without reopening entry.
+    if (data.status === "submitted") {
+      await requireOpenAssessmentPeriod(
+        context.supabase,
+        schoolId,
+        existingAssessment.term_id,
+        existingAssessment.exam_type,
+      );
     }
 
     const patch: Record<string, unknown> = {
@@ -949,6 +1101,25 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       },
     );
 
+    // Notify the teacher who originally submitted the marks when they are
+    // approved, and notify the DOS when marks are moved to submitted.
+    if (data.status === "approved" && existingAssessment.submitted_by) {
+      await notifyTeacherOfApproval(
+        context.supabase,
+        schoolId,
+        existingAssessment.submitted_by,
+        1,
+      );
+    }
+    if (data.status === "submitted") {
+      await notifyDosOfSubmission(
+        context.supabase,
+        schoolId,
+        1,
+        context.userId,
+      );
+    }
+
     return { ok: true };
   });
 
@@ -964,6 +1135,26 @@ export const updateAssessmentPeriod = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId || !["beginning_of_term", "mid_term", "end_of_term"].includes(data.examType))
       throw new Error("Invalid assessment period");
+    const [{ data: currentYear }, { data: currentTerm }] = await Promise.all([
+      context.supabase
+        .from("academic_years")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("is_current", true)
+        .maybeSingle(),
+      context.supabase
+        .from("terms")
+        .select("id, academic_year_id")
+        .eq("school_id", schoolId)
+        .eq("is_current", true)
+        .maybeSingle(),
+    ]);
+    if (!currentYear || !currentTerm || currentTerm.academic_year_id !== currentYear.id) {
+      throw new Error("Set a current academic year and current term before managing assessment periods");
+    }
+    if (data.termId !== currentTerm.id) {
+      throw new Error("Assessment periods can only be managed for the current academic year and term");
+    }
     const { error } = await (context.supabase as any)
       .from("assessment_periods")
       .upsert(
@@ -1645,11 +1836,13 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
     (data: {
       studentId: string;
       subjectId: string;
+      paperId?: string | null;
       termId: string;
       examType?: string;
       gradeDescriptor?: string | null;
       formative?: number | null;
       summative?: number | null;
+      isMissing?: boolean;
       teacherInitials?: string | null;
     }) => data,
   )
@@ -1681,10 +1874,14 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       roles,
       studentId: data.studentId,
       subjectId: data.subjectId,
+      paperId: data.paperId,
       termId: data.termId,
       examType: data.examType,
-      formative: data.formative,
+      // Formative marks are stored once in formative_marks, never on a
+      // per-period BOT/MOT/EOT assessment row.
+      formative: 0,
       summative: data.summative,
+      isMissing: data.isMissing,
       teacherInitials: data.teacherInitials,
     });
     const {
@@ -1695,7 +1892,9 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       educationLevel,
       formative,
       summative,
+      isMissing,
       teacherInitials,
+      paperId,
     } = validated;
     await requireOpenAssessmentPeriod(context.supabase, schoolId, term.id, examType);
     const { data: gradingScales, error: gradingScaleError } = await context.supabase
@@ -1703,19 +1902,25 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
-    const formativeScore = Number(data.formative ?? 0);
-    const summativeScore = Number(data.summative ?? 0);
-    const totalScore = formativeScore + summativeScore;
-    const gradeMatch = gradeFromScale(gradingScales ?? [], totalScore, educationLevel);
-    const { data: existingAssessment, error: existingError } = await context.supabase
+    const totalScore = summative;
+    const gradeMatch = gradeForAssessment(
+      gradingScales ?? [],
+      totalScore,
+      educationLevel,
+      isMissing,
+    );
+    let existingAssessmentQuery = context.supabase
       .from("assessments")
       .select("id")
       .eq("school_id", schoolId)
       .eq("student_id", student.id)
       .eq("subject_id", subject.id)
       .eq("term_id", term.id)
-      .eq("exam_type", examType)
-      .maybeSingle();
+      .eq("exam_type", examType);
+    existingAssessmentQuery = paperId
+      ? existingAssessmentQuery.eq("paper_id", paperId)
+      : existingAssessmentQuery.is("paper_id", null);
+    const { data: existingAssessment, error: existingError } = await existingAssessmentQuery.maybeSingle();
     if (existingError) throw new Error(existingError.message);
     if (existingAssessment) {
       throw new Error(
@@ -1728,10 +1933,12 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       student_id: student.id,
       subject_id: subject.id,
       term_id: term.id,
+      paper_id: paperId,
       exam_type: examType,
       grade_descriptor: gradeMatch.descriptor,
       formative,
       summative,
+      is_missing: isMissing,
       teacher_initials: teacherInitials,
       status: "draft",
       locked: false,
@@ -1768,6 +1975,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       gradeDescriptor?: string | null;
       formative?: number | null;
       summative?: number | null;
+      isMissing?: boolean;
       teacherInitials?: string | null;
     }) => data,
   )
@@ -1796,7 +2004,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials, submitted_by",
+        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials, submitted_by",
       )
       .eq("id", data.assessmentId)
       .maybeSingle();
@@ -1814,10 +2022,12 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       roles,
       studentId: existingAssessment.student_id,
       subjectId: existingAssessment.subject_id,
+      paperId: existingAssessment.paper_id,
       termId: existingAssessment.term_id,
       examType: data.examType ?? existingAssessment.exam_type,
-      formative: data.formative !== undefined ? data.formative : existingAssessment.formative,
+      formative: 0,
       summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
+      isMissing: data.isMissing ?? existingAssessment.is_missing ?? false,
       teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
     });
     await requireOpenAssessmentPeriod(
@@ -1832,7 +2042,12 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
     const totalScore = validated.formative + validated.summative;
-    const gradeMatch = gradeFromScale(gradingScales ?? [], totalScore, validated.educationLevel);
+    const gradeMatch = gradeForAssessment(
+      gradingScales ?? [],
+      totalScore,
+      validated.educationLevel,
+      validated.isMissing,
+    );
 
     const { error } = await context.supabase
       .from("assessments")
@@ -1841,6 +2056,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
         grade_descriptor: gradeMatch.descriptor,
         formative: validated.formative,
         summative: validated.summative,
+        is_missing: validated.isMissing,
         teacher_initials: validated.teacherInitials,
         rejection_reason: null,
         submitted_by: existingAssessment.submitted_by ?? context.userId,
@@ -1869,6 +2085,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       assessmentId: string;
       formative?: number | null;
       summative?: number | null;
+      isMissing?: boolean;
       teacherInitials?: string | null;
     }) => data,
   )
@@ -1897,7 +2114,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials, submitted_by",
+        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials, submitted_by",
       )
       .eq("id", data.assessmentId)
       .maybeSingle();
@@ -1917,10 +2134,12 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       roles,
       studentId: existingAssessment.student_id,
       subjectId: existingAssessment.subject_id,
+      paperId: existingAssessment.paper_id,
       termId: existingAssessment.term_id,
       examType: existingAssessment.exam_type,
-      formative: data.formative !== undefined ? data.formative : existingAssessment.formative,
+      formative: 0,
       summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
+      isMissing: data.isMissing ?? existingAssessment.is_missing ?? false,
       teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
     });
     await requireOpenAssessmentPeriod(
@@ -1936,13 +2155,19 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
     const totalScore = validated.formative + validated.summative;
-    const gradeMatch = gradeFromScale(gradingScales ?? [], totalScore, validated.educationLevel);
+    const gradeMatch = gradeForAssessment(
+      gradingScales ?? [],
+      totalScore,
+      validated.educationLevel,
+      validated.isMissing,
+    );
 
-    const { error } = await context.supabase
+    const { data: updatedRows, error } = await context.supabase
       .from("assessments")
       .update({
         formative: validated.formative,
         summative: validated.summative,
+        is_missing: validated.isMissing,
         teacher_initials: validated.teacherInitials,
         grade_descriptor: gradeMatch.descriptor,
         status: "submitted",
@@ -1952,19 +2177,199 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
         submitted_at: new Date().toISOString(),
       })
       .eq("id", data.assessmentId)
-      .eq("school_id", schoolId);
+      .eq("school_id", schoolId)
+      .eq("status", existingAssessment.status)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!updatedRows?.length) throw new Error("The assessment changed before it was updated");
 
-    await logAudit(
-      context.supabase,
-      context.userId,
-      schoolId,
-      "ASSESSMENT_SUBMITTED",
-      "assessments",
-      {
+    await Promise.all([
+      logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
         assessment_id: data.assessmentId,
-      },
+      }),
+      notifyDosOfSubmission(context.supabase, schoolId, 1, context.userId),
+    ]);
+
+    return { ok: true };
+  });
+
+/**
+ * Save the latest scores and submit the assessment in one server request.
+ * The legacy assessment screen used separate update and submit calls, which
+ * repeated all authorization and relationship checks for the same mark.
+ */
+export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      assessmentId?: string | null;
+      studentId?: string;
+      subjectId?: string;
+      paperId?: string | null;
+      termId?: string;
+      examType?: string;
+      formative?: number | null;
+      summative?: number | null;
+      isMissing?: boolean;
+      teacherInitials?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const [roles, schoolId] = await Promise.all([
+      rolesOf(context.supabase, context.userId),
+      schoolOf(context.supabase, context.userId),
+    ]);
+    if (
+      !roles.some((r) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "hod",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(r),
+      )
+    ) {
+      throw new Error("Not allowed to submit assessments");
+    }
+
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const assessmentId = data.assessmentId?.trim() || null;
+    const existingResult = assessmentId
+      ? await context.supabase
+          .from("assessments")
+          .select(
+            "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials, submitted_by",
+          )
+          .eq("id", assessmentId)
+          .maybeSingle()
+      : { data: null, error: null };
+    if (existingResult.error) throw new Error(existingResult.error.message);
+
+    const existingAssessment = existingResult.data;
+    if (assessmentId && (!existingAssessment || existingAssessment.school_id !== schoolId)) {
+      throw new Error("Assessment not found in your school");
+    }
+    if (existingAssessment) {
+      if (existingAssessment.locked) throw new Error("Locked assessments cannot be submitted");
+      if (!["draft", "rejected"].includes(existingAssessment.status)) {
+        throw new Error("Only draft or rejected assessments can be submitted");
+      }
+    }
+
+    const validated = await validateAssessmentRelationships(context.supabase, {
+      schoolId,
+      userId: context.userId,
+      roles,
+      studentId: existingAssessment?.student_id ?? data.studentId ?? "",
+      subjectId: existingAssessment?.subject_id ?? data.subjectId ?? "",
+      paperId: existingAssessment?.paper_id ?? data.paperId,
+      termId: existingAssessment?.term_id ?? data.termId ?? "",
+      examType: existingAssessment?.exam_type ?? data.examType,
+      formative: 0,
+      summative: data.summative ?? existingAssessment?.summative,
+      isMissing: data.isMissing ?? existingAssessment?.is_missing ?? false,
+      teacherInitials: data.teacherInitials ?? existingAssessment?.teacher_initials,
+    });
+    await requireOpenAssessmentPeriod(
+      context.supabase,
+      schoolId,
+      validated.term.id,
+      validated.examType,
     );
+
+    const { data: gradingScales, error: gradingScaleError } = await context.supabase
+      .from("grading_scales")
+      .select("grade, min_score, max_score, grade_descriptor, education_level")
+      .eq("school_id", schoolId);
+    if (gradingScaleError) {
+      throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
+    }
+    const gradeMatch = gradeForAssessment(
+      gradingScales ?? [],
+      validated.formative + validated.summative,
+      validated.educationLevel,
+      validated.isMissing,
+    );
+    const submittedAt = new Date().toISOString();
+
+    if (existingAssessment) {
+      const { data: updatedRows, error } = await context.supabase
+        .from("assessments")
+        .update({
+          formative: validated.formative,
+          summative: validated.summative,
+          is_missing: validated.isMissing,
+          teacher_initials: validated.teacherInitials,
+          grade_descriptor: gradeMatch.descriptor,
+          status: "submitted",
+          locked: false,
+          rejection_reason: null,
+          submitted_by: existingAssessment.submitted_by ?? context.userId,
+          submitted_at: submittedAt,
+        })
+        .eq("id", existingAssessment.id)
+        .eq("school_id", schoolId)
+        .eq("status", existingAssessment.status)
+        .select("id");
+      if (error) throw new Error(error.message);
+      if (!updatedRows?.length) throw new Error("The assessment changed before it was submitted");
+    } else {
+      let duplicateQuery = context.supabase
+        .from("assessments")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("student_id", validated.student.id)
+        .eq("subject_id", validated.subject.id)
+        .eq("term_id", validated.term.id)
+        .eq("exam_type", validated.examType);
+      duplicateQuery = validated.paperId
+        ? duplicateQuery.eq("paper_id", validated.paperId)
+        : duplicateQuery.is("paper_id", null);
+      const { data: duplicate, error: duplicateError } = await duplicateQuery.maybeSingle();
+      if (duplicateError) throw new Error(duplicateError.message);
+      if (duplicate) {
+        throw new Error(
+          "An assessment already exists for this learner, subject and term. Existing marks were left unchanged.",
+        );
+      }
+
+      const { error } = await context.supabase.from("assessments").insert({
+        school_id: schoolId,
+        student_id: validated.student.id,
+        subject_id: validated.subject.id,
+        term_id: validated.term.id,
+        paper_id: validated.paperId,
+        exam_type: validated.examType,
+        grade_descriptor: gradeMatch.descriptor,
+        formative: validated.formative,
+        summative: validated.summative,
+        is_missing: validated.isMissing,
+        teacher_initials: validated.teacherInitials,
+        status: "submitted",
+        locked: false,
+        rejection_reason: null,
+        submitted_by: context.userId,
+        submitted_at: submittedAt,
+        approved_by: null,
+        approved_at: null,
+      });
+      if (error) throw new Error(error.message);
+    }
+
+    await Promise.all([
+      logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
+        assessment_id: existingAssessment?.id ?? null,
+        student_id: validated.student.id,
+        subject_id: validated.subject.id,
+        term_id: validated.term.id,
+      }),
+      notifyDosOfSubmission(context.supabase, schoolId, 1, context.userId),
+    ]);
 
     return { ok: true };
   });
@@ -2001,7 +2406,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     const { data: assessments, error: fetchError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, term_id, exam_type, formative, summative, teacher_initials",
+        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials",
       )
       .in("id", data.assessmentIds);
     if (fetchError) throw new Error(fetchError.message);
@@ -2019,44 +2424,58 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
       throw new Error("Only unlocked draft or rejected assessments can be submitted");
     }
 
+    // Every assessment period involved must be open for entry.
+    const periodKeys = new Set<string>();
+    for (const item of assessments) {
+      periodKeys.add(`${item.term_id}|${item.exam_type}`);
+    }
+    await Promise.all(
+      [...periodKeys].map((key) => {
+        const [termId, examType] = key.split("|");
+        return requireOpenAssessmentPeriod(context.supabase, schoolId, termId, examType);
+      }),
+    );
+
     const { data: gradingScales, error: gradingScaleError } = await context.supabase
       .from("grading_scales")
       .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
 
-    const validatedAssessments = [] as Array<{
-      assessment: (typeof assessments)[number];
-      validated: Awaited<ReturnType<typeof validateAssessmentRelationships>>;
-    }>;
-    for (const assessment of assessments) {
-      const validated = await validateAssessmentRelationships(context.supabase, {
-        schoolId,
-        userId: context.userId,
-        roles,
-        studentId: assessment.student_id,
-        subjectId: assessment.subject_id,
-        termId: assessment.term_id,
-        examType: assessment.exam_type,
-        formative: assessment.formative,
-        summative: assessment.summative,
-        teacherInitials: data.teacherInitials ?? assessment.teacher_initials,
-      });
-      validatedAssessments.push({ assessment, validated });
-    }
+    const validatedAssessments = await Promise.all(
+      assessments.map(async (assessment) => ({
+        assessment,
+        validated: await validateAssessmentRelationships(context.supabase, {
+          schoolId,
+          userId: context.userId,
+          roles,
+          studentId: assessment.student_id,
+          subjectId: assessment.subject_id,
+          paperId: assessment.paper_id,
+          termId: assessment.term_id,
+          examType: assessment.exam_type,
+          formative: 0,
+          summative: assessment.summative,
+          isMissing: assessment.is_missing ?? false,
+          teacherInitials: data.teacherInitials ?? assessment.teacher_initials,
+        }),
+      })),
+    );
 
     const entries = validatedAssessments.map(({ assessment, validated }) => {
       const totalScore = validated.formative + validated.summative;
-      const gradeMatch = gradeFromScale(
+      const gradeMatch = gradeForAssessment(
         gradingScales ?? [],
         totalScore,
         validated.educationLevel,
+        validated.isMissing,
       );
       return {
         assessment_id: assessment.id,
         teacher_initials: validated.teacherInitials,
         formative: validated.formative,
         summative: validated.summative,
+        is_missing: validated.isMissing,
         grade_descriptor: gradeMatch.descriptor,
       };
     });
@@ -2068,16 +2487,17 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
       throw new Error("The selected assessments could not be submitted");
     }
 
-    await logAudit(
-      context.supabase,
-      context.userId,
-      schoolId,
-      "ASSESSMENTS_SUBMITTED",
-      "assessments",
-      {
-        assessment_ids: data.assessmentIds,
-      },
-    );
+    await Promise.all([
+      logAudit(
+        context.supabase,
+        context.userId,
+        schoolId,
+        "ASSESSMENTS_SUBMITTED",
+        "assessments",
+        { assessment_ids: data.assessmentIds },
+      ),
+      notifyDosOfSubmission(context.supabase, schoolId, entries.length, context.userId),
+    ]);
 
     return { ok: true };
   });
@@ -2117,12 +2537,16 @@ export const deleteAssessmentEntry = createServerFn({ method: "POST" })
       throw new Error("Only unlocked draft or rejected assessments can be deleted");
     }
 
-    const { error } = await context.supabase
+    const { data: deletedAssessments, error } = await context.supabase
       .from("assessments")
       .delete()
       .eq("id", data.assessmentId)
-      .eq("school_id", schoolId);
+      .eq("school_id", schoolId)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!deletedAssessments?.length) {
+      throw new Error("The assessment could not be deleted");
+    }
 
     await logAudit(
       context.supabase,
@@ -2139,6 +2563,71 @@ export const deleteAssessmentEntry = createServerFn({ method: "POST" })
     );
 
     return { ok: true };
+  });
+
+export const deleteAssessmentGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      studentId: string;
+      subjectId: string;
+      paperId?: string | null;
+      termId: string;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((role) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "hod",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(role),
+      )
+    ) {
+      throw new Error("Not allowed to delete assessments");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: deletedAssessmentCount, error } = await (context.supabase as any).rpc(
+      "delete_assessment_group",
+      {
+        p_school_id: schoolId,
+        p_student_id: data.studentId,
+        p_subject_id: data.subjectId,
+        p_paper_id: data.paperId ?? null,
+        p_term_id: data.termId,
+      },
+    );
+    if (error) throw new Error(error.message);
+    if (!Number(deletedAssessmentCount)) {
+      throw new Error("No assessment records could be deleted");
+    }
+
+    await logAudit(
+      context.supabase,
+      context.userId,
+      schoolId,
+      "ASSESSMENT_GROUP_DELETED",
+      "assessments",
+      {
+        student_id: data.studentId,
+        subject_id: data.subjectId,
+        paper_id: data.paperId ?? null,
+        term_id: data.termId,
+        deleted_assessment_count: Number(deletedAssessmentCount),
+      },
+    );
+
+    return { ok: true, deletedAssessmentCount: Number(deletedAssessmentCount) };
   });
 
 export const verifyStudent = createServerFn({ method: "POST" })
@@ -2259,7 +2748,7 @@ export const updateStudentFeesBalance = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     const canEditAny = roles.some((r) =>
-      ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos"].includes(r),
+      ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos", "bursar"].includes(r),
     );
     const isClassTeacher = roles.includes("class_teacher");
     if (!canEditAny && !isClassTeacher) throw new Error("Not allowed to update fees balance");
@@ -2302,6 +2791,138 @@ export const updateStudentFeesBalance = createServerFn({ method: "POST" })
       fees_balance: data.feesBalance,
     });
     return { ok: true };
+  });
+
+export const setSchoolFees = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      scope: "class" | "student";
+      classId?: string | null;
+      streamId?: string | null;
+      studentId?: string | null;
+      academicYearId: string;
+      termId: string;
+      feeName: string;
+      amount: number;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((role) => ["super_admin", "school_admin", "bursar"].includes(role))) {
+      throw new Error("Only a school bursar or school administrator can set fees");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+    if (!(await isModuleEnabled(context.supabase, schoolId, "fees"))) {
+      throw new Error("Fees module is disabled");
+    }
+
+    const amount = Number(data.amount);
+    const feeName = data.feeName.trim();
+    if (!feeName) throw new Error("Enter a fee name first");
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("School fees must be zero or greater");
+    }
+
+    const [{ data: academicYear }, { data: term }] = await Promise.all([
+      context.supabase
+        .from("academic_years")
+        .select("id, school_id")
+        .eq("id", data.academicYearId)
+        .maybeSingle(),
+      context.supabase
+        .from("terms")
+        .select("id, school_id, academic_year_id")
+        .eq("id", data.termId)
+        .maybeSingle(),
+    ]);
+    if (!academicYear || academicYear.school_id !== schoolId) {
+      throw new Error("Academic year not found in your school");
+    }
+    if (
+      !term ||
+      term.school_id !== schoolId ||
+      term.academic_year_id !== data.academicYearId
+    ) {
+      throw new Error("Term not found in the selected academic year");
+    }
+
+    let students: Array<{
+      id: string;
+      school_id: string;
+      class_id: string | null;
+      stream_id: string | null;
+    }> = [];
+    if (data.scope === "student") {
+      if (!data.studentId) throw new Error("Select a learner first");
+      const { data: student } = await context.supabase
+        .from("students")
+        .select("id, school_id, class_id, stream_id")
+        .eq("id", data.studentId)
+        .maybeSingle();
+      if (!student || student.school_id !== schoolId) {
+        throw new Error("Learner not found in your school");
+      }
+      students = [student];
+    } else {
+      if (!data.classId) throw new Error("Select a class first");
+      let classQuery = context.supabase
+        .from("students")
+        .select("id, school_id, class_id, stream_id")
+        .eq("school_id", schoolId)
+        .eq("class_id", data.classId)
+        .eq("status", "active")
+        .is("deleted_at", null);
+      if (data.streamId) classQuery = classQuery.eq("stream_id", data.streamId);
+      const result = await classQuery;
+      if (result.error) throw new Error(result.error.message);
+      students = result.data ?? [];
+      if (!students.length) throw new Error("No active learners were found in that scope");
+    }
+
+    const assignments = students.map((student) => ({
+      school_id: schoolId,
+      student_id: student.id,
+      class_id: student.class_id,
+      stream_id: student.stream_id,
+      academic_year_id: data.academicYearId,
+      term_id: data.termId,
+      fee_name: feeName,
+      amount_due: amount,
+      amount_paid: 0,
+      balance_due: amount,
+      status: "active",
+      set_by: context.userId,
+    }));
+    const { error: assignmentError } = await context.supabase
+      .from("student_fee_assignments")
+      .upsert(assignments, {
+        onConflict: "school_id,student_id,academic_year_id,term_id,fee_name",
+      });
+    if (assignmentError) throw new Error(assignmentError.message);
+
+    const studentIds = students.map((student) => student.id);
+    const { error: balanceError } = await context.supabase
+      .from("students")
+      .update({ fees_balance: amount })
+      .eq("school_id", schoolId)
+      .in("id", studentIds);
+    if (balanceError) throw new Error(balanceError.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "SCHOOL_FEES_SET", "student_fee_assignments", {
+      scope: data.scope,
+      class_id: data.classId ?? null,
+      stream_id: data.streamId ?? null,
+      student_id: data.studentId ?? null,
+      academic_year_id: data.academicYearId,
+      term_id: data.termId,
+      fee_name: feeName,
+      amount,
+      learner_count: students.length,
+    });
+    return { learnerCount: students.length, amount };
   });
 
 export const deleteAttendanceSummary = createServerFn({ method: "POST" })
@@ -2680,6 +3301,35 @@ export const recordStudentPayment = createServerFn({ method: "POST" })
       .eq("id", data.studentId);
     if (balanceUpdateError) throw new Error(balanceUpdateError.message);
 
+    // Apply a posted learner payment to the oldest open invoices first so the
+    // bursar's invoice list and the learner balance stay in sync.
+    let unappliedAmount = amount;
+    const { data: openInvoices, error: openInvoicesError } = await context.supabase
+      .from("student_invoices")
+      .select("id, amount_paid, balance_due")
+      .eq("school_id", student.school_id)
+      .eq("student_id", data.studentId)
+      .gt("balance_due", 0)
+      .order("invoice_date", { ascending: true });
+    if (openInvoicesError) throw new Error(openInvoicesError.message);
+    for (const invoice of openInvoices ?? []) {
+      if (unappliedAmount <= 0) break;
+      const balanceDue = Number(invoice.balance_due ?? 0);
+      const allocation = Math.min(unappliedAmount, balanceDue);
+      const newBalance = Math.max(0, balanceDue - allocation);
+      const { error: invoiceUpdateError } = await context.supabase
+        .from("student_invoices")
+        .update({
+          amount_paid: Number(invoice.amount_paid ?? 0) + allocation,
+          balance_due: newBalance,
+          status: newBalance === 0 ? "paid" : "partially_paid",
+        })
+        .eq("id", invoice.id)
+        .eq("school_id", student.school_id);
+      if (invoiceUpdateError) throw new Error(invoiceUpdateError.message);
+      unappliedAmount -= allocation;
+    }
+
     const { data: transaction, error: transactionError } = await context.supabase
       .from("transactions")
       .insert({
@@ -3051,7 +3701,7 @@ export const reviewPurchaseRequest = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["super_admin", "head_teacher"].includes(r))) {
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
       throw new Error("Not allowed to review purchase requests");
     }
     const schoolId = await schoolOf(context.supabase, context.userId);
@@ -3492,7 +4142,7 @@ export const reviewSupplierInvoice = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["super_admin", "head_teacher"].includes(r))) {
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
       throw new Error("Not allowed to review invoices");
     }
     const schoolId = await schoolOf(context.supabase, context.userId);
@@ -3597,6 +4247,14 @@ export const logReportPrint = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: { count: number; scope: string }) => data)
   .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (
+      !roles.some((role) =>
+        ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(role),
+      )
+    ) {
+      throw new Error("Only the Director of Studies, School Admin, Head Teacher, or Deputy Head Teacher can print reports");
+    }
     const { data: profile } = await context.supabase
       .from("profiles")
       .select("school_id")
@@ -3640,12 +4298,21 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
+    const educationLevel = data.educationLevel ?? "ordinary";
     const grade = data.grade.trim().toUpperCase();
-    const gradeDescriptor = data.gradeDescriptor.trim();
+    const gradeDescriptor = data.gradeDescriptor?.trim() ?? "";
     if (!grade) throw new Error("Enter a grade before saving the grading scale");
-    if (!gradeDescriptor) throw new Error("Enter a grade descriptor before saving the grading scale");
+    if (educationLevel === "ordinary" && !gradeDescriptor) {
+      throw new Error("Enter a grade descriptor before saving the ordinary-level grading scale");
+    }
     if (!Number.isFinite(data.minScore) || !Number.isFinite(data.maxScore)) {
       throw new Error("Enter valid minimum and maximum scores");
+    }
+    if (
+      educationLevel === "advanced" &&
+      (!Number.isFinite(Number(data.points)) || Number(data.points) < 1 || Number(data.points) > 5)
+    ) {
+      throw new Error("Enter A-level points between 1 and 5");
     }
     if (data.minScore > data.maxScore) {
       throw new Error("The minimum score cannot exceed the maximum score");
@@ -3653,7 +4320,7 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
 
     const payload = {
       school_id: schoolId,
-      education_level: data.educationLevel ?? "ordinary",
+      education_level: educationLevel,
       grade,
       min_score: data.minScore,
       max_score: data.maxScore,

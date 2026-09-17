@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
-import logoUrl from "@/assets/logo.png";
+import logoUrl from "@/assets/logo-optimized.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -199,10 +199,9 @@ const NAV: NavItem[] = [
   },
   {
     to: "/reports",
-    label: "Report cards",
+    label: "Reports",
     icon: FileBadge,
-    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "hod", "class_teacher"],
-    module: "report_cards",
+    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos"],
     section: "Teaching & results",
   },
   {
@@ -302,22 +301,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const root = document.querySelector("main");
     if (!root) return;
 
+    let frame: number | null = null;
     const decorateTables = () => {
-      root.querySelectorAll("table.w-full").forEach((table) => {
-        table.setAttribute("data-responsive-table", "true");
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        root.querySelectorAll("table.w-full").forEach((table) => {
+          table.setAttribute("data-responsive-table", "true");
 
-        const headerLabels = Array.from(table.querySelectorAll("thead th")).map((header, index) => {
-          const label = header.textContent?.trim();
-          if (label) return label;
-          return index === table.querySelectorAll("thead th").length - 1
-            ? "Action"
-            : `Column ${index + 1}`;
-        });
+          const headers = Array.from(table.querySelectorAll("thead th"));
+          const headerLabels = headers.map((header, index) => {
+            const label = header.textContent?.trim();
+            if (label) return label;
+            return index === headers.length - 1 ? "Action" : `Column ${index + 1}`;
+          });
 
-        table.querySelectorAll("tbody tr").forEach((row) => {
-          row.querySelectorAll("td").forEach((cell, index) => {
-            const label = headerLabels[index] ?? `Column ${index + 1}`;
-            cell.setAttribute("data-label", label);
+          table.querySelectorAll("tbody tr").forEach((row) => {
+            row.querySelectorAll("td").forEach((cell, index) => {
+              const label = headerLabels[index] ?? `Column ${index + 1}`;
+              if (cell.getAttribute("data-label") !== label) {
+                cell.setAttribute("data-label", label);
+              }
+            });
           });
         });
       });
@@ -328,7 +333,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const observer = new MutationObserver(decorateTables);
     observer.observe(root, { childList: true, subtree: true });
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, [isMobile, pathname]);
 
   const items = NAV.filter((item) => hasAny(me?.roles, item.roles))

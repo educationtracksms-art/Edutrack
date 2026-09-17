@@ -5,6 +5,8 @@ import { descriptorFromIdentifier } from "./descriptor";
 type AnyClient = SupabaseClient<any, any, any>;
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+// Score boundaries are configured values, not calculated marks. Keep their saved precision on reports.
+const formatScoreBoundary = (value: unknown) => String(value ?? "").trim();
 
 export async function buildReportCards(
   supabase: AnyClient,
@@ -147,7 +149,7 @@ export async function buildReportCards(
     supabase
       .from("assessments")
       .select(
-        "student_id, subject_id, paper_id, exam_type, formative, summative, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+        "student_id, subject_id, paper_id, exam_type, formative, summative, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
       )
       .in("student_id", reportStudentIds)
       .eq("term_id", termFilterId)
@@ -163,6 +165,12 @@ export async function buildReportCards(
       .in("student_id", reportStudentIds)
       .eq("term_id", termFilterId),
     (supabase as any)
+      .from("formative_marks")
+      .select("student_id, subject_id, paper_id, mark, is_missing, teacher_initials, status, approved_by, approved_at")
+      .in("student_id", reportStudentIds)
+      .eq("term_id", termFilterId)
+      .eq("status", "approved"),
+    (supabase as any)
       .from("assessment_periods")
       .select("exam_type")
       .eq("school_id", schoolId)
@@ -177,6 +185,7 @@ export async function buildReportCards(
     { data: assessments },
     { data: attendance },
     { data: activities },
+    { data: formativeMarks },
     { data: activePeriods },
   ] = resultResults;
   const { data: commentRules, error: commentRulesError } = await supabase
@@ -187,24 +196,25 @@ export async function buildReportCards(
     throw new Error(`Unable to load report comment rules: ${commentRulesError.message}`);
   }
 
-  const activeTypes = new Set((activePeriods ?? []).map((p: any) => p.exam_type));
-  if (activeTypes.size === 0) {
-    throw new Error("Activate at least one assessment period before generating report cards");
-  }
+  // Only approved marks from periods activated for this term count towards a
+  // report. Inactive BOT/MOT/EOT periods must not appear or affect totals.
+  // A report must use the periods activated for the selected term. For older
+  // schools that have approved marks but no assessment_periods rows yet,
+  // retain those approved marks so report generation does not produce a blank
+  // card; once periods are configured, the activation rule is enforced.
+  const configuredActiveTypes = new Set((activePeriods ?? []).map((period: any) => period.exam_type));
+  const activeTypes = configuredActiveTypes.size
+    ? configuredActiveTypes
+    : new Set((assessments ?? []).map((assessment: any) => assessment.exam_type));
   const approvedAssessments = (assessments ?? []).filter(
-    (assessment: any) => assessment.status === "approved" && activeTypes.has(assessment.exam_type),
+    (assessment: any) =>
+      assessment.status === "approved" && activeTypes.has(assessment.exam_type),
   );
 
   const feesEnabled = toggles?.find((t: any) => t.module === "fees")?.enabled ?? true;
   const attendanceEnabled = toggles?.find((t: any) => t.module === "attendance")?.enabled ?? true;
-  const reportCardsEnabled =
-    toggles?.find((t: any) => t.module === "report_cards")?.enabled ?? true;
   const coCurricularEnabled =
     toggles?.find((t: any) => t.module === "co_curricular")?.enabled ?? true;
-
-  if (!reportCardsEnabled) {
-    throw new Error("Report cards module is disabled");
-  }
 
   const gradeFor = (total: number, educationLevel: "ordinary" | "advanced") => {
     const hit = (scales ?? []).find(
@@ -213,14 +223,27 @@ export async function buildReportCards(
         total >= Number(s.min_score) &&
         total <= Number(s.max_score),
     );
-    const grade = hit?.grade?.trim() ?? "";
-    const descriptor = hit?.grade_descriptor?.trim() ?? "";
-    if (!hit || !grade || !descriptor) {
+    if (!hit) {
       throw new Error(
-        `No complete ${educationLevel} grading-scale row covers a total score of ${total}`,
+        `No ${educationLevel} grading scale covers a total score of ${total}. Add a grading-scale range that includes this score.`,
       );
     }
-    return { grade, descriptor, points: Number(hit.points ?? 0) };
+    const grade = typeof hit.grade === "string" ? hit.grade.trim() : "";
+    const descriptor =
+      typeof hit.grade_descriptor === "string" ? hit.grade_descriptor.trim() : "";
+    const points = Number(hit.points ?? 0);
+    if (
+      !grade ||
+      (educationLevel === "ordinary" && !descriptor) ||
+      (educationLevel === "advanced" && (!Number.isFinite(points) || points < 1 || points > 5))
+    ) {
+      throw new Error(
+        educationLevel === "advanced"
+          ? `The A-level grading scale for scores ${hit.min_score}–${hit.max_score} is incomplete. Add a grade and points value.`
+          : `The ordinary-level grading scale for scores ${hit.min_score}–${hit.max_score} is incomplete. Add both a grade and grade descriptor.`,
+      );
+    }
+    return { grade, descriptor, points };
   };
 
   const schoolInitials =
@@ -241,12 +264,18 @@ export async function buildReportCards(
     const marks = approvedAssessments.filter(
       (assessment: any) => assessment.student_id === student.id,
     );
+    const studentFormativeMarks = (formativeMarks ?? []).filter(
+      (mark: any) => mark.student_id === student.id,
+    );
     const assignedSubjectIds = new Set(
       (studentSubjects ?? [])
         .filter((assignment: any) => assignment.student_id === student.id)
         .map((assignment: any) => assignment.subject_id),
     );
-    const subjectIdsWithMarks = new Set(marks.map((mark: any) => mark.subject_id));
+    const subjectIdsWithMarks = new Set([
+      ...marks.map((mark: any) => mark.subject_id),
+      ...studentFormativeMarks.map((mark: any) => mark.subject_id),
+    ]);
     const subjectIdsToRender = new Set([...assignedSubjectIds, ...subjectIdsWithMarks]);
 
     const totals: number[] = [];
@@ -255,15 +284,29 @@ export async function buildReportCards(
       .filter(
         (subject: any) =>
           subjectIdsToRender.has(subject.id) &&
-          (subject.education_level ?? "ordinary") === educationLevel,
+          (subjectIdsWithMarks.has(subject.id) ||
+            (subject.education_level ?? "ordinary") === educationLevel),
       )
       .map((subject: any) => {
+        const isAssignedSubject = assignedSubjectIds.has(subject.id);
         const papers =
           educationLevel === "advanced"
             ? (subjectPapers ?? []).filter((p: any) => p.subject_id === subject.id)
             : [];
+        const subjectMaxPoints = Number(subject.points ?? 0);
+        const advancedGradeFor = (score: number) => {
+          if (subject.is_subsidiary) {
+            const passed = score >= 50;
+            return {
+              grade: passed ? "PASS" : "FAIL",
+              descriptor: "",
+              points: passed ? 1 : 0,
+            };
+          }
+          return gradeFor(score, "advanced");
+        };
         const paperRows = papers.length ? papers : [null];
-        return paperRows
+        const renderedPaperRows = paperRows
           .map((paper: any) => {
             const subjectMarks = marks.filter(
               (m: any) =>
@@ -271,75 +314,133 @@ export async function buildReportCards(
             );
             const mark = subjectMarks[subjectMarks.length - 1];
             const summativeMarks = subjectMarks
+              .filter((m: any) => m.summative != null)
               .map((m: any) => Number(m.summative))
               .filter((value: number) => Number.isFinite(value));
             const averageSummative = summativeMarks.length
               ? summativeMarks.reduce((sum: number, value: number) => sum + value, 0) /
                 summativeMarks.length
               : null;
-            const subjectMaxPoints = Number(subject.points ?? 0);
+            const summativeByPeriod = {
+              beginning_of_term: subjectMarks.find((m: any) => m.exam_type === "beginning_of_term")?.summative,
+              mid_term: subjectMarks.find((m: any) => m.exam_type === "mid_term")?.summative,
+              end_of_term: subjectMarks.find((m: any) => m.exam_type === "end_of_term")?.summative,
+            };
+            const periodValue = (period: keyof typeof summativeByPeriod) =>
+              activeTypes.has(period) && summativeByPeriod[period] != null
+                ? fmt(Number(summativeByPeriod[period]))
+                : "";
+            // Formative is one whole-term mark per paper. Legacy subject-level
+            // records remain a fallback so historic report cards still render.
+            const formativeRecord = studentFormativeMarks.find(
+              (m: any) =>
+                m.subject_id === subject.id &&
+                (m.paper_id ?? null) === (paper?.id ?? null),
+            ) ??
+              (paper
+                ? studentFormativeMarks.find(
+                    (m: any) => m.subject_id === subject.id && !m.paper_id,
+                  )
+                : undefined);
+            const standaloneFormative = formativeRecord?.mark;
+            const legacyFormative = subjectMarks
+              .map((m: any) => m.formative)
+              .find((value: unknown) => value != null);
+            const formativeMark =
+              standaloneFormative != null
+                ? Number(standaloneFormative)
+                : legacyFormative != null
+                  ? Number(legacyFormative)
+                  : undefined;
+            const hasExplicitMissingMark =
+              Boolean(formativeRecord?.is_missing) || subjectMarks.some((item: any) => item.is_missing);
             const isMissingMark =
-              Boolean(mark) && mark.formative == null && averageSummative == null;
+              hasExplicitMissingMark ||
+              ((Boolean(mark) || formativeMark !== undefined) &&
+                (formativeMark === undefined || averageSummative == null)) ||
+              (isAssignedSubject && !mark && formativeMark === undefined);
             if (isMissingMark) {
               // An approved missing mark is a real result: show it on the report and
               // include it as zero when calculating the learner's average.
-              totals.push(0);
+              if (educationLevel !== "advanced" || papers.length <= 1) totals.push(0);
               return {
-                subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+                subject: subject.name,
+                paperName: paper?.name ?? "",
                 subjectId: subject.id,
                 paperId: paper?.id ?? null,
-                isPaper: Boolean(paper),
-                formative: "MISSING MARK",
-                summative: "MISSING MARK",
+                isPaper: false,
+                formative: formativeMark === undefined ? "MISSING MARK" : fmt(formativeMark),
+                summative: averageSummative == null ? "MISSING MARK" : fmt(averageSummative),
+                bot: hasExplicitMissingMark ? "MISSING MARK" : periodValue("beginning_of_term"),
+                mot: hasExplicitMissingMark ? "MISSING MARK" : periodValue("mid_term"),
+                eot: hasExplicitMissingMark ? "MISSING MARK" : periodValue("end_of_term"),
                 total: "MISSING MARK",
                 grade: "",
                 gradeDetail: "",
                 subjectPoints: educationLevel === "advanced" ? "0" : "",
-                teacher: mark?.teacher_initials ?? "",
+                teacher: mark?.teacher_initials ??
+                  formativeRecord?.teacher_initials ??
+                  "",
               };
             }
             if (!mark) {
               return {
-                subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+                subject: subject.name,
+                paperName: paper?.name ?? "",
                 subjectId: subject.id,
                 paperId: paper?.id ?? null,
-                isPaper: Boolean(paper),
+                isPaper: false,
                 formative: "",
                 summative: "",
+                bot: periodValue("beginning_of_term"),
+                mot: periodValue("mid_term"),
+                eot: periodValue("end_of_term"),
                 total: "",
                 grade: "",
                 gradeDetail: "",
-                subjectPoints: educationLevel === "advanced" ? String(subjectMaxPoints) : "",
-                teacher: mark?.teacher_initials ?? "",
+                subjectPoints: "",
+                teacher:
+                  formativeRecord?.teacher_initials ?? "",
               };
             }
-            const formative = Number(mark.formative ?? 0);
+            const formative = formativeMark ?? 0;
             const summative = averageSummative ?? 0;
             const total = Math.round((formative + summative) * 10) / 10;
-            const g = gradeFor(total, educationLevel);
+            const g =
+              educationLevel === "advanced"
+                ? papers.length > 1
+                  ? null
+                  : advancedGradeFor(total)
+                : gradeFor(total, educationLevel);
             const weightedPoints =
               educationLevel === "advanced"
                 ? subject.is_subsidiary
                   ? total >= 50
                     ? 1
                     : 0
-                  : Math.min(subjectMaxPoints || 0, g.points || 0)
+                    : Math.min(subjectMaxPoints || 0, g?.points || 0)
                 : 0;
-            totals.push(total);
+            if (educationLevel !== "advanced" || papers.length <= 1) totals.push(total);
             return {
-              subject: paper ? `${subject.name} - ${paper.name}` : subject.name,
+              subject: subject.name,
+              paperName: paper?.name ?? "",
               subjectId: subject.id,
               paperId: paper?.id ?? null,
-              isPaper: Boolean(paper),
+              isPaper: false,
               formative: fmt(formative),
               summative: fmt(summative),
+              bot: periodValue("beginning_of_term"),
+              mot: periodValue("mid_term"),
+              eot: periodValue("end_of_term"),
               total: fmt(total),
-              grade: g.grade,
+              grade: g?.grade ?? "",
               gradeDetail: educationLevel === "advanced" ? "" : g.descriptor,
               subjectPoints:
                 educationLevel === "advanced"
                   ? String(
-                      subject.is_subsidiary
+                      papers.length > 1
+                        ? ""
+                        : subject.is_subsidiary
                         ? weightedPoints
                         : weightedPoints || subjectMaxPoints || 0,
                     )
@@ -348,7 +449,117 @@ export async function buildReportCards(
             };
           })
           .flat();
-      });
+        if (educationLevel !== "advanced") return renderedPaperRows;
+
+        if (papers.length <= 1) {
+          const row = renderedPaperRows[0];
+          if (!row || !String(row.total).trim()) return renderedPaperRows;
+          if (row.total === "MISSING MARK") {
+            return [
+              ...renderedPaperRows,
+              {
+                subject: `${subject.name} - TOTAL`,
+                subjectId: subject.id,
+                paperId: null,
+                isSubjectSummary: true,
+                formative: "",
+                summative: "",
+                bot: "",
+                mot: "",
+                eot: "",
+                total: "MISSING MARK",
+                totalAverage: "MISSING MARK",
+                grade: "",
+                gradeDetail: "",
+                subjectPoints: "0",
+                teacher: "",
+              },
+            ];
+          }
+          const subjectTotal = Number(row.total);
+          const subjectGrade = advancedGradeFor(subjectTotal);
+          const subjectPoints = subject.is_subsidiary
+            ? subjectGrade.points
+            : Math.min(subjectMaxPoints || 0, subjectGrade.points || 0);
+          return [
+            ...renderedPaperRows,
+            {
+              subject: `${subject.name} - TOTAL`,
+              subjectId: subject.id,
+              paperId: null,
+              isSubjectSummary: true,
+              formative: "",
+              summative: "",
+              bot: "",
+              mot: "",
+              eot: "",
+              total: fmt(subjectTotal),
+              totalAverage: fmt(subjectTotal),
+              grade: subjectGrade.grade,
+              gradeDetail: "",
+              subjectPoints: String(
+                subject.is_subsidiary ? subjectPoints : subjectPoints || subjectMaxPoints || 0,
+              ),
+              teacher: row.teacher,
+            },
+          ];
+        }
+
+        const paperTotals = renderedPaperRows.map((row) =>
+          String(row.total).trim() ? Number(row.total) : Number.NaN,
+        );
+        if (paperTotals.some((value) => !Number.isFinite(value))) {
+          totals.push(0);
+          return [
+            ...renderedPaperRows,
+            {
+              subject: `${subject.name} - TOTAL`,
+              subjectId: subject.id,
+              paperId: null,
+              isSubjectSummary: true,
+              formative: "",
+              summative: "",
+              bot: "",
+              mot: "",
+              eot: "",
+              total: "MISSING MARK",
+              totalAverage: "MISSING MARK",
+              grade: "",
+              gradeDetail: "",
+              subjectPoints: "0",
+              teacher: "",
+            },
+          ];
+        }
+        const subjectTotal = Math.round(paperTotals.reduce((sum, value) => sum + value, 0) * 10) / 10;
+        const subjectAverage = subjectTotal / papers.length;
+        const subjectGrade = advancedGradeFor(subjectAverage);
+        const subjectPoints = subject.is_subsidiary
+          ? subjectAverage >= 50 ? 1 : 0
+          : Math.min(subjectMaxPoints || 0, subjectGrade.points || 0);
+        totals.push(subjectAverage);
+        return [
+          ...renderedPaperRows,
+          {
+            subject: `${subject.name} - TOTAL`,
+            subjectId: subject.id,
+            paperId: null,
+            isSubjectSummary: true,
+            formative: "",
+            summative: "",
+            bot: "",
+            mot: "",
+            eot: "",
+            total: fmt(subjectTotal),
+            totalAverage: fmt(subjectAverage),
+            grade: subjectGrade.grade,
+            gradeDetail: "",
+            subjectPoints: String(subject.is_subsidiary ? subjectPoints : subjectPoints || subjectMaxPoints || 0),
+            teacher: renderedPaperRows.map((row) => row.teacher).filter(Boolean).join(", "),
+          },
+        ];
+      })
+      .flat();
 
     const average = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
     const identifierAvg = (average / 100) * 3;
@@ -361,21 +572,34 @@ export async function buildReportCards(
           )?.descriptor ?? descriptorFromIdentifier(identifierAvg));
     const totalPoints =
       educationLevel === "advanced"
-        ? rows.reduce((sum, row) => sum + Number(row.subjectPoints || 0), 0)
+        ? rows
+            .filter((row) =>
+              row.isSubjectSummary ||
+              !rows.some((summary) => summary.isSubjectSummary && summary.subjectId === row.subjectId),
+            )
+            .reduce((sum, row) => sum + Number(row.subjectPoints || 0), 0)
         : null;
+    const hasSubsidiarySubject = (subjects ?? []).some(
+      (subject: any) =>
+        subject.education_level === "advanced" &&
+        subject.is_subsidiary &&
+        subjectIdsToRender.has(subject.id),
+    );
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
     const savedComments = (reportComments ?? []).find(
       (comment: any) => comment.student_id === student.id && comment.term_id === term.id,
     );
-    const approvedAssessment = marks.find((mark: any) => mark.approved_by || mark.approved_at);
+    const approvedAssessment =
+      marks.find((mark: any) => mark.approved_by || mark.approved_at) ??
+      studentFormativeMarks.find((mark: any) => mark.approved_by || mark.approved_at);
     const approvedByName = approvedAssessment?.approved_by
       ? ((profiles ?? []).find((p: any) => p.id === approvedAssessment.approved_by)?.full_name ??
         "")
       : "";
     const gradeCounts: Record<"A" | "B" | "C" | "D" | "E", number> = rows.reduce(
       (counts, row) => {
-        const grade = row.grade.trim().toUpperCase() as keyof typeof counts;
+        const grade = (row.grade ?? "").trim().toUpperCase() as keyof typeof counts;
         if (grade in counts) {
           counts[grade] += 1;
         }
@@ -457,6 +681,11 @@ export async function buildReportCards(
             ? { present: 0, absent: 0, total: 0 }
             : null,
       rows,
+      activeSummativePeriods: [
+        activeTypes.has("beginning_of_term") ? "BOT" : null,
+        activeTypes.has("mid_term") ? "MOT" : null,
+        activeTypes.has("end_of_term") ? "EOT" : null,
+      ].filter(Boolean) as ("BOT" | "MOT" | "EOT")[],
       overall: {
         average: `${average.toFixed(1)}%`,
         metricLabel: "Identifier out of three",
@@ -479,16 +708,24 @@ export async function buildReportCards(
         : null,
       gradeKeys:
         educationLevel === "advanced"
-          ? (scales ?? [])
-              .filter((scale: any) => (scale.education_level ?? "ordinary") === "advanced")
-              .map((scale: any) => ({
-                identifier: scale.grade as string,
-                range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,
-                detail: String(Number(scale.points ?? 0)),
-              }))
+          ? [
+              ...(scales ?? [])
+                .filter((scale: any) => (scale.education_level ?? "ordinary") === "advanced")
+                .map((scale: any) => ({
+                  identifier: scale.grade as string,
+                  range: `${formatScoreBoundary(scale.min_score)} - ${formatScoreBoundary(scale.max_score)}`,
+                  detail: String(Number(scale.points ?? 0)),
+                })),
+              ...(hasSubsidiarySubject
+                ? [
+                    { identifier: "PASS", range: "50 - 100", detail: "1" },
+                    { identifier: "FAIL", range: "0 - 49.9", detail: "0" },
+                  ]
+                : []),
+            ]
           : (identifierScales ?? []).map((scale: any) => ({
               identifier: String(scale.identifier),
-              range: `${fmt(Number(scale.min_score))} - ${fmt(Number(scale.max_score))}`,
+              range: `${formatScoreBoundary(scale.min_score)} - ${formatScoreBoundary(scale.max_score)}`,
               detail: scale.descriptor as string,
             })),
       coCurricular: {

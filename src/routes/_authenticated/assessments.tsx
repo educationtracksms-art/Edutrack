@@ -9,7 +9,7 @@ import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import {
   deleteReportComment,
-  deleteAssessmentEntry,
+  deleteAssessmentGroup,
   reviewAssessments,
   updateAssessmentDraftEntry,
   submitAssessmentEntry,
@@ -24,6 +24,7 @@ import { isModuleEnabled } from "@/lib/modules";
 type TeacherAllocationView = {
   key: string;
   subject_id: string;
+  paper_id: string | null;
   class_id: string | null;
   stream_id: string | null;
   label: string;
@@ -33,16 +34,30 @@ type AssessmentRow = {
   id: string;
   student_id: string;
   subject_id: string;
+  paper_id?: string | null;
   term_id: string;
   exam_type?: string;
   submitted_by?: string | null;
   submitted_by_name?: string | null;
   formative: number | null;
   summative: number | null;
+  is_missing?: boolean;
   teacher_initials?: string | null;
   status: "draft" | "submitted" | "approved" | "rejected";
   locked: boolean;
   grade_descriptor: string | null;
+};
+
+type FormativeMarkRow = {
+  id: string;
+  student_id: string;
+  subject_id: string;
+  paper_id?: string | null;
+  term_id: string;
+  mark: number | null;
+  is_missing?: boolean;
+  status: "draft" | "submitted" | "approved" | "rejected";
+  locked: boolean;
 };
 
 type StudentRow = {
@@ -53,7 +68,13 @@ type StudentRow = {
   status: string;
 };
 
-type SubjectRow = { id: string; name: string };
+type SubjectPaperRow = { id: string; subject_id: string; name: string; position: number };
+type SubjectRow = {
+  id: string;
+  name: string;
+  department_id?: string | null;
+  education_level?: string | null;
+};
 type GradingScaleRow = {
   grade: string;
   min_score: number;
@@ -62,7 +83,7 @@ type GradingScaleRow = {
   education_level: string | null;
   points: number | null;
 };
-type TermRow = { id: string; name: string; is_current: boolean };
+type TermRow = { id: string; name: string; is_current: boolean; academic_year_id?: string | null };
 type ClassRow = {
   id: string;
   name: string;
@@ -95,8 +116,10 @@ function readAssessmentMark(value: string, label: string, maximum: number) {
 
 type AssessmentsData = {
   assessments: AssessmentRow[];
+  formativeMarks: FormativeMarkRow[];
   students: StudentRow[];
   subjects: SubjectRow[];
+  subjectPapers: SubjectPaperRow[];
   terms: TermRow[];
   classes: ClassRow[];
   streams: StreamRow[];
@@ -104,11 +127,18 @@ type AssessmentsData = {
   allocations: TeacherAllocationView[];
   gradingScales: GradingScaleRow[];
   currentTermId: string;
+  activeAssessmentPeriods: string[];
+  openAssessmentPeriods: string[];
   teacherInitials: string;
   staffProfileMap: Map<string, string>;
 };
 
 type LearnerSortKey = "class" | "stream";
+
+function isMissingRelationError(result: { error?: { message?: string } } | null | undefined) {
+  const message = result?.error?.message?.toLowerCase() ?? "";
+  return message.includes("does not exist") || message.includes("could not find the table");
+}
 
 export const Route = createFileRoute("/_authenticated/assessments")({
   beforeLoad: async () => {
@@ -151,7 +181,7 @@ function AssessmentsError({ error, reset }: { error: Error; reset: () => void })
   return null;
 }
 
-function AssessmentsPage() {
+export function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
@@ -182,13 +212,14 @@ function AssessmentsPage() {
   const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);
   const submitEntry = useServerFn(submitAssessmentEntry);
   const submitEntries = useServerFn(submitAssessmentEntries);
-  const deleteEntry = useServerFn(deleteAssessmentEntry);
+  const deleteGroup = useServerFn(deleteAssessmentGroup);
   const saveComment = useServerFn(upsertReportComment);
   const removeComment = useServerFn(deleteReportComment);
   const [subjectFilter, setSubjectFilter] = useState("");
   const [tableSubjectFilter, setTableSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [termFilter, setTermFilter] = useState("");
+  const [assessmentSort, setAssessmentSort] = useState<"created_at" | "class" | "stream" | "subject">("created_at");
   const [allocationKey, setAllocationKey] = useState("");
   const [reviewClassId, setReviewClassId] = useState("");
   const [reviewStreamId, setReviewStreamId] = useState("");
@@ -216,20 +247,33 @@ function AssessmentsPage() {
     examType: "end_of_term",
     formative: "",
     summative: "",
+    summativeBot: "",
+    summativeMot: "",
+    summativeEot: "",
+    isMissing: false,
     teacherInitials: "",
+    paperId: "",
   });
   const [edits, setEdits] = useState<
     Record<string, { formative?: string; summative?: string; gradeDescriptor?: string }>
   >({});
 
-  const { data } = useQuery<AssessmentsData>({
+  const {
+    data,
+    isLoading: isAssessmentsLoading,
+    isError: isAssessmentsError,
+    error: assessmentsError,
+  } = useQuery<AssessmentsData>({
     queryKey: ["assessments", schoolId, me?.userId],
     queryFn: async () => {
       const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
-      const [
+      let [
         assessmentsResult,
+        formativeMarksResult,
+        assessmentPeriodsResult,
         studentsResult,
         subjectsResult,
+        subjectPapersResult,
         termsResult,
         classesResult,
         streamsResult,
@@ -240,13 +284,24 @@ function AssessmentsPage() {
       ] = (await Promise.all([
         schoolQuery(supabase.from("assessments").select("*").order("created_at")),
         schoolQuery(
+          (supabase as any)
+            .from("formative_marks")
+            .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked"),
+        ),
+        schoolQuery(
+          (supabase as any)
+            .from("assessment_periods")
+            .select("term_id, exam_type, is_active, is_locked"),
+        ),
+        schoolQuery(
           supabase
             .from("students")
             .select("id, full_name, class_id, stream_id, status")
             .eq("status", "active")
             .order("full_name"),
         ),
-        schoolQuery(supabase.from("subjects").select("id, name").order("position")),
+        schoolQuery(supabase.from("subjects").select("id, name, department_id, education_level").order("position")),
+        schoolQuery((supabase as any).from("subject_papers").select("id, subject_id, name, position").order("position")),
         schoolQuery(
           supabase
             .from("terms")
@@ -263,7 +318,7 @@ function AssessmentsPage() {
         schoolId && me?.userId
           ? supabase
               .from("teacher_allocations")
-              .select("subject_id, class_id, stream_id")
+              .select("subject_id, paper_id, class_id, stream_id")
               .eq("school_id", schoolId)
               .eq("teacher_id", me.userId)
           : Promise.resolve({ data: [] as any[] }),
@@ -279,10 +334,37 @@ function AssessmentsPage() {
           : Promise.resolve({ data: null as ProfileRow | null }),
       ])) as any[];
 
+      // Keep the assessments page usable while an older deployment is waiting
+      // for the teacher-allocation paper migration to be applied.
+      if (allocationsResult?.error?.message?.includes("paper_id")) {
+        allocationsResult = schoolId && me?.userId
+          ? await supabase
+              .from("teacher_allocations")
+              .select("subject_id, class_id, stream_id")
+              .eq("school_id", schoolId)
+              .eq("teacher_id", me.userId)
+          : { data: [], error: null };
+      }
+
+      // These datasets were added after the original assessments workflow. Keep
+      // the core page available while a deployment is catching up with them.
+      if (isMissingRelationError(formativeMarksResult)) {
+        formativeMarksResult = { data: [], error: null };
+      }
+      if (isMissingRelationError(assessmentPeriodsResult)) {
+        assessmentPeriodsResult = { data: [], error: null };
+      }
+      if (isMissingRelationError(subjectPapersResult)) {
+        subjectPapersResult = { data: [], error: null };
+      }
+
       const failedResult = [
         assessmentsResult,
+        formativeMarksResult,
+        assessmentPeriodsResult,
         studentsResult,
         subjectsResult,
+        subjectPapersResult,
         termsResult,
         classesResult,
         streamsResult,
@@ -294,13 +376,22 @@ function AssessmentsPage() {
       if (failedResult?.error) throw new Error(`Unable to load assessments: ${failedResult.error.message}`);
 
       const assessmentRows = (assessmentsResult.data ?? []) as AssessmentRow[];
+      const formativeMarkRows = (formativeMarksResult.data ?? []) as FormativeMarkRow[];
+      const assessmentPeriods = (assessmentPeriodsResult.data ?? []) as Array<{
+        term_id: string;
+        exam_type: string;
+        is_active: boolean;
+        is_locked: boolean;
+      }>;
       const studentRows = (studentsResult.data ?? []) as StudentRow[];
       const subjectRows = (subjectsResult.data ?? []) as SubjectRow[];
+      const subjectPaperRows = (subjectPapersResult.data ?? []) as SubjectPaperRow[];
       const termRows = (termsResult.data ?? []) as TermRow[];
       const classRows = (classesResult.data ?? []) as ClassRow[];
       const streamRows = (streamsResult.data ?? []) as StreamRow[];
       const allocationRows = (allocationsResult.data ?? []) as Array<{
         subject_id: string;
+        paper_id: string | null;
         class_id: string | null;
         stream_id: string | null;
       }>;
@@ -315,8 +406,8 @@ function AssessmentsPage() {
         staffProfiles.map((profile) => [profile.id, profile.full_name]),
       );
       const teacherInitials = (profileResult.data?.initials ?? "") as string;
-      const currentTermId = termRows.find((term) => term.is_current)?.id ?? termRows[0]?.id ?? "";
-      const { data: coCurricularData, error: coCurricularError } = currentTermId
+      const currentTermId = termRows.find((term) => term.is_current)?.id ?? "";
+      const { data: coCurricularData, error: coCurricularError } = currentTermId && studentRows.length
         ? await supabase
             .from("co_curricular")
             .select("student_id, games, clubs, projects")
@@ -341,11 +432,12 @@ function AssessmentsPage() {
             const streamName =
               streamRows.find((item) => item.id === allocation.stream_id)?.name ?? "Any stream";
             return {
-              key: `${allocation.subject_id}:${allocation.class_id ?? ""}:${allocation.stream_id ?? ""}`,
+              key: `${allocation.subject_id}:${allocation.paper_id ?? "subject"}:${allocation.class_id ?? ""}:${allocation.stream_id ?? ""}`,
               subject_id: allocation.subject_id,
+              paper_id: allocation.paper_id ?? null,
               class_id: allocation.class_id ?? null,
               stream_id: allocation.stream_id ?? null,
-              label: [subjectName, className, allocation.stream_id ? streamName : null]
+              label: [subjectName, allocation.paper_id ? (subjectPaperRows.find((paper) => paper.id === allocation.paper_id)?.name ?? "Paper") : null, className, allocation.stream_id ? streamName : null]
                 .filter(Boolean)
                 .join(" - "),
             };
@@ -354,8 +446,10 @@ function AssessmentsPage() {
 
       return {
         assessments: assessmentRows,
+        formativeMarks: formativeMarkRows.filter((mark) => mark.term_id === currentTermId),
         students: studentRows,
         subjects: subjectRows,
+        subjectPapers: subjectPaperRows,
         terms: termRows,
         classes: classRows,
         streams: streamRows,
@@ -363,6 +457,12 @@ function AssessmentsPage() {
         allocations: allocationOptions,
         gradingScales: gradingScaleRows,
         currentTermId,
+        activeAssessmentPeriods: assessmentPeriods
+          .filter((period) => period.term_id === currentTermId && period.is_active)
+          .map((period) => period.exam_type),
+        openAssessmentPeriods: assessmentPeriods
+          .filter((period) => period.term_id === currentTermId && period.is_active && !period.is_locked)
+          .map((period) => period.exam_type),
         teacherInitials,
         staffProfileMap,
       };
@@ -370,8 +470,10 @@ function AssessmentsPage() {
   });
   const { data: tableData } = useQuery<{
     assessments: AssessmentRow[];
+    formativeMarks: FormativeMarkRow[];
     students: StudentRow[];
     subjects: SubjectRow[];
+    subjectPapers: SubjectPaperRow[];
     terms: TermRow[];
     classes: ClassRow[];
     gradingScales: GradingScaleRow[];
@@ -380,10 +482,12 @@ function AssessmentsPage() {
     queryKey: ["assessment-table", schoolId],
     queryFn: async () => {
       const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
-      const [
+      let [
         assessmentsResult,
+        formativeMarksResult,
         studentsResult,
         subjectsResult,
+        subjectPapersResult,
         termsResult,
         classesResult,
         gradingScalesResult,
@@ -391,13 +495,19 @@ function AssessmentsPage() {
       ] = (await Promise.all([
         schoolQuery(supabase.from("assessments").select("*").order("created_at")),
         schoolQuery(
+          (supabase as any)
+            .from("formative_marks")
+            .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked"),
+        ),
+        schoolQuery(
           supabase
             .from("students")
             .select("id, full_name, class_id, stream_id, status")
             .eq("status", "active")
             .order("full_name"),
         ),
-        schoolQuery(supabase.from("subjects").select("id, name").order("position")),
+        schoolQuery(supabase.from("subjects").select("id, name, education_level").order("position")),
+        schoolQuery((supabase as any).from("subject_papers").select("id, subject_id, name, position").order("position")),
         schoolQuery(
           supabase
             .from("terms")
@@ -418,10 +528,15 @@ function AssessmentsPage() {
         ),
         schoolQuery(supabase.from("profiles").select("id, full_name")),
       ])) as any[];
+      if (isMissingRelationError(subjectPapersResult)) {
+        subjectPapersResult = { data: [], error: null };
+      }
       const failedResult = [
         assessmentsResult,
+        formativeMarksResult,
         studentsResult,
         subjectsResult,
+        subjectPapersResult,
         termsResult,
         classesResult,
         gradingScalesResult,
@@ -435,8 +550,10 @@ function AssessmentsPage() {
 
       return {
         assessments: (assessmentsResult.data ?? []) as AssessmentRow[],
+        formativeMarks: (formativeMarksResult.data ?? []) as FormativeMarkRow[],
         students: (studentsResult.data ?? []) as StudentRow[],
         subjects: (subjectsResult.data ?? []) as SubjectRow[],
+        subjectPapers: (subjectPapersResult.data ?? []) as SubjectPaperRow[],
         terms: (termsResult.data ?? []) as TermRow[],
         classes: (classesResult.data ?? []) as ClassRow[],
         gradingScales: ((gradingScalesResult.data ?? []) as Array<
@@ -457,6 +574,10 @@ function AssessmentsPage() {
       null,
     [allocationKey, data?.allocations],
   );
+  const selectedAllocationPaper = (data?.subjectPapers ?? []).find(
+    (paper) => paper.id === selectedAllocation?.paper_id,
+  );
+  const selectedAllocationUsesPaper = Boolean(selectedAllocation?.paper_id);
   const assignedClass = useMemo(() => {
     if (!isClassTeacher || !data || !me?.userId) return null;
     return data.classes.find((item) => item.class_teacher_id === me.userId) ?? null;
@@ -469,27 +590,6 @@ function AssessmentsPage() {
   };
   const streamName = (id: string | null) =>
     data?.streams.find((item) => item.id === id)?.name ?? "-";
-
-  const selectedStudentLevel = useMemo<"ordinary" | "advanced">(() => {
-    if (!entryForm.studentId) return "ordinary";
-    const student = data?.students.find((item) => item.id === entryForm.studentId);
-    const studentClass = data?.classes.find((item) => item.id === student?.class_id);
-    return studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
-  }, [data?.classes, data?.students, entryForm.studentId]);
-
-  const autoDescriptor = useMemo(() => {
-    const total = Number(entryForm.formative || 0) + Number(entryForm.summative || 0);
-    const hit = data?.gradingScales.find(
-      (scale) =>
-        (scale.education_level ?? "ordinary") === selectedStudentLevel &&
-        total >= Number(scale.min_score) &&
-        total <= Number(scale.max_score),
-    );
-    if (selectedStudentLevel === "advanced") {
-      return hit?.points != null ? String(hit.points) : (hit?.descriptor ?? "");
-    }
-    return hit?.descriptor ?? "";
-  }, [data?.gradingScales, entryForm.formative, entryForm.summative, selectedStudentLevel]);
 
   const assessmentLookup = useMemo(
     () => new Map(tableData?.assessments.map((assessment) => [assessment.id, assessment]) ?? []),
@@ -512,6 +612,7 @@ function AssessmentsPage() {
       if (!data?.allocations.length) return false;
       return data.allocations.some((allocation) => {
         if (allocation.subject_id !== assessment.subject_id) return false;
+        if ((allocation.paper_id ?? null) !== (assessment.paper_id ?? null)) return false;
         if (allocation.class_id && student.class_id !== allocation.class_id) return false;
         if (allocation.stream_id && student.stream_id !== allocation.stream_id) return false;
         return true;
@@ -522,14 +623,50 @@ function AssessmentsPage() {
   const loadAssessmentIntoForm = (assessmentId: string) => {
     const assessment = assessmentLookup.get(assessmentId);
     if (!assessment) return;
+    const assessmentStudent = data?.students.find((student) => student.id === assessment.student_id);
+    const matchingAllocation = data?.allocations.find(
+      (allocation) =>
+        allocation.subject_id === assessment.subject_id &&
+        (allocation.paper_id ?? null) === (assessment.paper_id ?? null) &&
+        (!allocation.class_id || allocation.class_id === assessmentStudent?.class_id) &&
+        (!allocation.stream_id || allocation.stream_id === assessmentStudent?.stream_id),
+    );
+    const assessmentGroup = (tableData?.assessments ?? []).filter(
+      (row) =>
+        row.student_id === assessment.student_id &&
+        row.subject_id === assessment.subject_id &&
+        row.term_id === assessment.term_id &&
+        (row.paper_id ?? null) === (assessment.paper_id ?? null),
+    );
+    const summativeMark = (examType: string) =>
+      assessmentGroup.find((row) => row.exam_type === examType)?.summative?.toString() ?? "";
+    const formativeMark = data?.formativeMarks.find(
+      (mark) =>
+        mark.student_id === assessment.student_id &&
+        mark.subject_id === assessment.subject_id &&
+        mark.term_id === assessment.term_id &&
+        (mark.paper_id ?? null) === (assessment.paper_id ?? null),
+    );
+
+    // A teacher's learner list is scoped by allocation. Select the allocation
+    // for the row before loading it, so its learner, subject, and paper remain
+    // visible and selected in the form.
+    if (isTeacher && matchingAllocation) {
+      setAllocationKey(matchingAllocation.key);
+    }
     setEditingAssessmentId(assessment.id);
     setEntryForm({
       studentId: assessment.student_id,
       subjectId: assessment.subject_id,
+      paperId: assessment.paper_id ?? "",
       termId: assessment.term_id,
       examType: assessment.exam_type ?? "end_of_term",
-      formative: assessment.formative?.toString() ?? "",
+      formative: formativeMark?.mark?.toString() ?? assessment.formative?.toString() ?? "",
       summative: assessment.summative?.toString() ?? "",
+      summativeBot: summativeMark("beginning_of_term"),
+      summativeMot: summativeMark("mid_term"),
+      summativeEot: summativeMark("end_of_term"),
+      isMissing: Boolean(assessment.is_missing || formativeMark?.is_missing),
       teacherInitials: assessment.teacher_initials ?? "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -543,8 +680,13 @@ function AssessmentsPage() {
       termId: data?.currentTermId || "",
       formative: "",
       summative: "",
+      summativeBot: "",
+      summativeMot: "",
+      summativeEot: "",
+      isMissing: false,
       examType: "end_of_term",
       teacherInitials: "",
+      paperId: "",
     }));
   };
 
@@ -564,13 +706,14 @@ function AssessmentsPage() {
   }, [allocationKey, data, isTeacher, termFilter, selectedAllocation]);
 
   useEffect(() => {
-    if (!isTeacher || !selectedAllocation) return;
+    if (!isTeacher || !selectedAllocation || editingAssessmentId) return;
     setEntryForm((current) => ({
       ...current,
       subjectId: selectedAllocation.subject_id,
+      paperId: selectedAllocation.paper_id ?? "",
       studentId: "",
     }));
-  }, [isTeacher, selectedAllocation?.key]);
+  }, [editingAssessmentId, isTeacher, selectedAllocation?.key]);
 
   const teacherStudents = useMemo(() => {
     if (!data) return [];
@@ -611,12 +754,73 @@ function AssessmentsPage() {
 
   const teacherSubjects = useMemo(() => {
     if (!data) return [];
-    if (!isTeacher) return data.subjects;
+    const restrictToAllocation = hasAny(me?.roles, ["subject_teacher", "class_teacher", "hod", "dos"]);
+    if (!restrictToAllocation) return data.subjects;
     if (!selectedAllocation) return [];
     return data.subjects.filter(
-      (subject: SubjectRow) => subject.id === selectedAllocation.subject_id,
+      (subject: SubjectRow) =>
+        subject.id === selectedAllocation.subject_id &&
+        (!me?.profile?.department_id || subject.department_id === me.profile.department_id),
     );
-  }, [data, isTeacher, selectedAllocation]);
+  }, [data, entryForm.studentId, isTeacher, me?.profile?.department_id, me?.roles, selectedAllocation]);
+
+  const assessmentSubjectId = entryForm.subjectId || (isTeacher ? selectedAllocation?.subject_id : "") || "";
+  const selectedSubject = data?.subjects.find((subject) => subject.id === assessmentSubjectId);
+  const selectedPaperId = entryForm.paperId || null;
+  const selectedPaper = (data?.subjectPapers ?? []).find((paper) => paper.id === selectedPaperId);
+  const availablePapers = (data?.subjectPapers ?? [])
+    .filter((paper) => paper.subject_id === assessmentSubjectId)
+    .filter((paper) => !isTeacher || !selectedAllocation?.paper_id || paper.id === selectedAllocation.paper_id)
+    .sort((a, b) => a.position - b.position);
+  const isALevelSubject = selectedSubject?.education_level === "advanced";
+  const selectedSubjectRequiresPaper = isALevelSubject && availablePapers.length > 0;
+
+  useEffect(() => {
+    if (!isTeacher || editingAssessmentId || !assessmentSubjectId) return;
+    if (!teacherSubjects.some((subject) => subject.id === assessmentSubjectId)) {
+      setEntryForm((current) => ({ ...current, subjectId: "" }));
+    }
+  }, [assessmentSubjectId, editingAssessmentId, isTeacher, teacherSubjects]);
+
+  useEffect(() => {
+    if (editingAssessmentId) return;
+    if (selectedSubject?.education_level !== "advanced" || availablePapers.length === 0) {
+      if (entryForm.paperId) setEntryForm((current) => ({ ...current, paperId: "" }));
+      return;
+    }
+    if (selectedAllocation?.paper_id) {
+      if (entryForm.paperId !== selectedAllocation.paper_id) {
+        setEntryForm((current) => ({ ...current, paperId: selectedAllocation.paper_id ?? "" }));
+      }
+      return;
+    }
+    if (!availablePapers.some((paper) => paper.id === entryForm.paperId)) {
+      if (entryForm.paperId) setEntryForm((current) => ({ ...current, paperId: "" }));
+    }
+  }, [
+    availablePapers,
+    editingAssessmentId,
+    entryForm.paperId,
+    selectedAllocation?.paper_id,
+    selectedSubject?.education_level,
+  ]);
+
+  useEffect(() => {
+    if (editingAssessmentId || !data || !entryForm.studentId || !entryForm.subjectId) return;
+    const saved = data.formativeMarks.find(
+      (mark) =>
+        mark.student_id === entryForm.studentId &&
+        mark.subject_id === entryForm.subjectId &&
+        (mark.paper_id ?? null) === selectedPaperId,
+    );
+    if (saved && entryForm.formative === "") {
+      setEntryForm((current) => ({
+        ...current,
+        formative: saved.mark == null ? "" : String(saved.mark),
+        isMissing: Boolean(saved.is_missing),
+      }));
+    }
+  }, [data, editingAssessmentId, entryForm.formative, entryForm.studentId, entryForm.subjectId, selectedPaperId]);
 
   const commentStudents = useMemo(() => {
     if (!data) return [];
@@ -752,6 +956,9 @@ function AssessmentsPage() {
           subjectName:
             tableData.subjects.find((subject: SubjectRow) => subject.id === assessment.subject_id)
               ?.name ?? "Ã¢â‚¬â€",
+          paperName: assessment.paper_id
+            ? tableData.subjectPapers.find((paper) => paper.id === assessment.paper_id)?.name ?? "Paper"
+            : "",
           termName:
             tableData.terms.find((term: TermRow) => term.id === assessment.term_id)?.name ??
             "Ã¢â‚¬â€",
@@ -771,6 +978,105 @@ function AssessmentsPage() {
       normalizedSubjectFilter ? row.subject_id === normalizedSubjectFilter : true,
     );
   }, [rows, tableSubjectFilter]);
+
+  const summativeGroups = useMemo(() => {
+    const activePeriods = new Set(data?.activeAssessmentPeriods ?? []);
+    const groups = new Map<
+      string,
+      {
+        row: (typeof visibleRows)[number];
+        periods: Partial<Record<"beginning_of_term" | "mid_term" | "end_of_term", number>>;
+        rows: (typeof visibleRows)[number][];
+        formativeMark: FormativeMarkRow | null;
+      }
+    >();
+    for (const row of visibleRows) {
+      const examType = row.exam_type as "beginning_of_term" | "mid_term" | "end_of_term";
+      if (!activePeriods.has(examType)) continue;
+      const key = `${row.student_id}:${row.subject_id}:${row.term_id}:${row.paper_id ?? "subject"}`;
+      const group = groups.get(key) ?? { row, periods: {}, rows: [], formativeMark: null };
+      const score = Number(row.summative);
+      if (Number.isFinite(score)) group.periods[examType] = score;
+      group.rows.push(row);
+      groups.set(key, group);
+    }
+    return Array.from(groups.values()).map((group) => {
+        const formativeMark = tableData?.formativeMarks.find(
+          (mark) =>
+            mark.student_id === group.row.student_id &&
+            mark.subject_id === group.row.subject_id &&
+            mark.term_id === group.row.term_id &&
+            (mark.paper_id ?? null) === (group.row.paper_id ?? null),
+        ) ?? null;
+      return {
+        ...group,
+        formativeMark,
+        formative: formativeMark?.mark ?? null,
+        average: Object.values(group.periods).length
+        ? Object.values(group.periods).reduce((sum, score) => sum + (score ?? 0), 0) /
+          Object.values(group.periods).length
+        : null,
+      };
+    });
+  }, [data?.activeAssessmentPeriods, tableData?.formativeMarks, visibleRows]);
+
+  const sortedSummativeGroups = useMemo(() => {
+    const groups = [...summativeGroups];
+    if (assessmentSort === "class") {
+      return groups.sort((a, b) => {
+        const aStudent = tableData?.students.find((item) => item.id === a.row.student_id);
+        const bStudent = tableData?.students.find((item) => item.id === b.row.student_id);
+        const aClass = tableData?.classes.find((item) => item.id === aStudent?.class_id)?.name ?? "";
+        const bClass = tableData?.classes.find((item) => item.id === bStudent?.class_id)?.name ?? "";
+        return aClass.localeCompare(bClass) || a.row.studentName.localeCompare(b.row.studentName);
+      });
+    }
+    if (assessmentSort === "stream") {
+      return groups.sort((a, b) => {
+        const aStudent = tableData?.students.find((item) => item.id === a.row.student_id);
+        const bStudent = tableData?.students.find((item) => item.id === b.row.student_id);
+        const aStream = data?.streams.find((item) => item.id === aStudent?.stream_id)?.name ?? "";
+        const bStream = data?.streams.find((item) => item.id === bStudent?.stream_id)?.name ?? "";
+        return aStream.localeCompare(bStream) || a.row.studentName.localeCompare(b.row.studentName);
+      });
+    }
+    if (assessmentSort === "subject") {
+      return groups.sort((a, b) => a.row.subjectName.localeCompare(b.row.subjectName));
+    }
+    return groups.sort((a, b) => String(b.row.created_at ?? "").localeCompare(String(a.row.created_at ?? "")));
+  }, [assessmentSort, data?.streams, summativeGroups, tableData?.classes, tableData?.students]);
+
+  const submitGroupMutation = useMutation({
+    mutationFn: async (group: (typeof summativeGroups)[number]) => {
+      const assessmentIds = group.rows
+        .filter((row) => row.status === "draft" || row.status === "rejected")
+        .filter((row) => !row.locked)
+        .map((row) => row.id);
+      if (!assessmentIds.length) throw new Error("No editable summative drafts are available");
+      if (!group.formativeMark) {
+        throw new Error("Save the learner's formative mark before submitting this record");
+      }
+      if (!group.formativeMark.locked && ["draft", "rejected"].includes(group.formativeMark.status)) {
+        const { error } = await (supabase as any)
+          .from("formative_marks")
+          .update({
+            status: "submitted",
+            submitted_by: me?.userId ?? null,
+            submitted_at: new Date().toISOString(),
+          })
+          .eq("id", group.formativeMark.id)
+          .eq("status", group.formativeMark.status);
+        if (error) throw new Error(error.message);
+      }
+      await submitEntries({ data: { assessmentIds, teacherInitials: data?.teacherInitials ?? null } });
+    },
+    onSuccess: () => {
+      toast.success("Formative and summative marks submitted for approval");
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -863,10 +1169,19 @@ function AssessmentsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (assessmentId: string) => deleteEntry({ data: { assessmentId } }),
+    mutationFn: (group: (typeof summativeGroups)[number]) =>
+      deleteGroup({
+        data: {
+          studentId: group.row.student_id,
+          subjectId: group.row.subject_id,
+          paperId: group.row.paper_id ?? null,
+          termId: group.row.term_id,
+        },
+      }),
     onSuccess: () => {
-      toast.success("Assessment deleted");
+      toast.success("Formative, BOT, MOT, and EOT marks deleted");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -899,40 +1214,87 @@ function AssessmentsPage() {
     mutationFn: async () => {
       if (!entryForm.termId && !data?.currentTermId) throw new Error("Choose a term");
       if (!entryForm.studentId) throw new Error("Choose a learner");
-      if (!entryForm.subjectId) throw new Error("Choose a subject");
+      if (!assessmentSubjectId) throw new Error("Choose a subject");
+      if (selectedSubjectRequiresPaper && !selectedPaperId) {
+        throw new Error("Select the A-Level paper being assessed");
+      }
+      if (!selectedSubjectRequiresPaper && selectedPaperId) {
+        throw new Error("O-Level subjects cannot be assessed against a paper");
+      }
       if (isTeacher && !selectedAllocation)
         throw new Error("Choose an assigned class / stream / subject");
       if (isTeacher && selectedAllocation) {
         const allowed = teacherStudents.some((student) => student.id === entryForm.studentId);
         if (!allowed) throw new Error("This learner is not assigned to you for this subject");
+        if (selectedSubjectRequiresPaper && selectedAllocation.paper_id !== selectedPaperId) {
+          throw new Error("Select the paper assigned to you for this A-Level subject");
+        }
       }
-      const formative = readAssessmentMark(entryForm.formative, "formative", 20);
-      const summative = readAssessmentMark(entryForm.summative, "summative", 80);
+      // Formative is saved independently in formative_marks; legacy assessment
+      // rows keep zero only to satisfy the existing database constraint.
+      const formative = entryForm.formative
+        ? readAssessmentMark(entryForm.formative, "formative", 20)
+        : 0;
       const teacherInitials = entryForm.teacherInitials.trim();
       if (!teacherInitials) throw new Error("Add teacher initials before saving the assessment");
+      const summativeEntries = [
+        ["beginning_of_term", entryForm.summativeBot],
+        ["mid_term", entryForm.summativeMot],
+        ["end_of_term", entryForm.summativeEot],
+      ].filter(([, value]) => value.trim());
+      if (!summativeEntries.length) throw new Error("Enter at least one summative mark");
 
-      const payload = {
-        studentId: entryForm.studentId,
-        subjectId: entryForm.subjectId,
-        termId: entryForm.termId || data?.currentTermId || "",
-        examType: entryForm.examType,
-        gradeDescriptor: autoDescriptor || null,
-        formative,
-        summative,
-        teacherInitials,
-      };
       if (editingAssessmentId) {
+        const currentValue =
+          entryForm.examType === "beginning_of_term"
+            ? entryForm.summativeBot
+            : entryForm.examType === "mid_term"
+              ? entryForm.summativeMot
+              : entryForm.summativeEot;
         await updateDraftEntry({
           data: {
             assessmentId: editingAssessmentId,
-            examType: payload.examType,
-            formative: payload.formative,
-            summative: payload.summative,
-            teacherInitials: payload.teacherInitials,
+            examType: entryForm.examType,
+            formative,
+            summative: readAssessmentMark(currentValue, "summative", 80),
+            teacherInitials,
           },
         });
-      } else {
-        await upsertEntry({ data: payload });
+        return;
+      }
+
+      for (const [examType, value] of summativeEntries) {
+        const summative = readAssessmentMark(value, `${examType.replaceAll("_", " ")} summative`, 80);
+        const existing = tableData?.assessments.find(
+          (assessment) =>
+            assessment.student_id === entryForm.studentId &&
+            assessment.subject_id === assessmentSubjectId &&
+            assessment.term_id === (entryForm.termId || data?.currentTermId || "") &&
+            (assessment.paper_id ?? null) === selectedPaperId &&
+            assessment.exam_type === examType,
+        );
+        if (existing) {
+          if (existing.locked || !["draft", "rejected"].includes(existing.status)) {
+            throw new Error(`${examType.replaceAll("_", " ")} already submitted or approved`);
+          }
+          await updateDraftEntry({
+            data: { assessmentId: existing.id, examType, formative, summative, teacherInitials },
+          });
+        } else {
+          await upsertEntry({
+            data: {
+              studentId: entryForm.studentId,
+              subjectId: assessmentSubjectId,
+              paperId: selectedPaperId,
+              termId: entryForm.termId || data?.currentTermId || "",
+              examType,
+              gradeDescriptor: null,
+              formative,
+              summative,
+              teacherInitials,
+            },
+          });
+        }
       }
     },
     onSuccess: () => {
@@ -944,79 +1306,208 @@ function AssessmentsPage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
+  const formativeDraftMutation = useMutation({
+    mutationFn: async () => {
+      const subjectId = entryForm.subjectId || (isTeacher ? selectedAllocation?.subject_id : "") || "";
+      const termId = entryForm.termId || data?.currentTermId || "";
+      if (!schoolId || !entryForm.studentId || !subjectId || !termId) {
+        throw new Error("Choose a learner, subject, and current term first");
+      }
+      if (!entryForm.teacherInitials.trim()) {
+        throw new Error("Add teacher initials before saving the formative mark");
+      }
+      if (isTeacher && !selectedAllocation) {
+        throw new Error("Choose an assigned class, stream, and subject first");
+      }
+      if (isTeacher && selectedAllocation && !teacherStudents.some((student) => student.id === entryForm.studentId)) {
+        throw new Error("This learner is not assigned to you for this subject");
+      }
+      if (isTeacher && !teacherSubjects.some((subject) => subject.id === subjectId)) {
+        throw new Error("This subject is not assigned to you for the selected learner");
+      }
+      if (selectedSubjectRequiresPaper && !selectedPaperId) {
+        throw new Error("Select the A-Level paper being assessed");
+      }
+      const existing = data.formativeMarks.find(
+        (mark) =>
+          mark.student_id === entryForm.studentId &&
+          mark.subject_id === subjectId &&
+          mark.term_id === termId &&
+          (mark.paper_id ?? null) === selectedPaperId,
+      );
+      if (existing && (existing.locked || ["submitted", "approved"].includes(existing.status))) {
+        throw new Error("This formative mark has already been submitted or approved");
+      }
+      const mark = Number(entryForm.formative);
+      if (!Number.isFinite(mark) || mark < 0 || mark > 20) {
+        throw new Error("Enter a formative mark between 0 and 20");
+      }
+      const { error } = await (supabase as any).from("formative_marks").upsert(
+        {
+          school_id: schoolId,
+          student_id: entryForm.studentId,
+          subject_id: subjectId,
+          paper_id: selectedPaperId,
+          term_id: termId,
+          mark,
+          teacher_initials: entryForm.teacherInitials.trim(),
+          status: "draft",
+          locked: false,
+          submitted_by: me?.userId ?? null,
+        },
+        { onConflict: "student_id,subject_id,term_id,paper_id" },
+      );
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Formative draft saved");
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
   const submitMutation = useMutation({
     mutationFn: async () => {
       if (!entryForm.termId && !data?.currentTermId) throw new Error("Choose a term");
       if (!entryForm.studentId) throw new Error("Choose a learner");
-      if (!entryForm.subjectId) throw new Error("Choose a subject");
+      if (!assessmentSubjectId) throw new Error("Choose a subject");
+      if (selectedSubjectRequiresPaper && !selectedPaperId) {
+        throw new Error("Select the A-Level paper being assessed");
+      }
+      if (!selectedSubjectRequiresPaper && selectedPaperId) {
+        throw new Error("O-Level subjects cannot be assessed against a paper");
+      }
       if (isTeacher && !selectedAllocation)
         throw new Error("Choose an assigned class / stream / subject");
       if (isTeacher && selectedAllocation) {
         const allowed = teacherStudents.some((student) => student.id === entryForm.studentId);
         if (!allowed) throw new Error("This learner is not assigned to you for this subject");
+        if (selectedSubjectRequiresPaper && selectedAllocation.paper_id !== selectedPaperId) {
+          throw new Error("Select the paper assigned to you for this A-Level subject");
+        }
       }
-      const formative = readAssessmentMark(entryForm.formative, "formative", 20);
-      const summative = readAssessmentMark(entryForm.summative, "summative", 80);
+      const formative = entryForm.isMissing
+        ? 0
+        : readAssessmentMark(entryForm.formative, "formative", 20);
+      // Formative is persisted once in formative_marks. Assessment rows hold
+      // only their individual BOT, MOT, or EOT summative value.
+      const assessmentFormative = 0;
       const teacherInitials = entryForm.teacherInitials.trim();
-      if (!teacherInitials) throw new Error("Add teacher initials before submitting the assessment");
+      if (!teacherInitials) throw new Error("Add teacher initials before saving the draft");
 
       const termId = entryForm.termId || data?.currentTermId || "";
-      const existing = tableData?.assessments.find(
-        (assessment) =>
-          assessment.student_id === entryForm.studentId &&
-          assessment.subject_id === entryForm.subjectId &&
-          assessment.term_id === termId &&
-          (assessment.exam_type ?? "end_of_term") === entryForm.examType,
-      );
-
-      if (!existing) {
-        await upsertEntry({
-          data: {
-            studentId: entryForm.studentId,
-            subjectId: entryForm.subjectId,
-            termId,
-            examType: entryForm.examType,
-            gradeDescriptor: autoDescriptor || null,
-            formative,
-            summative,
-            teacherInitials,
-          },
-        });
+      const summativeEntries: Array<[string, string]> = entryForm.isMissing
+        ? (data?.openAssessmentPeriods ?? []).map((examType) => [examType, "0"] as [string, string])
+        : [
+            ["beginning_of_term", entryForm.summativeBot],
+            ["mid_term", entryForm.summativeMot],
+            ["end_of_term", entryForm.summativeEot],
+          ].filter(([examType, value]) =>
+            (data?.openAssessmentPeriods ?? []).includes(examType) && value.trim(),
+          );
+      if (!summativeEntries.length) {
+        throw new Error(
+          entryForm.isMissing
+            ? "Open at least one assessment period before recording a missing mark"
+            : "Enter at least one active BOT, MOT, or EOT summative mark",
+        );
       }
 
-      const assessmentId =
-        existing?.id ??
-        (
-          await supabase
-            .from("assessments")
-            .select("id")
-            .eq("student_id", entryForm.studentId)
-            .eq("subject_id", entryForm.subjectId)
-            .eq("term_id", termId)
-            .eq("exam_type", entryForm.examType)
-            .maybeSingle()
-        ).data?.id;
-      if (!assessmentId) throw new Error("Unable to locate the saved assessment");
+      const existingFormative = data.formativeMarks.find(
+        (mark) =>
+          mark.student_id === entryForm.studentId &&
+          mark.subject_id === assessmentSubjectId &&
+          mark.term_id === termId &&
+          (mark.paper_id ?? null) === selectedPaperId,
+      );
+      if (existingFormative && (existingFormative.locked || ["submitted", "approved"].includes(existingFormative.status))) {
+        throw new Error("The formative mark has already been submitted or approved");
+      }
 
-      await submitEntry({
-        data: {
-          assessmentId,
-          formative,
-          summative,
-          teacherInitials,
+      // Save every entered summative period as a draft for this learner,
+      // subject, term, and (where applicable) A-Level paper.
+      for (const [examType, value] of summativeEntries) {
+        const summative = entryForm.isMissing
+          ? 0
+          : readAssessmentMark(value, `${examType.replaceAll("_", " ")} summative`, 80);
+        const existing = tableData?.assessments.find(
+          (assessment) =>
+            assessment.student_id === entryForm.studentId &&
+            assessment.subject_id === assessmentSubjectId &&
+            assessment.term_id === termId &&
+            (assessment.paper_id ?? null) === selectedPaperId &&
+            (assessment.exam_type ?? "end_of_term") === examType,
+        );
+        if (existing) {
+          if (existing.locked || !["draft", "rejected"].includes(existing.status)) {
+            throw new Error(`${examType.replaceAll("_", " ")} is already submitted or approved`);
+          }
+          await updateDraftEntry({
+            data: {
+              assessmentId: existing.id,
+              examType,
+              formative: assessmentFormative,
+              summative,
+              isMissing: entryForm.isMissing,
+              teacherInitials,
+            },
+          });
+        } else {
+          await upsertEntry({
+            data: {
+              studentId: entryForm.studentId,
+              subjectId: assessmentSubjectId,
+              paperId: selectedPaperId,
+              termId,
+              examType,
+              gradeDescriptor: null,
+              formative: assessmentFormative,
+              summative,
+              isMissing: entryForm.isMissing,
+              teacherInitials,
+            },
+          });
+        }
+      }
+
+      const { error: formativeError } = await (supabase as any).from("formative_marks").upsert(
+        {
+          school_id: schoolId,
+          student_id: entryForm.studentId,
+          subject_id: assessmentSubjectId,
+          paper_id: selectedPaperId,
+          term_id: termId,
+          mark: formative,
+          is_missing: entryForm.isMissing,
+          teacher_initials: teacherInitials,
+          status: "draft",
+          locked: false,
+          submitted_by: me?.userId ?? null,
+          submitted_at: null,
+          approved_by: null,
+          approved_at: null,
         },
-      });
+        { onConflict: "student_id,subject_id,term_id,paper_id" },
+      );
+      if (formativeError) throw new Error(formativeError.message);
     },
     onSuccess: () => {
-      toast.success("Marks submitted for DOS approval");
+      toast.success("Formative and summative drafts saved");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
+      setEditingAssessmentId("");
       setEntryForm((current) => ({
         ...current,
         studentId: "",
         formative: "",
         summative: "",
+        summativeBot: "",
+        summativeMot: "",
+        summativeEot: "",
+        isMissing: false,
         examType: "end_of_term",
         teacherInitials: "",
+        paperId: "",
       }));
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -1122,6 +1613,7 @@ function AssessmentsPage() {
     return tableData.assessments
       .filter((assessment) => assessment.term_id === (entryForm.termId || data.currentTermId))
       .filter((assessment) => assessment.subject_id === selectedAllocation.subject_id)
+      .filter((assessment) => (assessment.paper_id ?? null) === (selectedAllocation.paper_id ?? null))
       .filter((assessment) => assessment.status === "draft" || assessment.status === "rejected")
       .filter((assessment) => {
         const student = data.students.find((item) => item.id === assessment.student_id);
@@ -1160,13 +1652,26 @@ function AssessmentsPage() {
         description="Formative counts 20%, summative 80%. Approved scores lock automatically."
       />
 
-      {canEnter && (
+      {isAssessmentsLoading && (
+        <Panel className="mb-4">
+          <p className="text-sm text-muted-foreground">Loading assessment setup...</p>
+        </Panel>
+      )}
+      {isAssessmentsError && (
+        <Panel className="mb-4 border-red-200 bg-red-50">
+          <p role="alert" className="text-sm text-red-700">
+            Unable to load assessments: {friendlyAdminError(assessmentsError as Error)}
+          </p>
+        </Panel>
+      )}
+
+      {canEnter && data && !isAssessmentsLoading && !isAssessmentsError && (
         <Panel title="Enter assessment" className="mb-4">
           <form
-            className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+            className="grid gap-5 md:grid-cols-2 xl:grid-cols-4"
             onSubmit={(event) => {
               event.preventDefault();
-              createMutation.mutate();
+              submitMutation.mutate();
             }}
           >
             {isTeacher && (
@@ -1239,6 +1744,11 @@ function AssessmentsPage() {
                   <p className="text-xs text-muted-foreground">
                     Select a learner from the table to load them into the assessment form.
                   </p>
+                  {(selectedSubjectRequiresPaper || selectedAllocationUsesPaper) && (
+                    <p className="w-full text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                      Paper being assessed: {selectedPaper?.name ?? selectedAllocationPaper?.name ?? "Select a paper"}
+                    </p>
+                  )}
                   {isTeacher && selectedAllocation ? (
                     <Btn
                       type="button"
@@ -1265,6 +1775,9 @@ function AssessmentsPage() {
                     <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2">Learner</th>
+                        {(selectedSubjectRequiresPaper || selectedAllocationUsesPaper) && (
+                          <th className="px-3 py-2">Paper / marks</th>
+                        )}
                         <th className="px-3 py-2">
                           <button
                             type="button"
@@ -1308,6 +1821,15 @@ function AssessmentsPage() {
                     <tbody>
                       {sortedTeacherStudents.map((student) => {
                         const selected = entryForm.studentId === student.id;
+                        const paperAssessments = (selectedSubjectRequiresPaper || selectedAllocationUsesPaper) && selectedPaperId
+                          ? (tableData?.assessments ?? []).filter(
+                              (assessment) =>
+                                assessment.student_id === student.id &&
+                                assessment.subject_id === entryForm.subjectId &&
+                                (assessment.paper_id ?? null) === selectedPaperId &&
+                                assessment.term_id === (entryForm.termId || data?.currentTermId),
+                            )
+                          : [];
                         return (
                           <tr
                             key={student.id}
@@ -1316,6 +1838,23 @@ function AssessmentsPage() {
                             }`}
                           >
                             <td className="px-3 py-2 font-medium">{student.full_name}</td>
+                            {(selectedSubjectRequiresPaper || selectedAllocationUsesPaper) && (
+                              <td className="px-3 py-2">
+                                {selectedPaper?.name ?? selectedAllocationPaper?.name ?? "Select a paper"}
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  ({paperAssessments.length
+                                    ? ["beginning_of_term", "mid_term", "end_of_term"]
+                                        .map((examType) => {
+                                          const mark = paperAssessments.find(
+                                            (assessment) => assessment.exam_type === examType,
+                                          )?.summative;
+                                          return `${examType === "beginning_of_term" ? "BOT" : examType === "mid_term" ? "MID" : "EOT"}: ${mark ?? "-"}`;
+                                        })
+                                        .join(" | ")
+                                    : "No marks yet"})
+                                </span>
+                              </td>
+                            )}
                             <td className="px-3 py-2">{className(student.class_id)}</td>
                             <td className="px-3 py-2">{streamName(student.stream_id)}</td>
                             <td className="px-3 py-2 capitalize">{student.status}</td>
@@ -1327,6 +1866,12 @@ function AssessmentsPage() {
                                   setEntryForm((current) => ({
                                     ...current,
                                     studentId: student.id,
+                                    subjectId: isTeacher
+                                      ? selectedAllocation?.subject_id ?? current.subjectId
+                                      : current.subjectId,
+                                    paperId: isTeacher
+                                      ? selectedAllocation?.paper_id ?? current.paperId
+                                      : current.paperId,
                                   }))
                                 }
                               >
@@ -1338,7 +1883,7 @@ function AssessmentsPage() {
                       })}
                       {sortedTeacherStudents.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                          <td colSpan={selectedSubjectRequiresPaper || selectedAllocationUsesPaper ? 6 : 5} className="px-3 py-6 text-center text-muted-foreground">
                             No learners match the current allocation.
                           </td>
                         </tr>
@@ -1349,130 +1894,239 @@ function AssessmentsPage() {
               </Field>
             </div>
             <Field label="Subject">
-              <select
-                required
-                className={inputClass}
-                value={entryForm.subjectId}
-                onChange={(event) => setEntryForm({ ...entryForm, subjectId: event.target.value })}
-                disabled={isTeacher}
-              >
-                {!isTeacher && <option value="">Select subject</option>}
-                {teacherSubjects.map((subject: SubjectRow) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </select>
+              {isTeacher && teacherSubjects.length === 0 ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
+                  {!selectedAllocation
+                    ? "No subject allocation is selected."
+                    : !entryForm.studentId
+                      ? "Select a learner to load the assigned subject."
+                      : "This learner has no matching subject allocation."}
+                </p>
+              ) : (
+                <select
+                  required
+                  className={inputClass}
+                  value={entryForm.subjectId}
+                  onChange={(event) => setEntryForm({
+                    ...entryForm,
+                    subjectId: event.target.value,
+                    paperId: "",
+                  })}
+                  disabled={isTeacher}
+                >
+                  {!isTeacher && <option value="">Select subject</option>}
+                  {teacherSubjects.map((subject: SubjectRow) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </Field>
             <Field label="Term">
               <select
                 required={!data?.currentTermId}
                 className={inputClass}
                 value={entryForm.termId}
-                onChange={(event) => setEntryForm({ ...entryForm, termId: event.target.value })}
+                disabled
               >
-                <option value="">Select term</option>
-                {(data?.terms ?? []).map((term: TermRow) => (
-                  <option key={term.id} value={term.id}>
-                    {term.name}
-                    {term.is_current ? " (Current)" : ""}
-                  </option>
-                ))}
+                <option value={data?.currentTermId ?? ""}>
+                  {data?.currentTermId
+                    ? data.terms.find((term) => term.id === data.currentTermId)?.name + " (Current)"
+                    : "Set a current term first"}
+                </option>
               </select>
             </Field>
-            <Field label="Exam type">
-              <select
-                className={inputClass}
-                value={entryForm.examType}
-                onChange={(event) => setEntryForm({ ...entryForm, examType: event.target.value })}
-              >
-                <option value="beginning_of_term">Beginning of term</option>
-                <option value="mid_term">Mid term</option>
-                <option value="end_of_term">End of term</option>
-              </select>
-            </Field>
-            <Field label="Formative / 20">
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                max={20}
-                required
-                className={inputClass}
-                value={entryForm.formative}
-                onChange={(event) =>
-                  setEntryForm({ ...entryForm, formative: event.target.value })
-                }
-              />
-            </Field>
-            <Field label="Summative / 80">
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                max={80}
-                required
-                className={inputClass}
-                value={entryForm.summative}
-                onChange={(event) =>
-                  setEntryForm({ ...entryForm, summative: event.target.value })
-                }
-              />
-            </Field>
-            <Field label="Marks status">
-              <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
-                Both formative and summative marks are required before an assessment can be saved.
+            {selectedSubject?.education_level === "advanced" && availablePapers.length > 0 && (
+              <Field label="A-Level paper">
+                <select
+                  required
+                  className={inputClass}
+                  value={entryForm.paperId}
+                  onChange={(event) =>
+                    setEntryForm((current) => ({ ...current, paperId: event.target.value }))
+                  }
+                >
+                  <option value="">Select paper</option>
+                  {availablePapers.map((paper) => (
+                    <option key={paper.id} value={paper.id}>
+                      {paper.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Save each paper separately. You can assess one paper or every paper for the learner.
+                </p>
+              </Field>
+            )}
+            {isALevelSubject && availablePapers.length === 0 && (
+              <p className="rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2.5 text-sm text-sky-800">
+                No papers are configured. This A-Level subject will be assessed at subject level.
               </p>
-            </Field>
-            <Field label="Grade descriptor">
-              <input className={inputClass} value={autoDescriptor} readOnly />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Auto-generated from the current score total.
-              </p>
-            </Field>
+            )}
             <Field label="Teacher initials">
               <input
                 required
                 className={inputClass}
                 value={entryForm.teacherInitials}
                 onChange={(event) =>
-                  setEntryForm({ ...entryForm, teacherInitials: event.target.value })
+                  setEntryForm((current) => ({ ...current, teacherInitials: event.target.value }))
                 }
                 placeholder="e.g. JK"
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Used on both formative and summative records.
+              </p>
             </Field>
-            <div className="flex items-end">
-              <div className="flex gap-2">
-                <Btn
-                  type="submit"
-                  variant="ghost"
-                  disabled={
-                    createMutation.isPending ||
-                    submitMutation.isPending ||
-                    (isTeacher && !selectedAllocation) ||
-                    !entryForm.studentId
+            <div className="md:col-span-2 xl:col-span-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+              <label className="flex cursor-pointer items-start gap-3 text-sm font-medium text-amber-950 dark:text-amber-100">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4"
+                  checked={entryForm.isMissing}
+                  onChange={(event) =>
+                    setEntryForm((current) => ({ ...current, isMissing: event.target.checked }))
                   }
-                >
-                  {createMutation.isPending
-                    ? "Saving..."
-                    : editingAssessmentId
-                      ? "Update draft"
-                      : "Save draft"}
-                </Btn>
-                {editingAssessmentId ? (
-                  <Btn
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditingAssessmentId("");
-                      resetEntryForm();
-                    }}
-                  >
-                    Cancel edit
-                  </Btn>
-                ) : null}
-              </div>
+                />
+                <span>Record this subject or paper as a missing mark</span>
+              </label>
+              <p className="mt-1 pl-7 text-xs text-amber-900/80 dark:text-amber-200">
+                The score inputs are not required. After approval, the report shows MISSING MARK and
+                counts this subject as zero rather than omitting it.
+              </p>
             </div>
+            <fieldset className="md:col-span-1 xl:col-span-2 rounded-xl border-2 border-blue-200 bg-blue-50/40 p-4 shadow-sm dark:border-blue-900 dark:bg-blue-950/20">
+              <legend className="rounded-md border border-blue-200 bg-blue-100 px-2 py-1 text-sm font-semibold text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100">
+                Formative form — {selectedSubjectRequiresPaper ? "selected paper" : "whole term"}
+              </legend>
+              <Field
+                label={
+                  selectedSubjectRequiresPaper
+                    ? "Formative / 20 (selected paper)"
+                    : "Formative / 20 (whole term)"
+                }
+              >
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={20}
+                  disabled={entryForm.isMissing}
+                  className={inputClass}
+                  value={entryForm.formative}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.preventDefault();
+                  }}
+                  onChange={(event) =>
+                    setEntryForm({ ...entryForm, formative: event.target.value })
+                  }
+                />
+              </Field>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {entryForm.isMissing
+                  ? "This formative score is recorded as missing."
+                  : selectedSubjectRequiresPaper
+                  ? "Enter this separately for each A-Level paper."
+                  : "Enter this once for the learner and subject for the whole term."}
+              </p>
+              <p className="mt-2 text-xs font-medium text-blue-800 dark:text-blue-200">
+                This formative mark will be saved as a draft together with the summative marks below.
+              </p>
+            </fieldset>
+            <fieldset className="md:col-span-1 xl:col-span-2 rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4 shadow-sm dark:border-emerald-900 dark:bg-emerald-950/20">
+              <legend className="rounded-md border border-emerald-200 bg-emerald-100 px-2 py-1 text-sm font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
+                Summative form — BOT / MOT / EOT
+              </legend>
+              <p className="mb-3 text-xs text-muted-foreground">
+                {entryForm.isMissing
+                  ? "Every open period will be saved as a missing mark."
+                  : "Enter any active periods available for this term. Empty periods are skipped."}
+              </p>
+              <Field label="BOT summative / 80">
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={80}
+                  disabled={entryForm.isMissing || !data?.openAssessmentPeriods.includes("beginning_of_term")}
+                  className={inputClass}
+                  value={entryForm.summativeBot}
+                  onChange={(event) =>
+                    setEntryForm({ ...entryForm, summativeBot: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="MOT summative / 80">
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={80}
+                  disabled={entryForm.isMissing || !data?.openAssessmentPeriods.includes("mid_term")}
+                  className={inputClass}
+                  value={entryForm.summativeMot}
+                  onChange={(event) =>
+                    setEntryForm({ ...entryForm, summativeMot: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="EOT summative / 80">
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={80}
+                  disabled={entryForm.isMissing || !data?.openAssessmentPeriods.includes("end_of_term")}
+                  className={inputClass}
+                  value={entryForm.summativeEot}
+                  onChange={(event) =>
+                    setEntryForm({ ...entryForm, summativeEot: event.target.value })
+                  }
+                />
+              </Field>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {entryForm.isMissing
+                  ? "Missing marks are shown as MISSING MARK on the report and count as zero."
+                  : "Approved active-period marks are averaged on the report."}
+              </p>
+              <Btn type="submit" variant="accent" disabled={submitMutation.isPending || (isTeacher && !selectedAllocation) || !entryForm.studentId}>
+                {submitMutation.isPending
+                  ? "Saving draft..."
+                  : entryForm.isMissing
+                    ? "Save missing-mark draft"
+                    : "Save Draft formative + summative."}
+              </Btn>
+              {submitMutation.isError && (
+                <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  Marks were not saved as a draft: {friendlyAdminError(submitMutation.error as Error)}
+                </p>
+              )}
+              {editingAssessmentId && (
+                <Btn
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingAssessmentId("");
+                    resetEntryForm();
+                  }}
+                >
+                  Cancel edit
+                </Btn>
+              )}
+            </fieldset>
+            <Field label="Marks status">
+              <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+                {entryForm.isMissing
+                  ? "This draft records a missing mark for the selected subject or paper."
+                  : "Formative and summative marks are saved together as drafts. Enter at least one active BOT, MOT, or EOT mark."}
+              </p>
+            </Field>
+            <Field label="Grade descriptor">
+              <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                Generated on the report after the approved formative mark and active period
+                summative marks are available.
+              </p>
+            </Field>
           </form>
         </Panel>
       )}
@@ -1882,8 +2536,31 @@ function AssessmentsPage() {
         </Panel>
       )}
 
-      <Panel>
+      <Panel title="All assessments">
+        <p className="mb-3 text-sm text-muted-foreground">
+          This table shows every assessment record for the school, grouped by learner, subject, paper, and term.
+        </p>
+        {!tableData && (
+          <p className="mb-4 rounded-xl border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+            Loading saved assessment records...
+          </p>
+        )}
+        {saveMutation.isError && (
+          <p role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            Draft submission failed: {friendlyAdminError(saveMutation.error as Error)}
+          </p>
+        )}
         <div className="mb-3 flex flex-wrap gap-2">
+          <select
+            className={`${inputClass} max-w-xs`}
+            value={assessmentSort}
+            onChange={(event) => setAssessmentSort(event.target.value as typeof assessmentSort)}
+          >
+            <option value="created_at">Sort by newest</option>
+            <option value="class">Sort by class</option>
+            <option value="stream">Sort by stream</option>
+            <option value="subject">Sort by subject</option>
+          </select>
           <select
             className={`${inputClass} max-w-xs`}
             value={tableSubjectFilter}
@@ -1926,95 +2603,56 @@ function AssessmentsPage() {
             <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="pb-2">Learner</th>
+                <th className="pb-2">Class</th>
                 <th className="pb-2">Subject</th>
+                <th className="pb-2">Paper</th>
+                <th className="pb-2">Stream</th>
                 <th className="pb-2">Term</th>
-                <th className="pb-2">Grade descriptor</th>
-                <th className="pb-2">Submitted by</th>
-                <th className="pb-2">Formative (20)</th>
-                <th className="pb-2">Summative (80)</th>
+                <th className="pb-2">Formative</th>
+                <th className="pb-2">BOT</th>
+                <th className="pb-2">MOT</th>
+                <th className="pb-2">EOT</th>
                 <th className="pb-2">Total</th>
                 <th className="pb-2">Status</th>
                 <th className="pb-2" />
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map(
+              {sortedSummativeGroups.map(
                 (
-                  row: AssessmentRow & {
-                    studentName: string;
-                    subjectName: string;
-                    termName: string;
-                    gradeDescriptor: string;
-                    submitted_by_name: string;
-                  },
+                  group,
                 ) => {
-                  const edit = edits[row.id] ?? {};
-                  const formative = edit.formative ?? (row.formative ?? "").toString();
-                  const summative = edit.summative ?? (row.summative ?? "").toString();
-                  const student = data?.students.find((item) => item.id === row.student_id);
-                  const studentClass = data?.classes.find((item) => item.id === student?.class_id);
-                  const studentLevel =
-                    studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
-                  const total = Number(formative || 0) + Number(summative || 0);
-                  const gradeDescriptor =
-                    data?.gradingScales.find((scale) => {
-                      return (
-                        (scale.education_level ?? "ordinary") === studentLevel &&
-                        total >= Number(scale.min_score) &&
-                        total <= Number(scale.max_score)
-                      );
-                    })?.[studentLevel === "advanced" ? "points" : "descriptor"] ||
-                    row.gradeDescriptor ||
-                    "";
-                  const totalDisplay = total.toFixed(1);
+                  const row = group.row;
+                  const student = tableData.students.find((item) => item.id === row.student_id);
+                  const studentClass = tableData.classes.find((item) => item.id === student?.class_id);
+                  const stream = data?.streams.find((item) => item.id === student?.stream_id);
+                  const formative = group.formative;
+                  const canDeleteGroup =
+                    group.rows.every(
+                      (assessment) =>
+                        !assessment.locked && ["draft", "rejected"].includes(assessment.status),
+                    ) &&
+                    (!group.formativeMark ||
+                      (!group.formativeMark.locked &&
+                        ["draft", "rejected"].includes(group.formativeMark.status)));
+                  const total = formative == null || group.average == null
+                    ? null
+                    : Number(formative) + group.average;
                   return (
-                    <tr key={row.id} className="border-t border-border">
+                    <tr key={`${row.student_id}-${row.subject_id}-${row.paper_id ?? "subject"}-${row.term_id}`} className="border-t border-border">
                       <td className="py-2 font-medium">{row.studentName}</td>
+                      <td>{studentClass?.name ?? "—"}</td>
                       <td>{row.subjectName}</td>
+                      <td>{row.paperName || "—"}</td>
+                      <td>{stream?.name ?? "—"}</td>
                       <td>{row.termName}</td>
-                      <td>
-                        <Pill tone={!row.formative && !row.summative ? "warning" : "muted"}>
-                          {!row.formative && !row.summative
-                            ? "Missing marks"
-                            : gradeDescriptor || "â€”"}
-                        </Pill>
+                      <td>{formative == null ? "—" : formative}</td>
+                      <td>{group.periods.beginning_of_term ?? "—"}</td>
+                      <td>{group.periods.mid_term ?? "—"}</td>
+                      <td>{group.periods.end_of_term ?? "—"}</td>
+                      <td className="font-semibold">
+                        {total == null ? "—" : total.toFixed(1)}
                       </td>
-                      <td>{row.submitted_by_name ?? "Not submitted"}</td>
-                      <td>
-                        <input
-                          type="number"
-                          step="0.1"
-                          max={20}
-                          min={0}
-                          disabled={row.locked}
-                          className={`${inputClass} w-24`}
-                          value={formative}
-                          onChange={(event) =>
-                            setEdits({
-                              ...edits,
-                              [row.id]: { ...edit, formative: event.target.value },
-                            })
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          step="0.1"
-                          max={80}
-                          min={0}
-                          disabled={row.locked}
-                          className={`${inputClass} w-24`}
-                          value={summative}
-                          onChange={(event) =>
-                            setEdits({
-                              ...edits,
-                              [row.id]: { ...edit, summative: event.target.value },
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="font-semibold">{totalDisplay}</td>
                       <td>
                         <Pill
                           tone={
@@ -2038,16 +2676,28 @@ function AssessmentsPage() {
                             </Btn>
                           ) : null}
                           {!row.locked && (row.status === "draft" || row.status === "rejected") ? (
-                            <Btn variant="ghost" onClick={() => saveMutation.mutate(row.id)}>
-                              {row.status === "rejected" ? "Resubmit draft" : "Submit draft"}
+                            <Btn
+                              variant="ghost"
+                              disabled={submitGroupMutation.isPending}
+                              onClick={() => submitGroupMutation.mutate(group)}
+                            >
+                              {submitGroupMutation.isPending
+                                ? "Submitting..."
+                                : row.status === "rejected"
+                                  ? "Submit all again"
+                                  : "Submit all drafts"}
                             </Btn>
                           ) : null}
-                          {row.status !== "submitted" && row.status !== "approved" ? (
+                          {canDeleteGroup ? (
                             <Btn
                               variant="ghost"
                               onClick={() => {
-                                if (window.confirm("Delete this assessment record?")) {
-                                  deleteMutation.mutate(row.id);
+                                if (
+                                  window.confirm(
+                                    "Delete the formative mark and every BOT, MOT, and EOT mark for this subject paper?",
+                                  )
+                                ) {
+                                  deleteMutation.mutate(group);
                                 }
                               }}
                               disabled={deleteMutation.isPending}
@@ -2061,9 +2711,9 @@ function AssessmentsPage() {
                   );
                 },
               )}
-              {visibleRows.length === 0 && (
+              {summativeGroups.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={13} className="py-6 text-center text-muted-foreground">
                     No assessment records match these filters.
                   </td>
                 </tr>

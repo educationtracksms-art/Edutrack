@@ -3,7 +3,7 @@ import { CheckCircle2, Mail } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { PublicShell } from "@/components/layout/PublicShell";
-import logoUrl from "@/assets/logo.png";
+import logoUrl from "@/assets/logo-optimized.png";
 
 const SERVICE_ID = "service_w7qelyg";
 const TEMPLATE_ID = "template_1vqrwg4";

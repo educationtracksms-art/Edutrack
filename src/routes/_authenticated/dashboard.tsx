@@ -1,27 +1,13 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import {
+  Btn,
   Field,
   PageHeader,
   Panel,
@@ -69,15 +55,20 @@ const EMPTY_DASHBOARD = {
   streams: [],
   terms: [],
   teacherAllocations: [],
+  departments: [],
+  purchaseRequests: [],
 };
 
-const CHART_COLORS = [
-  "var(--color-chart-1)",
-  "var(--color-chart-2)",
-  "var(--color-chart-3)",
-  "var(--color-chart-4)",
-  "var(--color-chart-5)",
-];
+const DashboardCharts = lazy(() => import("@/components/dashboard/DashboardCharts"));
+
+function DashboardChartFallback({ height = 280 }: { height?: number }) {
+  return (
+    <div
+      className="flex items-center justify-center text-sm text-muted-foreground"
+      style={{ height }}
+    />
+  );
+}
 
 type DashboardStudentRow = {
   id: string;
@@ -92,10 +83,13 @@ function useDashboardData(
   isSuper: boolean,
   isTeacher: boolean,
   teacherId?: string | null,
+  isHod = false,
+  departmentId?: string | null,
 ) {
   return useQuery({
-    queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId],
-    retry: 3,
+    queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId, isHod, departmentId],
+    staleTime: 60_000,
+    retry: 1,
     queryFn: async () => {
       if (!isSuper && !schoolId) return EMPTY_DASHBOARD;
 
@@ -104,7 +98,7 @@ function useDashboardData(
           ? (query: any) => query.eq("school_id", schoolId)
           : (query: any) => query;
 
-      const [students, assessments, subjects, classes, streams, terms, teacherAllocations] =
+      const [students, assessments, subjects, classes, streams, terms, teacherAllocations, departmentsResult] =
         await Promise.all([
           schoolQuery(
             supabase
@@ -133,6 +127,9 @@ function useDashboardData(
                 .select("subject_id, class_id, stream_id")
                 .eq("teacher_id", teacherId)
             : Promise.resolve({ data: [] as any[] }),
+          isTeacher
+            ? Promise.resolve({ data: [] as any[] })
+            : schoolQuery(supabase.from("departments").select("id, name")),
         ]);
 
       const [schoolsResult, profilesResult, activityResult] = await Promise.all([
@@ -152,6 +149,21 @@ function useDashboardData(
                 .limit(8),
             ),
       ]);
+      let requestsQuery = schoolQuery(
+        supabase
+          .from("purchase_requests")
+          .select("id, request_number, department_name, item_description, requested_amount, approved_amount, approval_status, status, created_at")
+          .order("created_at", { ascending: false }),
+      );
+      if (isHod) {
+        const departmentName = (departmentsResult.data ?? []).find(
+          (department: any) => department.id === departmentId,
+        )?.name;
+        requestsQuery = requestsQuery.eq("department_name", departmentName ?? "__unassigned__");
+      }
+      const purchaseRequestsResult = isTeacher
+        ? { data: [] as any[] }
+        : await requestsQuery;
       return {
         schools: schoolsResult.data ?? [],
         students: students.data ?? [],
@@ -163,6 +175,8 @@ function useDashboardData(
         streams: streams.data ?? [],
         terms: terms.data ?? [],
         teacherAllocations: teacherAllocations.data ?? [],
+        departments: departmentsResult.data ?? [],
+        purchaseRequests: purchaseRequestsResult.data ?? [],
       };
     },
   });
@@ -269,17 +283,9 @@ function PlatformDashboard() {
       )}
 
       <Panel title="Usage by school" className="mt-4">
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={chart}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="students" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="users" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <Suspense fallback={<DashboardChartFallback />}>
+          <DashboardCharts kind="platform" data={chart} />
+        </Suspense>
       </Panel>
 
       <Panel title="Tenants" className="mt-4">
@@ -804,6 +810,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const isSuper = false;
   const schoolId = me?.profile?.school_id ?? null;
   const isDos = hasAny(me?.roles, ["dos"]);
+  const isHod = hasAny(me?.roles, ["hod"]);
   const canSeeActivity = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher"]);
   const canApprove = hasAny(me?.roles, [
     "dos",
@@ -863,7 +870,15 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const updateStatus = useServerFn(updateAssessmentStatus);
   const [reviewClassId, setReviewClassId] = useState("");
   const [reviewStreamId, setReviewStreamId] = useState("");
-  const { data, isLoading } = useDashboardData(schoolId, isSuper, isTeacher, me?.userId);
+  const [dashboardTab, setDashboardTab] = useState<"overview" | "requests">("overview");
+  const { data, isLoading } = useDashboardData(
+    schoolId,
+    isSuper,
+    isTeacher,
+    me?.userId,
+    isHod,
+    me?.profile?.department_id,
+  );
   const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const timetableEnabled = moduleMap?.get("timetable") ?? true;
@@ -876,6 +891,16 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
       { name: item.name as string, class_id: item.class_id as string | null },
     ]),
   );
+  // Reuse indexed lookups below. The dashboard can contain thousands of
+  // assessments, so repeated Array.find calls become noticeable on every
+  // filter or status change.
+  const studentById = new Map(
+    (data?.students ?? []).map((item: any) => [item.id, item]),
+  );
+  const subjectById = new Map(
+    (data?.subjects ?? []).map((item: any) => [item.id, item]),
+  );
+  const termById = new Map((data?.terms ?? []).map((item: any) => [item.id, item]));
   const { data: timetableSummary } = useQuery({
     queryKey: ["dashboard-timetable", schoolId],
     enabled: !!schoolId && isDos && timetableEnabled,
@@ -904,16 +929,23 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
-  const bulkApproveMutation = useMutation({
-    mutationFn: async () =>
-      reviewMarks({
+    const bulkApproveMutation = useMutation({
+    mutationFn: async () => {
+      const submittedIds = reviewedAssessments
+        .filter((assessment) => assessment.status === "submitted")
+        .map((assessment) => assessment.id);
+      if (!submittedIds.length) {
+        throw new Error("No submitted marks found to approve");
+      }
+      return reviewMarks({
         data: {
-          ids: reviewedAssessments.map((assessment) => assessment.id),
+          ids: submittedIds,
           action: "approve",
           classId: reviewClassId || null,
           streamId: reviewStreamId || null,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Submitted marks approved");
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -933,50 +965,63 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     return <TeacherDashboard data={data} me={me} />;
   }
 
-  const totals = data.assessments.map((a) => Number(a.formative ?? 0) + Number(a.summative ?? 0));
+  const totals: number[] = [];
+  const subjectStats = new Map<string, { total: number; count: number }>();
+  let approved = 0;
+  let rejected = 0;
+  let submitted = 0;
+  let draft = 0;
+  for (const assessment of data.assessments) {
+    const total = Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
+    totals.push(total);
+    const current = subjectStats.get(assessment.subject_id) ?? { total: 0, count: 0 };
+    current.total += total;
+    current.count += 1;
+    subjectStats.set(assessment.subject_id, current);
+    if (assessment.status === "approved") approved += 1;
+    if (assessment.status === "rejected") rejected += 1;
+    if (assessment.status === "submitted") submitted += 1;
+    if (assessment.status === "draft") draft += 1;
+  }
   const average = totals.length ? totals.reduce((x, y) => x + y, 0) / totals.length : 0;
 
   const subjectPerformance = data.subjects
     .map((subject) => {
-      const marks = data.assessments.filter((a) => a.subject_id === subject.id);
-      const scores = marks.map((m) => Number(m.formative ?? 0) + Number(m.summative ?? 0));
+      const stats = subjectStats.get(subject.id);
+      const average = stats ? stats.total / stats.count : 0;
       return {
         name: subject.name.length > 12 ? `${subject.name.slice(0, 12)}...` : subject.name,
-        average: scores.length
-          ? Math.round((scores.reduce((x, y) => x + y, 0) / scores.length) * 10) / 10
-          : 0,
+        average: Math.round(average * 10) / 10,
       };
     })
     .filter((s) => s.average > 0);
 
-  const gradeBuckets = [
-    { name: "80+", value: totals.filter((t) => t >= 80).length },
-    { name: "70-79", value: totals.filter((t) => t >= 70 && t < 80).length },
-    { name: "60-69", value: totals.filter((t) => t >= 60 && t < 70).length },
-    { name: "45-59", value: totals.filter((t) => t >= 45 && t < 60).length },
-    { name: "Below 45", value: totals.filter((t) => t < 45).length },
-  ].filter((bucket) => bucket.value > 0);
+  const gradeCounts = [0, 0, 0, 0, 0];
+  for (const total of totals) {
+    if (total >= 80) gradeCounts[0] += 1;
+    else if (total >= 70) gradeCounts[1] += 1;
+    else if (total >= 60) gradeCounts[2] += 1;
+    else if (total >= 45) gradeCounts[3] += 1;
+    else gradeCounts[4] += 1;
+  }
+  const gradeBuckets = ["80+", "70-79", "60-69", "45-59", "Below 45"]
+    .map((name, index) => ({ name, value: gradeCounts[index] }))
+    .filter((bucket) => bucket.value > 0);
 
   const genderSplit = [
     { name: "Female", value: data.students.filter((s) => s.gender === "Female").length },
     { name: "Male", value: data.students.filter((s) => s.gender === "Male").length },
   ].filter((g) => g.value > 0);
 
-  const approved = data.assessments.filter((assessment) => assessment.status === "approved").length;
-  const rejected = data.assessments.filter((a) => a.status === "rejected").length;
-  const submitted = data.assessments.filter((a) => a.status === "submitted").length;
-  const draft = data.assessments.filter((a) => a.status === "draft").length;
   const completion = data.assessments.length
     ? Math.round((approved / data.assessments.length) * 100)
     : 0;
   const pendingStudents = data.students.filter((student) => student.status === "pending");
   const assessmentsTable = data.assessments.map((assessment) => ({
     ...assessment,
-    studentName:
-      data.students.find((student) => student.id === assessment.student_id)?.full_name ?? "Unknown",
-    subjectName:
-      data.subjects.find((subject) => subject.id === assessment.subject_id)?.name ?? "Unknown",
-    termName: data.terms.find((term) => term.id === assessment.term_id)?.name ?? "Unknown",
+    studentName: studentById.get(assessment.student_id)?.full_name ?? "Unknown",
+    subjectName: subjectById.get(assessment.subject_id)?.name ?? "Unknown",
+    termName: termById.get(assessment.term_id)?.name ?? "Unknown",
     gradeDescriptor: assessment.grade_descriptor ?? "Unknown",
     total: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
   }));
@@ -985,52 +1030,13 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     (stream) => !reviewClassId || stream.class_id === reviewClassId,
   );
   const reviewedAssessments = assessmentsTable.filter((assessment) => {
-    const student = data.students.find((item) => item.id === assessment.student_id);
+    const student = studentById.get(assessment.student_id);
     if (!student) return false;
     if (reviewClassId && student.class_id !== reviewClassId) return false;
     if (reviewStreamId && student.stream_id !== reviewStreamId) return false;
     return true;
   });
   const visibleAssessments = reviewedAssessments;
-  const dosMarkRows = data.assessments
-    .map((assessment) => {
-      const student = data.students.find((item) => item.id === assessment.student_id);
-      const subject = data.subjects.find((item) => item.id === assessment.subject_id);
-      const classId = student?.class_id ?? null;
-      const className = classId ? (classById.get(classId) ?? "Unknown class") : null;
-      if (!student || !subject || !className) return null;
-      if (reviewClassId && classId !== reviewClassId) return null;
-      if (reviewStreamId && student.stream_id !== reviewStreamId) return null;
-      return {
-        id: assessment.id,
-        student_name: student.full_name ?? "Unknown learner",
-        class_name: className,
-        subject: subject.name ?? "Unknown subject",
-        formative: assessment.formative,
-        summative: assessment.summative,
-        total_marks: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
-        status: assessment.status,
-      };
-    })
-    .filter(
-      (
-        row,
-      ): row is {
-        id: string;
-        student_name: string;
-        class_name: string;
-        subject: string;
-        formative: number | null;
-        summative: number | null;
-        total_marks: number;
-        status: string;
-      } => row !== null,
-    )
-    .sort((left, right) =>
-      `${left.class_name} ${left.student_name} ${left.subject}`.localeCompare(
-        `${right.class_name} ${right.student_name} ${right.subject}`,
-      ),
-    );
 
   const trend = ["Term I", "Term II", "Term III"].map((term, index) => ({
     term,
@@ -1066,6 +1072,30 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
           </Link>
         }
       />
+
+      {isHod && (
+        <nav className="mb-4 flex flex-wrap gap-2" aria-label="Dashboard sections">
+          {([
+            ["overview", "Overview"],
+            ["requests", "My department requests"],
+          ] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setDashboardTab(tab)}
+              className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
+                dashboardTab === tab
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card hover:bg-muted"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      <div className={!isHod || dashboardTab === "overview" ? "space-y-4" : "hidden"}>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
@@ -1229,6 +1259,23 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
             Review all marks in the selected scope. Submitted marks can be approved, while drafts,
             rejected, and approved marks remain visible for oversight.
           </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Btn
+              variant="accent"
+              onClick={() => bulkApproveMutation.mutate()}
+              disabled={
+                bulkApproveMutation.isPending ||
+                !reviewedAssessments.some((assessment) => assessment.status === "submitted")
+              }
+            >
+              {bulkApproveMutation.isPending
+                ? "Approving..."
+                : "Approve all submitted marks"}
+            </Btn>
+            <span className="text-sm text-muted-foreground">
+              Draft marks must first be submitted by their teachers before they can be approved.
+            </span>
+          </div>
           <div className="mt-4">
             {visibleAssessments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No student marks are available.</p>
@@ -1257,14 +1304,12 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                           <td className="py-2 pr-4 font-medium">{assessment.studentName}</td>
                           <td className="py-2 pr-4">
                             {resolveClassName(
-                              data.students.find((item) => item.id === assessment.student_id)
-                                ?.class_id ?? null,
+                              studentById.get(assessment.student_id)?.class_id ?? null,
                             )}
                           </td>
                           <td className="py-2 pr-4">
                             {resolveStreamName(
-                              data.students.find((item) => item.id === assessment.student_id)
-                                ?.stream_id ?? null,
+                              studentById.get(assessment.student_id)?.stream_id ?? null,
                             )}
                           </td>
                           <td className="py-2 pr-4">{assessment.subjectName}</td>
@@ -1327,8 +1372,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                             <p className="text-xs text-muted-foreground">Class</p>
                             <p className="mt-1 font-medium">
                               {resolveClassName(
-                                data.students.find((item) => item.id === assessment.student_id)
-                                  ?.class_id ?? null,
+                                studentById.get(assessment.student_id)?.class_id ?? null,
                               )}
                             </p>
                           </div>
@@ -1336,8 +1380,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                             <p className="text-xs text-muted-foreground">Stream</p>
                             <p className="mt-1 font-medium">
                               {resolveStreamName(
-                                data.students.find((item) => item.id === assessment.student_id)
-                                  ?.stream_id ?? null,
+                                studentById.get(assessment.student_id)?.stream_id ?? null,
                               )}
                             </p>
                           </div>
@@ -1392,71 +1435,15 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         />
       )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Panel title="Subject performance">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={subjectPerformance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="average" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Panel>
-
-        <Panel title="Grade distribution">
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={gradeBuckets} dataKey="value" nameKey="name" outerRadius={90} label>
-                {gradeBuckets.map((entry, index) => (
-                  <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Legend />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </Panel>
-
-        <Panel title="Performance trend">
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={trend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="term" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="average"
-                stroke="var(--color-chart-2)"
-                strokeWidth={2}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </Panel>
-
-        <Panel title="Gender distribution">
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie
-                data={genderSplit}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={50}
-                outerRadius={90}
-                label
-              >
-                {genderSplit.map((entry, index) => (
-                  <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Legend />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </Panel>
-      </div>
+      <Suspense fallback={<DashboardChartFallback height={560} />}>
+        <DashboardCharts
+          kind="school"
+          subjectPerformance={subjectPerformance}
+          gradeBuckets={gradeBuckets}
+          trend={trend}
+          genderSplit={genderSplit}
+        />
+      </Suspense>
 
       {canSeeActivity && coCurricularEnabled && (
         <Panel title="Recent activity" className="mt-4">
@@ -1480,6 +1467,78 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
             </ul>
           )}
         </Panel>
+      )}
+
+      </div>
+
+      {isHod && (
+        <div className={dashboardTab === "requests" ? "space-y-4" : "hidden"}>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Stat label="Department requests" value={data.purchaseRequests.length} />
+            <Stat
+              label="Pending review"
+              value={data.purchaseRequests.filter((request: any) =>
+                ["pending", "submitted"].includes(request.approval_status ?? request.status),
+              ).length}
+            />
+            <Stat
+              label="Approved value"
+              value={data.purchaseRequests
+                .filter((request: any) => request.approval_status === "approved")
+                .reduce((sum: number, request: any) => sum + Number(request.approved_amount ?? request.requested_amount ?? 0), 0)
+                .toLocaleString()}
+            />
+          </div>
+
+          <Panel title="My department purchase requests">
+            {data.purchaseRequests.length === 0 ? (
+              <EmptyDashboardState
+                title="No department requests yet"
+                description="Requests raised by your department will appear here for tracking."
+              />
+            ) : (
+              <div className="space-y-3">
+                {data.purchaseRequests.map((request: any) => (
+                  <div
+                    key={request.id}
+                    className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="font-medium">{request.item_description}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {request.request_number} · {new Date(request.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="font-medium">
+                        {Number(request.requested_amount ?? 0).toLocaleString()}
+                      </span>
+                      <Pill
+                        tone={
+                          request.approval_status === "approved"
+                            ? "success"
+                            : request.approval_status === "rejected"
+                              ? "danger"
+                              : "muted"
+                        }
+                      >
+                        {request.approval_status ?? request.status ?? "pending"}
+                      </Pill>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-4">
+              <Link
+                to="/finance"
+                className="text-sm font-semibold text-primary hover:underline"
+              >
+                Open finance workspace
+              </Link>
+            </div>
+          </Panel>
+        </div>
       )}
     </div>
   );

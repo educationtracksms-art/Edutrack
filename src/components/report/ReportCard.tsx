@@ -16,6 +16,7 @@ export function ReportCard({ data }: { data: ReportCardData }) {
     comments,
     staff,
     totalPoints,
+    activeSummativePeriods,
   } = data;
   const isAdvanced = gradingLevel === "advanced";
   const watermarkLabel = school.name || "School";
@@ -190,39 +191,100 @@ export function ReportCard({ data }: { data: ReportCardData }) {
 
         <h2 className="title">ASSESSMENT RESULTS SUMMARY</h2>
         <table className="results">
+          <colgroup>
+            <col className="results-subject-col" />
+            {isAdvanced && <col className="results-paper-col" />}
+            <col className="results-formative-col" />
+            {activeSummativePeriods.map((period) => (
+              <col className="results-summative-col" key={period} />
+            ))}
+            <col className="results-total-col" />
+            {isAdvanced && <col className="results-average-col" />}
+            <col className="results-grade-col" />
+            <col className="results-descriptor-col" />
+            <col className="results-teacher-col" />
+          </colgroup>
           <thead>
             <tr>
-              <th>SUBJECT</th>
+              <th colSpan={isAdvanced ? 2 : 1}>SUBJECT</th>
+              {isAdvanced ? null : null}
               <th>
                 Formative
                 <br />
                 (20%)
               </th>
-              <th>
-                Summative
-                <br />
-                (80%)
+              <th colSpan={activeSummativePeriods.length}>
+                Summative (80%)
               </th>
               <th>Total</th>
+              {isAdvanced && <th>TOTAL A/V</th>}
               <th>Grade</th>
               <th>{isAdvanced ? "Points" : "Grade Descriptor"}</th>
               <th>Teacher</th>
             </tr>
+            <tr>
+              <th />
+              {isAdvanced && <th />}
+              <th />
+              {activeSummativePeriods.map((period) => <th key={period}>{period}</th>)}
+              <th />
+              <th />
+              <th />
+              <th />
+            </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.subject}>
-                <td className={row.isPaper ? "paper-row-subject" : undefined}>
-                  {row.isPaper ? `↳ ${row.subject}` : row.subject}
-                </td>
-                <td>{row.formative}</td>
-                <td>{row.summative}</td>
-                <td>{row.total}</td>
-                <td>{row.grade}</td>
-                <td>{isAdvanced ? row.subjectPoints : row.gradeDetail}</td>
-                <td>{row.teacher}</td>
-              </tr>
-            ))}
+            {isAdvanced
+              ? Array.from(
+                  rows.reduce((groups, row) => {
+                    if (row.isSubjectSummary) return groups;
+                    const key = row.subjectId ?? row.subject;
+                    const group = groups.get(key) ?? { papers: [], summary: undefined };
+                    group.papers.push(row);
+                    groups.set(key, group);
+                    return groups;
+                  }, new Map<string, { papers: typeof rows; summary?: (typeof rows)[number] }>()),
+                ).map(([key, group]) => {
+                  const summary = rows.find(
+                    (row) => row.isSubjectSummary && (row.subjectId ?? row.subject) === key,
+                  );
+                  return group.papers.map((row, index) => (
+                    <tr key={`${row.subject}-${row.paperId ?? index}`}>
+                      {index === 0 && <td rowSpan={group.papers.length}>{row.subject}</td>}
+                      <td>{row.paperName}</td>
+                      <td>{row.formative}</td>
+                      {activeSummativePeriods.map((period) => (
+                        <td key={period}>
+                          {period === "BOT" ? row.bot : period === "MOT" ? row.mot : row.eot}
+                        </td>
+                      ))}
+                      <td>{row.total}</td>
+                      {index === 0 && (
+                        <>
+                          <td rowSpan={group.papers.length}>{summary?.totalAverage ?? ""}</td>
+                          <td rowSpan={group.papers.length}>{summary?.grade ?? ""}</td>
+                          <td rowSpan={group.papers.length}>{summary?.subjectPoints ?? ""}</td>
+                        </>
+                      )}
+                      <td>{row.teacher}</td>
+                    </tr>
+                  ));
+                })
+              : rows.map((row) => (
+                  <tr key={`${row.subject}-${row.paperId ?? "summary"}`}>
+                    <td>{row.subject}</td>
+                    <td>{row.formative}</td>
+                    {activeSummativePeriods.map((period) => (
+                      <td key={period}>
+                        {period === "BOT" ? row.bot : period === "MOT" ? row.mot : row.eot}
+                      </td>
+                    ))}
+                    <td>{row.total}</td>
+                    <td>{row.grade}</td>
+                    <td>{row.gradeDetail}</td>
+                    <td>{row.teacher}</td>
+                  </tr>
+                ))}
           </tbody>
         </table>
 

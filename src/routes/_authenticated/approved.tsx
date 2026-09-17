@@ -75,6 +75,16 @@ function ApprovalsPage() {
     () => (allRows ?? []).filter((row) => row.status === "approved"),
     [allRows],
   );
+  const approvedGroups = useMemo(() => {
+    const groups = new Map<string, { rows: ApprovalRow[]; first: ApprovalRow }>();
+    for (const row of approvedRows) {
+      const key = [row.student_id, row.subject_id, row.paper_id ?? "subject", row.term_id, row.class_id, row.stream_id].join(":");
+      const group = groups.get(key) ?? { rows: [], first: row };
+      group.rows.push(row);
+      groups.set(key, group);
+    }
+    return Array.from(groups.values());
+  }, [approvedRows]);
   const isApprovedLoading = isLoading;
 
   const visibleData = useMemo(() => {
@@ -110,14 +120,25 @@ function ApprovalsPage() {
   }, [pendingRows, sortBy]);
 
   const statusMutation = useMutation({
-    mutationFn: async (vars: { assessmentId: string; status: ApprovalRow["status"] }) => {
-      await updateStatus({
-        data: {
-          assessmentId: vars.assessmentId,
-          status: vars.status,
-          reason: null,
-        },
-      });
+    mutationFn: async (vars: { rows: ApprovalRow[]; status: ApprovalRow["status"] }) => {
+      for (const row of vars.rows) {
+        if (row.record_type === "formative") {
+          const { error } = await (supabase as any)
+            .from("formative_marks")
+            .update({
+              status: vars.status,
+              locked: vars.status === "approved",
+              approved_by: vars.status === "approved" ? me?.userId ?? null : null,
+              approved_at: vars.status === "approved" ? new Date().toISOString() : null,
+            })
+            .eq("id", row.id);
+          if (error) throw new Error(error.message);
+        } else {
+          await updateStatus({
+            data: { assessmentId: row.id, status: vars.status, reason: null },
+          });
+        }
+      }
     },
     onSuccess: () => {
       toast.success("Status updated");
@@ -237,7 +258,7 @@ function ApprovalsPage() {
                 submissionSummaryRows.map((row) => (
                   <tr key={row.key} className="border-t border-border">
                     <td className="py-2 pr-4 font-medium">{row.teacher_name}</td>
-                    <td className="py-2 pr-4">{row.subject_name}</td>
+                    <td className="py-2 pr-4">{row.subject_name}{row.paper_name ? ` (${row.paper_name})` : ""}</td>
                     <td className="py-2 pr-4">{row.class_name}</td>
                     <td className="py-2 pr-4">{row.stream_name}</td>
                     <td className="py-2 pr-4">
@@ -264,9 +285,9 @@ function ApprovalsPage() {
         <p className="mb-3 text-sm text-muted-foreground">
           This table shows every non-approved mark row in the database for the school.
         </p>
-        <div className="mb-3 grid gap-2 md:grid-cols-1">
+        <div className="mb-3 flex flex-wrap gap-2">
           <select
-            className={`${inputClass} max-w-xs`}
+            className={`${inputClass} w-full max-w-xs`}
             value={sortBy}
             onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
           >
@@ -284,28 +305,47 @@ function ApprovalsPage() {
             No non-approved assessments were found for this school.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="min-w-[1180px] w-full text-sm">
+              <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="pb-2">Learner</th>
-                  <th className="pb-2">Class</th>
-                  <th className="pb-2">Subject</th>
-                  <th className="pb-2">Score</th>
-                  <th className="pb-2">Status</th>
-                  <th className="pb-2" />
+                  <th className="px-3 py-3">Learner</th>
+                  <th className="px-3 py-3">Class</th>
+                  <th className="px-3 py-3">Subject</th>
+                  <th className="px-3 py-3">Paper</th>
+                  <th className="px-3 py-3">Stream</th>
+                  <th className="px-3 py-3">Term</th>
+                  <th className="px-3 py-3 text-right">Formative</th>
+                  <th className="px-3 py-3 text-right">BOT</th>
+                  <th className="px-3 py-3 text-right">MOT</th>
+                  <th className="px-3 py-3 text-right">EOT</th>
+                  <th className="px-3 py-3 text-right">Total</th>
+                  <th className="px-3 py-3">Status</th>
+                  <th className="px-3 py-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleData.map((row) => {
+                  const isFormative = row.record_type === "formative";
+                  const isBot = row.exam_type === "beginning_of_term";
+                  const isMot = row.exam_type === "mid_term";
+                  const isEot = row.exam_type === "end_of_term";
+                  const isMissing = Boolean(row.is_missing);
                   const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
                   return (
                     <tr key={row.id} className="border-t border-border">
-                      <td className="py-3 pr-4 font-medium">{row.student_name}</td>
-                      <td className="py-3 pr-4">{row.class_name}</td>
-                      <td className="py-3 pr-4">{row.subject_name}</td>
-                      <td className="py-3 pr-4">{total}</td>
-                      <td className="py-3 pr-4">
+                      <td className="whitespace-nowrap px-3 py-3 font-medium">{row.student_name}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{row.class_name}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{row.subject_name}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{row.paper_name || "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{row.stream_name}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{row.term_name}</td>
+                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isFormative ? row.formative ?? "—" : "—"}</td>
+                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isBot ? row.summative ?? "—" : "—"}</td>
+                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isMot ? row.summative ?? "—" : "—"}</td>
+                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isEot ? row.summative ?? "—" : "—"}</td>
+                      <td className="px-3 py-3 text-right font-medium">{isMissing ? "MISSING MARK" : total}</td>
+                      <td className="px-3 py-3">
                         <Pill
                           tone={
                             row.status === "approved"
@@ -323,14 +363,14 @@ function ApprovalsPage() {
                           <p className="mt-1 text-xs text-muted-foreground">{row.rejection_reason}</p>
                         ) : null}
                       </td>
-                      <td className="py-3 text-right">
+                      <td className="px-3 py-3 text-right">
                         <select
                           className={inputClass}
                           value={row.status}
                           onChange={(event) => {
                             const nextStatus = event.target.value as ApprovalRow["status"];
                             if (nextStatus === row.status) return;
-                            statusMutation.mutate({ assessmentId: row.id, status: nextStatus });
+                            statusMutation.mutate({ rows: [row], status: nextStatus });
                           }}
                           disabled={statusMutation.isPending}
                         >
@@ -376,29 +416,45 @@ function ApprovalsPage() {
                   <th className="pb-2">{approvedGroupBy === "class" ? "Class" : "Subject"}</th>
                   <th className="pb-2">Learner</th>
                   <th className="pb-2">Subject</th>
-                  <th className="pb-2">Score</th>
+                  <th className="pb-2">Paper</th>
+                  <th className="pb-2">Stream</th>
+                  <th className="pb-2">Term</th>
+                  <th className="pb-2">Formative</th>
+                  <th className="pb-2">BOT</th>
+                  <th className="pb-2">MOT</th>
+                  <th className="pb-2">EOT</th>
+                  <th className="pb-2">Total</th>
                   <th className="pb-2">Status</th>
                   <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
-                {approvedGroupRows.map((group) => (
-                  <Fragment key={group.key}>
-                    <tr className="border-t border-border bg-muted/30">
-                      <td className="py-2 pr-4 font-semibold" colSpan={6}>
-                        {group.label}
-                      </td>
-                    </tr>
-                    {group.rows.map((row) => {
-                      const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
+                {approvedGroups.map((group) => {
+                      const rows = group.rows;
+                      const row = rows[0];
+                      const formative = rows.find((item) => item.record_type === "formative");
+                      const bot = rows.find((item) => item.exam_type === "beginning_of_term");
+                      const mot = rows.find((item) => item.exam_type === "mid_term");
+                      const eot = rows.find((item) => item.exam_type === "end_of_term");
+                      const isMissing = rows.some((item) => item.is_missing);
+                      const total = Number(formative?.formative ?? 0) +
+                        [bot, mot, eot].filter(Boolean).reduce((sum, item) => sum + Number(item?.summative ?? 0), 0) /
+                          Math.max(1, [bot, mot, eot].filter(Boolean).length);
                       return (
-                        <tr key={row.id} className="border-t border-border">
+                        <tr key={`${row.student_id}-${row.subject_id}-${row.paper_id ?? "subject"}-${row.term_id}`} className="border-t border-border">
                           <td className="py-3 pr-4">
                             {approvedGroupBy === "class" ? row.class_name : row.subject_name}
                           </td>
                           <td className="py-3 pr-4 font-medium">{row.student_name}</td>
                           <td className="py-3 pr-4">{row.subject_name}</td>
-                          <td className="py-3 pr-4">{total}</td>
+                          <td className="py-3 pr-4">{row.paper_name || "—"}</td>
+                          <td className="py-3 pr-4">{row.stream_name}</td>
+                          <td className="py-3 pr-4">{row.term_name}</td>
+                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : formative?.formative ?? "—"}</td>
+                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : bot?.summative ?? "—"}</td>
+                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : mot?.summative ?? "—"}</td>
+                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : eot?.summative ?? "—"}</td>
+                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : total}</td>
                           <td className="py-3 pr-4">
                             <Pill tone="success">{row.status}</Pill>
                           </td>
@@ -410,7 +466,7 @@ function ApprovalsPage() {
                                 const nextStatus = event.target.value as ApprovalRow["status"];
                                 if (nextStatus === row.status) return;
                                 statusMutation.mutate({
-                                  assessmentId: row.id,
+                                  rows,
                                   status: nextStatus,
                                 });
                               }}
@@ -425,8 +481,6 @@ function ApprovalsPage() {
                         </tr>
                       );
                     })}
-                  </Fragment>
-                ))}
               </tbody>
             </table>
           </div>

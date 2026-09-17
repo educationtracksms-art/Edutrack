@@ -10,7 +10,6 @@ import { Btn, PageHeader, Panel, inputClass } from "@/components/ui-kit";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { logReportPrint } from "@/lib/admin.functions";
 import { getALevelReportCards, getOLevelReportCards } from "@/lib/report.functions";
-import { isModuleEnabled } from "@/lib/modules";
 import type { ReportCardData } from "@/lib/report-types";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -30,23 +29,20 @@ export const Route = createFileRoute("/_authenticated/reports")({
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) throw redirect({ to: "/auth" });
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("school_id")
-      .eq("id", userId)
-      .maybeSingle();
-    if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "report_cards"))) {
-      throw redirect({ to: "/dashboard" });
-    }
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const canPrintReports = (roles ?? []).some((item) =>
+      ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"].includes(item.role),
+    );
+    if (!canPrintReports) throw redirect({ to: "/dashboard" });
   },
   head: () => ({
     meta: [
-      { title: "Report Cards · EduTrack" },
+      { title: "Reports · EduTrack" },
       {
         name: "description",
         content: "Generate and print A4 learner report cards built from approved assessment data.",
       },
-      { property: "og:title", content: "Report Cards · EduTrack" },
+      { property: "og:title", content: "Reports · EduTrack" },
       {
         property: "og:description",
         content: "Dynamic, print-ready report cards for individual learners or whole classes.",
@@ -238,7 +234,7 @@ function ReportsPage() {
   return (
     <div>
       <PageHeader
-        title="Report cards"
+        title="Reports"
         description="Only approved assessments appear on printed reports."
         actions={
           <>
@@ -249,6 +245,12 @@ function ReportsPage() {
           </>
         }
       />
+
+      {generate.isError && (
+        <p role="alert" className="no-print mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          Report generation failed: {friendlyAdminError(generate.error as Error)}
+        </p>
+      )}
 
       <Panel className="no-print mb-6">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">

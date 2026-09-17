@@ -10,8 +10,8 @@ import {
   deleteReportComment,
   deleteAssessmentEntry,
   reviewAssessments,
+  saveAndSubmitAssessmentEntry,
   updateAssessmentDraftEntry,
-  submitAssessmentEntry,
   submitAssessmentEntries,
   upsertAssessmentEntry,
   upsertReportComment,
@@ -136,8 +136,8 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
   const canEditComments = isClassTeacher || isHeadTeacher;
   const upsertEntry = useServerFn(upsertAssessmentEntry);
   const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);
-  const submitEntry = useServerFn(submitAssessmentEntry);
   const submitEntries = useServerFn(submitAssessmentEntries);
+  const saveAndSubmitEntry = useServerFn(saveAndSubmitAssessmentEntry);
   const deleteEntry = useServerFn(deleteAssessmentEntry);
   const saveComment = useServerFn(upsertReportComment);
   const removeComment = useServerFn(deleteReportComment);
@@ -737,28 +737,7 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
       const summative = readAssessmentMark(effectiveSummative, "summative", 80);
       const teacherInitials = data?.teacherInitials.trim() || existing.teacher_initials?.trim() || "";
       if (!teacherInitials) throw new Error("Add teacher initials before submitting the assessment");
-      if (["draft", "rejected"].includes(existing?.status ?? "") && !existing?.locked) {
-        await updateDraftEntry({
-          data: {
-            assessmentId: id,
-            examType: existing.exam_type,
-            formative,
-            summative,
-            teacherInitials,
-          },
-        });
-        await submitEntry({
-          data: {
-            assessmentId: id,
-            formative,
-            summative,
-            teacherInitials,
-          },
-        });
-        return;
-      }
-
-      await submitEntry({
+      await saveAndSubmitEntry({
         data: {
           assessmentId: id,
           formative,
@@ -769,7 +748,7 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
     },
     onSuccess: () => {
       toast.success("Scores submitted for approval");
-      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      void queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -920,39 +899,13 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
           assessment.term_id === termId &&
           (assessment.exam_type ?? "end_of_term") === entryForm.examType,
       );
-
-      if (!existing) {
-        await upsertEntry({
-          data: {
-            studentId: entryForm.studentId,
-            subjectId: entryForm.subjectId,
-            termId,
-            examType: entryForm.examType,
-            gradeDescriptor: autoDescriptor || null,
-            formative,
-            summative,
-            teacherInitials,
-          },
-        });
-      }
-
-      const assessmentId =
-        existing?.id ??
-        (
-          await supabase
-            .from("assessments")
-            .select("id")
-            .eq("student_id", entryForm.studentId)
-            .eq("subject_id", entryForm.subjectId)
-            .eq("term_id", termId)
-            .eq("exam_type", entryForm.examType)
-            .maybeSingle()
-        ).data?.id;
-      if (!assessmentId) throw new Error("Unable to locate the saved assessment");
-
-      await submitEntry({
+      await saveAndSubmitEntry({
         data: {
-          assessmentId,
+          assessmentId: existing?.id,
+          studentId: existing ? undefined : entryForm.studentId,
+          subjectId: existing ? undefined : entryForm.subjectId,
+          termId: existing ? undefined : termId,
+          examType: existing ? undefined : entryForm.examType,
           formative,
           summative,
           teacherInitials,
@@ -961,7 +914,7 @@ type LearnerSortKey = "class" | "stream";export function AssessmentsPage() {
     },
     onSuccess: () => {
       toast.success("Marks submitted for DOS approval");
-      queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      void queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
       setEntryForm((current) => ({
         ...current,
         studentId: "",

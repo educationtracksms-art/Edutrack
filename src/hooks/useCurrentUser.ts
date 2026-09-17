@@ -72,49 +72,55 @@ export const ROLE_HIERARCHY_LEVELS: RoleHierarchyLevel[] = [
   },
 ];
 
-export function useCurrentUser() {
-  return useQuery({
-    queryKey: ["current-user"],
+export async function fetchCurrentUser() {
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth.user;
+  if (!user) return null;
+
+  const [{ data: profile }, { data: roles }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id, full_name, email, initials, phone, school_id, department_id, is_active, must_change_password",
+      )
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase.from("user_roles").select("role").eq("user_id", user.id),
+  ]);
+
+  let school = null;
+  if (profile?.school_id) {
+    const { data } = await supabase
+      .from("schools")
+      .select("id, name, code, logo_url, status")
+      .eq("id", profile.school_id)
+      .maybeSingle();
+    school = data;
+  }
+
+  const roleList = (roles ?? []).map((r) => r.role as AppRole);
+  return {
+    userId: user.id,
+    email: user.email ?? "",
+    profile,
+    school,
+    roles: roleList,
+    isSuperAdmin: roleList.includes("super_admin"),
+    mustChangePassword: !!profile?.must_change_password,
+  };
+}
+
+export function currentUserQueryOptions() {
+  return {
+    queryKey: ["current-user"] as const,
     staleTime: 5 * 60_000,
     gcTime: 15 * 60_000,
-    queryFn: async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth.user;
-      if (!user) return null;
+    queryFn: fetchCurrentUser,
+  };
+}
 
-      const [{ data: profile }, { data: roles }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select(
-            "id, full_name, email, initials, phone, school_id, department_id, is_active, must_change_password",
-          )
-          .eq("id", user.id)
-          .maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", user.id),
-      ]);
-
-      let school = null;
-      if (profile?.school_id) {
-        const { data } = await supabase
-          .from("schools")
-          .select("id, name, code, logo_url, status")
-          .eq("id", profile.school_id)
-          .maybeSingle();
-        school = data;
-      }
-
-      const roleList = (roles ?? []).map((r) => r.role as AppRole);
-      return {
-        userId: user.id,
-        email: user.email ?? "",
-        profile,
-        school,
-        roles: roleList,
-        isSuperAdmin: roleList.includes("super_admin"),
-        mustChangePassword: !!profile?.must_change_password,
-      };
-    },
-  });
+export function useCurrentUser() {
+  return useQuery(currentUserQueryOptions());
 }
 
 export function hasAny(roles: AppRole[] | undefined, allowed: AppRole[]) {

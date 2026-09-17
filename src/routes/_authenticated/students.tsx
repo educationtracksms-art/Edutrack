@@ -4,7 +4,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { toast } from "sonner";
-import ExcelJS from "exceljs";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -325,6 +324,9 @@ function StudentsPage() {
   const streamName = (id: string | null) => streams?.find((stream) => stream.id === id)?.name ?? "";
 
   async function downloadStudentList() {
+    // Spreadsheet export is opt-in; do not make every learner-list visit pay
+    // the cost of loading ExcelJS.
+    const { default: ExcelJS } = await import("exceljs");
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "EduTrack";
     workbook.created = new Date();
@@ -376,6 +378,8 @@ function StudentsPage() {
 
     setImportingStudents(true);
     try {
+      // Importing is also opt-in, so load the parser only for this workflow.
+      const { default: ExcelJS } = await import("exceljs");
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(await file.arrayBuffer());
       const sheet = workbook.worksheets[0];

@@ -139,7 +139,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "dns-prefetch", href: "https://api.educationtrack.ug" },
       { rel: "dns-prefetch", href: "https://fonts.googleapis.com" },
       { rel: "preload", href: "/favicon.png", as: "image" },
-      { rel: "preload", href: "/logo.png", as: "image" },
+      { rel: "preload", href: "/favicon.png", as: "image" },
     ],
     scripts: [
       {
@@ -181,7 +181,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           name: SEO_CONFIG.siteName,
           alternateName: "EduTrack",
           url: SEO_CONFIG.siteUrl,
-          logo: `${SEO_CONFIG.siteUrl}/logo.png`,
+          logo: `${SEO_CONFIG.siteUrl}/favicon.png`,
           description: SEO_CONFIG.defaultDescription,
           address: {
             "@type": "PostalAddress",

@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import { PublicShell } from "@/components/layout/PublicShell";
 import { PasswordInput } from "@/components/ui-kit";
-import logoUrl from "@/assets/logo.png";
+import logoUrl from "@/assets/logo-optimized.png";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({

@@ -3,7 +3,7 @@ import { useLocation } from "@tanstack/react-router";
 import { ArrowUpRight, Facebook, Instagram, Mail, Menu, Phone, Sparkles, Twitter, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import logoUrl from "@/assets/logo.png";
+import logoUrl from "@/assets/logo-optimized.png";
 import pageHero from "@/assets/hero/hero-2.jpg";
 
 export function PublicShell({ children }: { children: ReactNode }) {

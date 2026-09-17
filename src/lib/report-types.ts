@@ -2,10 +2,16 @@ export type SubjectRow = {
   subjectId?: string;
   paperId?: string | null;
   isPaper?: boolean;
+  isSubjectSummary?: boolean;
   subject: string;
+  paperName?: string;
   formative: string;
   summative: string;
+  bot: string;
+  mot: string;
+  eot: string;
   total: string;
+  totalAverage?: string;
   grade: string;
   gradeDetail: string;
   subjectPoints: string;
@@ -51,6 +57,7 @@ export type ReportCardData = {
   };
   attendance: { present: number; absent: number; total: number } | null;
   rows: SubjectRow[];
+  activeSummativePeriods: ("BOT" | "MOT" | "EOT")[];
   overall: { average: string; metricLabel: string; metric: string; descriptor: string };
   totalPoints: number | null;
   approval: ReportApproval | null;

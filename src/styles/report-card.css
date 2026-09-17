@@ -410,8 +410,76 @@
 .report-doc .results {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12px;
   margin-bottom: 12px;
+}
+.report-doc .results .subject-summary-row td {
+  font-weight: 700;
+  border-top: 2px solid #1f2937;
+}
+.report-doc .results-subject-col {
+  width: 22%;
+}
+.report-doc .results-formative-col,
+.report-doc .results-summative-col {
+  width: 5%;
+}
+.report-doc .results-total-col {
+  width: 5%;
+}
+.report-doc .results-grade-col {
+  width: 6%;
+}
+.report-doc .results-descriptor-col {
+  width: 41%;
+}
+.report-doc .results-teacher-col {
+  width: 5%;
+}
+.report-doc.advanced-report .results-subject-col {
+  width: 20%;
+}
+.report-doc.advanced-report .results-paper-col {
+  width: 13%;
+}
+.report-doc.advanced-report .results-formative-col,
+.report-doc.advanced-report .results-summative-col {
+  width: 7%;
+}
+.report-doc.advanced-report .results-total-col,
+.report-doc.advanced-report .results-average-col,
+.report-doc.advanced-report .results-grade-col {
+  width: 7%;
+}
+.report-doc.advanced-report .results-descriptor-col {
+  width: 8%;
+}
+.report-doc.advanced-report .results-teacher-col {
+  width: 7%;
+}
+.report-doc.advanced-report .results {
+  font-size: 12px;
+}
+.report-doc.advanced-report .results th,
+.report-doc.advanced-report .results td {
+  text-align: center;
+  border-color: #26364a;
+}
+.report-doc.advanced-report .results th:first-child,
+.report-doc.advanced-report .results td:first-child,
+.report-doc.advanced-report .results td:nth-child(2) {
+  text-align: left;
+}
+.report-doc.advanced-report .results tbody td[rowspan] {
+  vertical-align: middle;
+  font-weight: 600;
+}
+.report-doc.advanced-report .results tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+.report-doc.advanced-report .results tbody tr:nth-child(even) {
+  background: #f8fafc;
 }
 .report-doc .results th {
   background: rgba(238, 242, 247, 0.72);
@@ -426,23 +494,6 @@
   padding: 3px 3px;
   vertical-align: middle;
   font-size: 12px;
-}
-.report-doc .results th:nth-child(1) {
-  width: 25%;
-}
-.report-doc .results th:nth-child(2),
-.report-doc .results th:nth-child(3),
-.report-doc .results th:nth-child(4) {
-  width: 6%;
-}
-.report-doc .results th:nth-child(5) {
-  width: 5%;
-}
-.report-doc .results th:nth-child(6) {
-  width: 36%;
-}
-.report-doc .results th:nth-child(7) {
-  width: 7%;
 }
 .report-doc .results tbody tr:nth-child(even) {
   background: rgba(250, 252, 255, 0.35);
@@ -746,9 +797,6 @@
   .report-doc .results td {
     padding: 2px 2px;
     font-size: 12px;
-  }
-  .report-doc .results th:nth-child(6) {
-    width: 34%;
   }
   .report-doc .overall-table td {
     padding: 3px 6px;

@@ -65,11 +65,25 @@ function AcademicsPage() {
     queryKey: ["assessment-periods", schoolId],
     enabled: !!schoolId && hasAny(me?.roles, ["dos"]),
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data: periods } = await (supabase as any)
         .from("assessment_periods")
         .select("term_id, exam_type, is_active, is_locked")
         .eq("school_id", schoolId!);
-      return data ?? [];
+      const [{ data: currentYear }, { data: currentTerm }] = await Promise.all([
+        supabase
+          .from("academic_years")
+          .select("id")
+          .eq("school_id", schoolId!)
+          .eq("is_current", true)
+          .maybeSingle(),
+        supabase
+          .from("terms")
+          .select("id, academic_year_id")
+          .eq("school_id", schoolId!)
+          .eq("is_current", true)
+          .maybeSingle(),
+      ]);
+      return (periods ?? []).filter((period: any) => period.term_id === currentTerm?.id);
     },
   });
   const periodMutation = useMutation({
@@ -128,15 +142,26 @@ function AcademicsPage() {
     category: "",
     position: "",
     points: "1",
-    education_level: "ordinary",
+  });
+  const [aLevelSubjectForm, setALevelSubjectForm] = useState({
+    name: "",
+    code: "",
+    department_id: "",
+    category: "",
+    position: "",
+    points: "1",
     is_subsidiary: false,
+    papers: [],
   });
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
-  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
+  const [editingOLevelSubjectId, setEditingOLevelSubjectId] = useState<string | null>(null);
+  const [editingALevelSubjectId, setEditingALevelSubjectId] = useState<string | null>(null);
+  const [editingAllocationId, setEditingAllocationId] = useState<string | null>(null);
   const [allocForm, setAllocForm] = useState({
     teacher_id: "",
     subject_id: "",
+    paper_id: "",
     class_id: "",
     stream_id: "",
     weekly_periods: "1",
@@ -185,6 +210,7 @@ function AcademicsPage() {
         classes,
         streams,
         subjects,
+        subjectPapers,
         allocations,
         teachers,
         departments,
@@ -208,6 +234,15 @@ function AcademicsPage() {
         ),
         safeLoad(schoolQuery(supabase.from("streams").select("*").order("name")), []),
         safeLoad(schoolQuery(supabase.from("subjects").select("*").order("position")), []),
+        safeLoad(
+          schoolQuery(
+            (supabase as any)
+              .from("subject_papers")
+              .select("id, subject_id, name, position")
+              .order("position"),
+          ),
+          [],
+        ),
         safeLoad(schoolQuery(supabase.from("teacher_allocations").select("*")), []),
         safeLoad(
           schoolQuery(
@@ -265,6 +300,7 @@ function AcademicsPage() {
         classes,
         streams,
         subjects,
+        subjectPapers,
         allocations,
         teachers: teachers.filter((t) => teachingRoles.has(t.id)),
         departments,
@@ -331,10 +367,22 @@ function AcademicsPage() {
       category: "",
       position: "",
       points: "1",
-      education_level: "ordinary",
-      is_subsidiary: false,
     });
-    setEditingSubjectId(null);
+    setEditingOLevelSubjectId(null);
+  }
+
+  function resetALevelSubjectForm() {
+    setALevelSubjectForm({
+      name: "",
+      code: "",
+      department_id: "",
+      category: "",
+      position: "",
+      points: "1",
+      is_subsidiary: false,
+      papers: [],
+    });
+    setEditingALevelSubjectId(null);
   }
 
   async function setYearAsCurrent(yearId: string) {
@@ -546,8 +594,8 @@ function AcademicsPage() {
         position: subjectForm.position
           ? Number(subjectForm.position)
           : (data?.subjects.length ?? 0) + 1,
-        education_level: subjectForm.education_level,
-        is_subsidiary: subjectForm.education_level === "advanced" && subjectForm.is_subsidiary,
+        education_level: "ordinary",
+        is_subsidiary: false,
       });
       if (error) throw new Error(error.message);
     },
@@ -562,7 +610,7 @@ function AcademicsPage() {
   const updateSubject = useMutation({
     mutationFn: async () => {
       if (!schoolId) throw new Error("Your account is not linked to a school");
-      if (!editingSubjectId) throw new Error("No subject selected for update");
+      if (!editingOLevelSubjectId) throw new Error("No O-Level subject selected for update");
       const name = subjectForm.name.trim();
       if (!name) throw new Error("Enter a subject name first");
       if (!subjectForm.department_id) throw new Error("Choose the subject department first");
@@ -589,10 +637,10 @@ function AcademicsPage() {
           position: subjectForm.position
             ? Number(subjectForm.position)
             : (data?.subjects.length ?? 0) + 1,
-          education_level: subjectForm.education_level,
-          is_subsidiary: subjectForm.education_level === "advanced" && subjectForm.is_subsidiary,
+          education_level: "ordinary",
+          is_subsidiary: false,
         })
-        .eq("id", editingSubjectId)
+        .eq("id", editingOLevelSubjectId)
         .eq("school_id", schoolId);
       if (error) throw new Error(error.message);
     },
@@ -613,10 +661,148 @@ function AcademicsPage() {
         .eq("id", subject.id)
         .eq("school_id", schoolId);
       if (error) throw new Error(error.message);
+      return subject.education_level;
+    },
+    onSuccess: (educationLevel) => {
+      if (educationLevel === "advanced") resetALevelSubjectForm();
+      else resetSubjectForm();
+      toast.success("Subject deleted");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addALevelSubject = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      const name = aLevelSubjectForm.name.trim();
+      if (!name) throw new Error("Enter an A-Level subject name first");
+      if (!aLevelSubjectForm.department_id) throw new Error("Choose the subject department first");
+      if (!data?.departments.some((department) => department.id === aLevelSubjectForm.department_id)) {
+        throw new Error("The selected department is no longer available. Choose it again");
+      }
+      const points = Number(aLevelSubjectForm.points);
+      if (Number.isNaN(points) || points < 1 || points > 5) throw new Error("Subject points must be between 1 and 5");
+      if (aLevelSubjectForm.position && (!Number.isInteger(Number(aLevelSubjectForm.position)) || Number(aLevelSubjectForm.position) < 1)) {
+        throw new Error("Subject position must be a whole number greater than zero");
+      }
+      const paperNames = aLevelSubjectForm.papers.map((paper) => paper.trim()).filter(Boolean);
+      if (new Set(paperNames.map((paper) => paper.toLowerCase())).size !== paperNames.length) {
+        throw new Error("Paper names must be unique");
+      }
+      const { data: createdSubject, error } = await supabase.from("subjects").insert({
+        school_id: schoolId,
+        name,
+        code: aLevelSubjectForm.code || null,
+        department_id: aLevelSubjectForm.department_id,
+        category: aLevelSubjectForm.category || undefined,
+        points,
+        position: aLevelSubjectForm.position ? Number(aLevelSubjectForm.position) : (data?.subjects.length ?? 0) + 1,
+        education_level: "advanced",
+        is_subsidiary: aLevelSubjectForm.is_subsidiary,
+      }).select("id").single();
+      if (error) throw new Error(error.message);
+      if (!createdSubject) throw new Error("The A-Level subject was created without an id");
+      if (paperNames.length) {
+        const { error: papersError } = await (supabase as any).from("subject_papers").insert(
+          paperNames.map((paper, index) => ({
+            school_id: schoolId,
+            subject_id: createdSubject.id,
+            name: paper,
+            position: index + 1,
+          })),
+        );
+        if (papersError) {
+          await supabase.from("subjects").delete().eq("id", createdSubject.id).eq("school_id", schoolId);
+          throw new Error(`The subject was not saved because its papers could not be saved: ${papersError.message}`);
+        }
+      }
     },
     onSuccess: () => {
-      resetSubjectForm();
-      toast.success("Subject deleted");
+      resetALevelSubjectForm();
+      toast.success("A-Level subject added");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateALevelSubject = useMutation({
+    mutationFn: async () => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
+      if (!editingALevelSubjectId) throw new Error("No A-Level subject selected for update");
+      const name = aLevelSubjectForm.name.trim();
+      if (!name) throw new Error("Enter an A-Level subject name first");
+      if (!aLevelSubjectForm.department_id) throw new Error("Choose the subject department first");
+      if (!data?.departments.some((department) => department.id === aLevelSubjectForm.department_id)) {
+        throw new Error("The selected department is no longer available. Choose it again");
+      }
+      const points = Number(aLevelSubjectForm.points);
+      if (Number.isNaN(points) || points < 1 || points > 5) throw new Error("Subject points must be between 1 and 5");
+      if (aLevelSubjectForm.position && (!Number.isInteger(Number(aLevelSubjectForm.position)) || Number(aLevelSubjectForm.position) < 1)) {
+        throw new Error("Subject position must be a whole number greater than zero");
+      }
+      const paperNames = aLevelSubjectForm.papers.map((paper) => paper.trim()).filter(Boolean);
+      if (new Set(paperNames.map((paper) => paper.toLowerCase())).size !== paperNames.length) {
+        throw new Error("Paper names must be unique");
+      }
+      const { error } = await supabase
+        .from("subjects")
+        .update({
+          name,
+          code: aLevelSubjectForm.code || null,
+          department_id: aLevelSubjectForm.department_id,
+          category: aLevelSubjectForm.category || undefined,
+          points,
+          position: aLevelSubjectForm.position ? Number(aLevelSubjectForm.position) : (data?.subjects.length ?? 0) + 1,
+          education_level: "advanced",
+          is_subsidiary: aLevelSubjectForm.is_subsidiary,
+        })
+        .eq("id", editingALevelSubjectId)
+        .eq("school_id", schoolId);
+      if (error) throw new Error(error.message);
+
+      const existingPapers = (data?.subjectPapers ?? [])
+        .filter((paper) => paper.subject_id === editingALevelSubjectId)
+        .sort((a, b) => a.position - b.position);
+      // Free the unique paper names first so renaming/reordering Paper 1 and
+      // Paper 2 cannot fail because the old names temporarily collide.
+      for (const existingPaper of existingPapers) {
+        const { error: stagingError } = await (supabase as any)
+          .from("subject_papers")
+          .update({ name: `__pending_${existingPaper.id}` })
+          .eq("id", existingPaper.id)
+          .eq("school_id", schoolId);
+        if (stagingError) throw new Error(`Unable to prepare the existing papers for update: ${stagingError.message}`);
+      }
+      for (const [index, paperName] of paperNames.entries()) {
+        const existingPaper = existingPapers[index];
+        const result = existingPaper
+          ? await (supabase as any)
+              .from("subject_papers")
+              .update({ name: paperName, position: index + 1 })
+              .eq("id", existingPaper.id)
+              .eq("school_id", schoolId)
+          : await (supabase as any).from("subject_papers").insert({
+              school_id: schoolId,
+              subject_id: editingALevelSubjectId,
+              name: paperName,
+              position: index + 1,
+            });
+        if (result.error) throw new Error(`The subject was updated but paper ${index + 1} was not saved: ${result.error.message}`);
+      }
+      const removedPapers = existingPapers.slice(paperNames.length);
+      if (removedPapers.length) {
+        const { error: removePapersError } = await (supabase as any)
+          .from("subject_papers")
+          .delete()
+          .in("id", removedPapers.map((paper) => paper.id))
+          .eq("school_id", schoolId);
+        if (removePapersError) throw new Error(`The subject was updated but removed papers could not be synchronized: ${removePapersError.message}`);
+      }
+    },
+    onSuccess: () => {
+      resetALevelSubjectForm();
+      toast.success("A-Level subject updated");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -641,6 +827,18 @@ function AcademicsPage() {
       }
       if (teacher.department_id !== subject.department_id) {
         throw new Error("The teacher and subject must belong to the same department");
+      }
+      const subjectPapers = (data?.subjectPapers ?? [])
+        .filter((paper) => paper.subject_id === subject.id)
+        .sort((a, b) => a.position - b.position);
+      if (subject.education_level === "advanced" && subjectPapers.length > 0 && !allocForm.paper_id) {
+        throw new Error("Select the A-Level paper this teacher will handle");
+      }
+      if (subject.education_level !== "advanced" && allocForm.paper_id) {
+        throw new Error("O-Level subjects cannot be allocated to papers");
+      }
+      if (allocForm.paper_id && !subjectPapers.some((paper) => paper.id === allocForm.paper_id)) {
+        throw new Error("The selected paper does not belong to this subject");
       }
       if (!data?.classes.some((item) => item.id === allocForm.class_id)) {
         throw new Error("The selected class is no longer available. Choose a class again");
@@ -667,20 +865,26 @@ function AcademicsPage() {
         school_id: schoolId,
         teacher_id: allocForm.teacher_id,
         subject_id: allocForm.subject_id,
+        paper_id: allocForm.paper_id || null,
         class_id: allocForm.class_id,
         stream_id: allocForm.stream_id || null,
         weekly_periods: weeklyPeriods,
       };
-      const { error } = await supabase.from("teacher_allocations").insert(payload);
+      const query = editingAllocationId
+        ? supabase.from("teacher_allocations").update(payload).eq("id", editingAllocationId).eq("school_id", schoolId)
+        : supabase.from("teacher_allocations").insert(payload);
+      const { error } = await query;
       if (error) throw new Error(error.message);
       await supabase
         .from("teacher_allocation_history")
-        .insert({ ...payload, action: "assigned", performed_by: me?.userId ?? null });
+        .insert({ ...payload, action: editingAllocationId ? "updated" : "assigned", performed_by: me?.userId ?? null });
     },
     onSuccess: () => {
+      setEditingAllocationId(null);
       setAllocForm({
         teacher_id: "",
         subject_id: "",
+        paper_id: "",
         class_id: "",
         stream_id: "",
         weekly_periods: "1",
@@ -797,6 +1001,7 @@ function AcademicsPage() {
           school_id: alloc.school_id,
           teacher_id: alloc.teacher_id,
           subject_id: alloc.subject_id,
+          paper_id: alloc.paper_id ?? null,
           class_id: alloc.class_id,
           stream_id: alloc.stream_id,
           action: "removed",
@@ -805,6 +1010,7 @@ function AcademicsPage() {
       }
     },
     onSuccess: () => {
+      setEditingAllocationId(null);
       toast.success("Allocation removed");
       refresh();
     },
@@ -1012,7 +1218,25 @@ function AcademicsPage() {
   }
 
   function startEditingSubject(item: AcademicSubject) {
-    setEditingSubjectId(item.id);
+    if (item.education_level === "advanced") {
+      setEditingALevelSubjectId(item.id);
+      const papers = (data?.subjectPapers ?? [])
+        .filter((paper) => paper.subject_id === item.id)
+        .sort((a, b) => a.position - b.position)
+        .map((paper) => paper.name);
+      setALevelSubjectForm({
+        name: item.name ?? "",
+        code: item.code ?? "",
+        department_id: item.department_id ?? "",
+        category: item.category ?? "",
+        position: item.position?.toString() ?? "",
+        points: item.points?.toString() ?? "1",
+        is_subsidiary: Boolean(item.is_subsidiary),
+        papers,
+      });
+      return;
+    }
+    setEditingOLevelSubjectId(item.id);
     setSubjectForm({
       name: item.name ?? "",
       code: item.code ?? "",
@@ -1020,8 +1244,6 @@ function AcademicsPage() {
       category: item.category ?? "",
       position: item.position?.toString() ?? "",
       points: item.points?.toString() ?? "1",
-      education_level: item.education_level ?? "ordinary",
-      is_subsidiary: Boolean(item.is_subsidiary),
     });
   }
 
@@ -1041,6 +1263,9 @@ function AcademicsPage() {
       !selectedAllocationSubject?.department_id ||
       teacher.department_id === selectedAllocationSubject.department_id,
   );
+  const allocationPapers = (data?.subjectPapers ?? [])
+    .filter((paper) => paper.subject_id === allocForm.subject_id)
+    .sort((a, b) => a.position - b.position);
 
   return (
     <div>
@@ -1305,11 +1530,11 @@ function AcademicsPage() {
             className="mb-3 space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (editingSubjectId) updateSubject.mutate();
+              if (editingOLevelSubjectId) updateSubject.mutate();
               else addSubject.mutate();
             }}
           >
-            <Field label="Subject name">
+            <Field label="O-Level subject name">
               <input
                 required
                 className={inputClass}
@@ -1369,43 +1594,123 @@ function AcademicsPage() {
                 onChange={(e) => setSubjectForm({ ...subjectForm, category: e.target.value })}
               />
             </Field>
-            <Field label="Education level">
-              <select
-                className={inputClass}
-                value={subjectForm.education_level}
-                onChange={(e) =>
-                  setSubjectForm({ ...subjectForm, education_level: e.target.value })
-                }
-              >
-                <option value="ordinary">O-Level</option>
-                <option value="advanced">A-Level</option>
-              </select>
-            </Field>
-            {subjectForm.education_level === "advanced" && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={subjectForm.is_subsidiary}
-                  onChange={(e) =>
-                    setSubjectForm({ ...subjectForm, is_subsidiary: e.target.checked })
-                  }
-                />
-                Subsidiary subject (50+ = 1 point, below 50 = 0)
-              </label>
-            )}
             <div className="flex flex-wrap gap-2">
               <Btn
                 type="submit"
                 variant="accent"
                 disabled={addSubject.isPending || updateSubject.isPending}
               >
-                {editingSubjectId ? "Save changes" : "Add subject"}
+                {editingOLevelSubjectId ? "Save O-Level changes" : "Add O-Level subject"}
               </Btn>
-              {editingSubjectId && (
+              {editingOLevelSubjectId && (
                 <Btn variant="ghost" onClick={resetSubjectForm}>
                   Cancel
                 </Btn>
               )}
+            </div>
+          </form>
+          <form
+            className="mb-4 space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 dark:border-indigo-900 dark:bg-indigo-950/20"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (editingALevelSubjectId) updateALevelSubject.mutate();
+              else addALevelSubject.mutate();
+            }}
+          >
+            <div>
+              <h3 className="font-semibold">A-Level subjects</h3>
+              <p className="text-xs text-muted-foreground">
+                Create A-Level subjects with optional paper breakdowns.
+              </p>
+            </div>
+            <Field label="A-Level subject name">
+              <input
+                required
+                className={inputClass}
+                value={aLevelSubjectForm.name}
+                onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, name: event.target.value })}
+              />
+            </Field>
+            <Field label="Department">
+              <select
+                required
+                className={inputClass}
+                value={aLevelSubjectForm.department_id}
+                onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, department_id: event.target.value })}
+              >
+                <option value="">Select department</option>
+                {(data?.departments ?? []).map((department) => (
+                  <option key={department.id} value={department.id}>{department.name}</option>
+                ))}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Code">
+                <input className={inputClass} value={aLevelSubjectForm.code} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, code: event.target.value })} />
+              </Field>
+              <Field label="Position">
+                <input type="number" min={1} className={inputClass} value={aLevelSubjectForm.position} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, position: event.target.value })} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Points">
+                <input required type="number" min={1} max={5} className={inputClass} value={aLevelSubjectForm.points} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, points: event.target.value })} />
+              </Field>
+              <Field label="Category">
+                <input placeholder="Core / Elective" className={inputClass} value={aLevelSubjectForm.category} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, category: event.target.value })} />
+              </Field>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={aLevelSubjectForm.is_subsidiary} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, is_subsidiary: event.target.checked })} />
+              Subsidiary subject (50+ = 1 point, below 50 = 0)
+            </label>
+            <div className="rounded-lg border border-indigo-200 bg-background/70 p-3 dark:border-indigo-800">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-semibold">Subject papers (optional)</h4>
+                  <p className="text-xs text-muted-foreground">Add one paper, multiple papers, or leave this empty for subject-level assessment.</p>
+                </div>
+                <Btn
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setALevelSubjectForm((current) => ({ ...current, papers: [...current.papers, ""] }))}
+                >
+                  Add paper
+                </Btn>
+              </div>
+              <div className="space-y-2">
+                {aLevelSubjectForm.papers.map((paper, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      className={inputClass}
+                      placeholder={`Paper ${index + 1}`}
+                      value={paper}
+                      onChange={(event) => setALevelSubjectForm((current) => ({
+                        ...current,
+                        papers: current.papers.map((item, itemIndex) => itemIndex === index ? event.target.value : item),
+                      }))}
+                    />
+                    {aLevelSubjectForm.papers.length > 0 && (
+                      <Btn
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setALevelSubjectForm((current) => ({
+                          ...current,
+                          papers: current.papers.filter((_, itemIndex) => itemIndex !== index),
+                        }))}
+                      >
+                        Remove
+                      </Btn>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Btn type="submit" variant="accent" disabled={addALevelSubject.isPending || updateALevelSubject.isPending}>
+                {editingALevelSubjectId ? "Save A-Level changes" : "Add A-Level subject"}
+              </Btn>
+              {editingALevelSubjectId && <Btn type="button" variant="ghost" onClick={resetALevelSubjectForm}>Cancel</Btn>}
             </div>
           </form>
           <div className="overflow-hidden rounded-xl border border-border">
@@ -1477,6 +1782,67 @@ function AcademicsPage() {
               </p>
             )}
           </div>
+          {false && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+            <div className="mb-3">
+              <h3 className="font-semibold">A-Level subject papers</h3>
+              <p className="text-xs text-muted-foreground">
+                Create Paper 1, Paper 2, or any other papers for A-Level subjects. O-Level subjects do not use papers.
+              </p>
+            </div>
+            <form
+              className="grid gap-2 md:grid-cols-[1fr_1fr_8rem_auto]"
+              onSubmit={(event) => {
+                event.preventDefault();
+                return;
+              }}
+            >
+              <select
+                required
+                className={inputClass}
+                value=""
+                onChange={() => undefined}
+              >
+                <option value="">Select A-Level subject</option>
+                {(data?.subjects ?? [])
+                  .filter((subject) => subject.education_level === "advanced")
+                  .map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+              </select>
+              <input
+                required
+                className={inputClass}
+                placeholder="Paper name, e.g. Paper 1"
+                value=""
+                onChange={() => undefined}
+              />
+              <input
+                type="number"
+                min={1}
+                className={inputClass}
+                placeholder="Position"
+                value=""
+                onChange={() => undefined}
+              />
+              <Btn type="submit" variant="accent" disabled>Add paper</Btn>
+            </form>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {([] as Array<{ id: string; subject_id: string; name: string }>).map((paper) => (
+                <div key={paper.id} className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                  <span>
+                    {data?.subjects.find((subject) => subject.id === paper.subject_id)?.name ?? "Subject"} — {paper.name}
+                  </span>
+                  <Btn
+                    variant="ghost"
+                    onClick={() => {
+                      if (window.confirm(`Delete paper "${paper.name}"?`)) return;
+                    }}
+                    disabled
+                  >
+                    Delete
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          </div>}
         </Panel>
       </div>
 
@@ -2016,7 +2382,7 @@ function AcademicsPage() {
 
       <Panel title="Teacher allocations" className="mt-4">
         <form
-          className="mb-4 grid gap-3 md:grid-cols-6"
+          className="mb-4 grid gap-3 md:grid-cols-7"
           onSubmit={(e) => {
             e.preventDefault();
             addAllocation.mutate();
@@ -2034,6 +2400,7 @@ function AcademicsPage() {
                 setAllocForm((current) => ({
                   ...current,
                   teacher_id: teacherId,
+                  paper_id: "",
                   subject_id:
                     teacher && subject && teacher.department_id === subject.department_id
                       ? current.subject_id
@@ -2061,6 +2428,7 @@ function AcademicsPage() {
                 setAllocForm((current) => ({
                   ...current,
                   subject_id: subjectId,
+                  paper_id: "",
                   teacher_id:
                     subject && teacher && subject.department_id === teacher.department_id
                       ? current.teacher_id
@@ -2076,6 +2444,21 @@ function AcademicsPage() {
               ))}
             </select>
           </Field>
+          {selectedAllocationSubject?.education_level === "advanced" && allocationPapers.length > 0 && (
+            <Field label="A-Level paper">
+              <select
+                required
+                className={inputClass}
+                value={allocForm.paper_id}
+                onChange={(e) => setAllocForm({ ...allocForm, paper_id: e.target.value })}
+              >
+                <option value="">Select paper</option>
+                {allocationPapers.map((paper) => (
+                  <option key={paper.id} value={paper.id}>{paper.name}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Class">
             <select
               required
@@ -2124,8 +2507,20 @@ function AcademicsPage() {
           </Field>
           <div className="flex items-end">
             <Btn type="submit" variant="accent" disabled={addAllocation.isPending}>
-              Allocate
+              {editingAllocationId ? "Save allocation" : "Allocate"}
             </Btn>
+            {editingAllocationId && (
+              <Btn
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setEditingAllocationId(null);
+                  setAllocForm({ teacher_id: "", subject_id: "", paper_id: "", class_id: "", stream_id: "", weekly_periods: "1" });
+                }}
+              >
+                Cancel
+              </Btn>
+            )}
           </div>
         </form>
 
@@ -2135,6 +2530,7 @@ function AcademicsPage() {
               <tr>
                 <th className="pb-2">Teacher</th>
                 <th className="pb-2">Subject</th>
+                <th className="pb-2">Paper</th>
                 <th className="pb-2">Department</th>
                 <th className="pb-2">Class</th>
                 <th className="pb-2">Stream</th>
@@ -2147,6 +2543,7 @@ function AcademicsPage() {
                 <tr key={a.id} className="border-t border-border">
                   <td className="py-2 font-medium">{teacherName(a.teacher_id)}</td>
                   <td>{subjectName(a.subject_id)}</td>
+                  <td>{a.paper_id ? (data?.subjectPapers ?? []).find((paper) => paper.id === a.paper_id)?.name ?? "Unknown paper" : "—"}</td>
                   <td>
                     {departmentName(
                       data?.subjects.find((s) => s.id === a.subject_id)?.department_id,
@@ -2156,6 +2553,22 @@ function AcademicsPage() {
                   <td>{streamName(a.stream_id)}</td>
                   <td>{a.weekly_periods}</td>
                   <td className="text-right">
+                    <Btn
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingAllocationId(a.id);
+                        setAllocForm({
+                          teacher_id: a.teacher_id,
+                          subject_id: a.subject_id,
+                          paper_id: a.paper_id ?? "",
+                          class_id: a.class_id,
+                          stream_id: a.stream_id ?? "",
+                          weekly_periods: String(a.weekly_periods ?? 1),
+                        });
+                      }}
+                    >
+                      Edit
+                    </Btn>
                     <Btn variant="ghost" onClick={() => removeAllocation.mutate(a.id)}>
                       Remove
                     </Btn>
@@ -2164,7 +2577,7 @@ function AcademicsPage() {
               ))}
               {(data?.allocations ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={8} className="py-6 text-center text-muted-foreground">
                     No allocations yet.
                   </td>
                 </tr>
