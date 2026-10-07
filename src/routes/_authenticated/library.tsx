@@ -28,6 +28,15 @@ export const Route = createFileRoute("/_authenticated/library")({
       .select("school_id")
       .eq("id", userId)
       .maybeSingle();
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("school_id", profile?.school_id ?? "");
+    const canViewLibrary = (roles ?? []).some(({ role }) =>
+      ["head_teacher", "deputy_head_teacher", "dos", "librarian"].includes(role),
+    );
+    if (!canViewLibrary) throw redirect({ to: "/dashboard" });
     if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "library"))) {
       throw redirect({ to: "/dashboard" });
     }
@@ -79,7 +88,6 @@ function LibraryPage() {
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const canManage = hasAny(me?.roles, [
-    "school_admin",
     "head_teacher",
     "deputy_head_teacher",
     "dos",

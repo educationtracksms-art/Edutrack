@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireRateLimitedSupabaseAuth as requireSupabaseAuth } from "@/integrations/supabase/rate-limited-auth-middleware";
 import { isModuleEnabled } from "./modules";
 
 function otp() {
@@ -106,6 +106,7 @@ const assignableStaffRoles = new Set([
   "head_teacher",
   "deputy_head_teacher",
   "dos",
+  "bursar",
   "hod",
   "class_teacher",
   "subject_teacher",
@@ -1389,7 +1390,9 @@ export const createSubscriptionPlan = createServerFn({ method: "POST" })
     (data: {
       name: string;
       price: number;
-      billingCycle: "monthly" | "termly" | "annual";
+      billingCycle?: "monthly" | "termly" | "annual";
+      durationValue?: number;
+      durationUnit?: "days" | "weeks" | "months" | "years";
       description?: string;
     }) => data,
   )
@@ -1400,15 +1403,28 @@ export const createSubscriptionPlan = createServerFn({ method: "POST" })
     const price = Number(data.price);
     if (!name) throw new Error("Plan name is required");
     if (!Number.isFinite(price) || price < 0) throw new Error("Plan price cannot be negative");
+    // Duration model (canonical): prefer explicit value+unit, else map legacy billingCycle.
+    const durationUnit = data.durationUnit
+      ?? (data.billingCycle === "annual" ? "years" : "months");
+    const durationValue = data.durationValue
+      ?? (data.billingCycle === "termly" ? 3 : 1);
+    if (!Number.isFinite(durationValue) || durationValue < 1) {
+      throw new Error("Plan duration value must be at least 1");
+    }
+    const billingCycle = data.billingCycle
+      ?? (durationUnit === "years" ? "annual"
+        : durationUnit === "months" && durationValue >= 3 ? "termly" : "monthly");
     const { data: plan, error } = await (context.supabase as any)
       .from("subscription_plans")
       .insert({
         name,
         price,
-        billing_cycle: data.billingCycle,
+        billing_cycle: billingCycle,
+        duration_value: Math.trunc(durationValue),
+        duration_unit: durationUnit,
         description: data.description?.trim() || null,
       })
-      .select("id, name, price, billing_cycle, description, is_active")
+      .select("id, name, price, billing_cycle, duration_value, duration_unit, description, is_active")
       .single();
     if (error) throw new Error(error.message);
     await logAudit(
@@ -1429,7 +1445,9 @@ export const updateSubscriptionPlan = createServerFn({ method: "POST" })
       id: string;
       name: string;
       price: number;
-      billingCycle: "monthly" | "termly" | "annual";
+      billingCycle?: "monthly" | "termly" | "annual";
+      durationValue?: number;
+      durationUnit?: "days" | "weeks" | "months" | "years";
       description?: string;
     }) => data,
   )
@@ -1440,16 +1458,24 @@ export const updateSubscriptionPlan = createServerFn({ method: "POST" })
     const price = Number(data.price);
     if (!data.id || !name) throw new Error("Plan name is required");
     if (!Number.isFinite(price) || price < 0) throw new Error("Plan price cannot be negative");
+    const patch: Record<string, string | number | null> = {
+      name,
+      price,
+      description: data.description?.trim() || null,
+    };
+    if (data.durationUnit !== undefined) patch.duration_unit = data.durationUnit;
+    if (data.durationValue !== undefined) {
+      if (!Number.isFinite(data.durationValue) || data.durationValue < 1) {
+        throw new Error("Plan duration value must be at least 1");
+      }
+      patch.duration_value = Math.trunc(data.durationValue);
+    }
+    if (data.billingCycle !== undefined) patch.billing_cycle = data.billingCycle;
     const { data: plan, error } = await (context.supabase as any)
       .from("subscription_plans")
-      .update({
-        name,
-        price,
-        billing_cycle: data.billingCycle,
-        description: data.description?.trim() || null,
-      })
+      .update(patch)
       .eq("id", data.id)
-      .select("id, name, price, billing_cycle, description, is_active")
+      .select("id, name, price, billing_cycle, duration_value, duration_unit, description, is_active")
       .single();
     if (error) throw new Error(error.message);
     await logAudit(
@@ -2925,6 +2951,36 @@ export const setSchoolFees = createServerFn({ method: "POST" })
     return { learnerCount: students.length, amount };
   });
 
+export const updateStudentPayCode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { studentId: string; schpayCode: string }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("bursar")) {
+      throw new Error("Only the school bursar can assign a learner payment code");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const schpayCode = data.schpayCode.trim();
+    if (!schpayCode) throw new Error("Enter the learner payment code");
+
+    const { error } = await context.supabase
+      .from("students")
+      .update({ schpay_code: schpayCode })
+      .eq("id", data.studentId)
+      .eq("school_id", schoolId)
+      .is("deleted_at", null);
+    if (error) throw new Error(error.message);
+
+    await logAudit(context.supabase, context.userId, schoolId, "STUDENT_PAY_CODE_ASSIGNED", "students", {
+      student_id: data.studentId,
+      schpay_code: schpayCode.toUpperCase(),
+    });
+    return { ok: true };
+  });
+
 export const deleteAttendanceSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: { studentId: string; termId: string }) => data)
@@ -4188,6 +4244,7 @@ export const createPaymentVoucher = createServerFn({ method: "POST" })
       voucherNumber: string;
       invoiceId?: string | null;
       payeeName: string;
+      departmentName?: string | null;
       amount: number;
       paymentMethod: string;
       remarks?: string | null;
@@ -4203,12 +4260,13 @@ export const createPaymentVoucher = createServerFn({ method: "POST" })
     const amount = Number(data.amount);
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Voucher amount must be positive");
 
-    const { data: voucher, error } = await context.supabase
+    const { data: voucher, error } = await (context.supabase as any)
       .from("payment_vouchers")
       .insert({
         school_id: schoolId,
         approved_invoice_id: data.invoiceId ?? null,
         voucher_number: data.voucherNumber,
+        department_name: data.departmentName ?? null,
         payee_name: data.payeeName,
         amount,
         payment_method: data.paymentMethod,

@@ -1,13 +1,21 @@
 import * as React from "react";
 import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
+  ArrowLeftRight,
+  BadgeDollarSign,
+  Banknote,
+  BookOpenCheck,
   Building2,
   CalendarCheck,
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
   CreditCard,
+  FileBarChart,
+  FileText,
+  HandCoins,
   Landmark,
   FileBadge,
   GraduationCap,
@@ -19,10 +27,14 @@ import {
   NotebookText,
   PanelLeftClose,
   PanelLeftOpen,
+  PiggyBank,
+  ReceiptText,
   ScrollText,
   Search,
   Settings2,
   Users,
+  Vault,
+  Wallet,
   X,
   Workflow,
 } from "lucide-react";
@@ -36,14 +48,19 @@ import {
   ACADEMIC_MANAGERS,
   ROLE_LABELS,
   SCHOOL_ROLES,
+  clearCachedUser,
   hasAny,
   type AppRole,
   useCurrentUser,
 } from "@/hooks/useCurrentUser";
 import { useQuery } from "@tanstack/react-query";
 import { getEnabledModuleMap } from "@/lib/modules";
+import { stableDataQueryOptions, subscriptionQueryOptions } from "@/lib/query-cache-config";
+import { takeAccessNotice } from "@/lib/access-notice";
+import { SubscriptionExpiredBlock } from "@/components/subscription/SubscriptionExpiredBlock";
+import { getSchoolSubscriptionStatus } from "@/lib/subscription.functions";
 import { cn } from "@/lib/utils";
-import { NotificationPanel } from "@/components/notifications/NotificationPanel";
+import { Suspense, lazy } from "react";
 import {
   Sheet,
   SheetContent,
@@ -51,6 +68,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+const NotificationPanel = lazy(() =>
+  import("@/components/notifications/NotificationPanel").then((m) => ({
+    default: m.NotificationPanel,
+  })),
+);
 
 type NavItem = {
   to: string;
@@ -72,7 +94,26 @@ const ALL: AppRole[] = [
   "subject_teacher",
 ];
 
-const WORKFLOW_ROLES: AppRole[] = [...ALL, "bursar", "librarian"];
+const WORKFLOW_ROLES: AppRole[] = [...ALL, "librarian"];
+
+/**
+ * The Bursar sidebar is an allow-list: finance navigation renders for the Bursar
+ * role only. See {@link FINANCE_ROUTE_ROLES} in "@/lib/route-guards" for the
+ * matching route-level guard and the SQL policy helpers for the data layer.
+ */
+const FINANCE_ROLES: AppRole[] = ["bursar"];
+
+/** Every role that works inside a school, used for the non-finance Bursar tools. */
+const SCHOOL_OPERATIONS_ROLES: AppRole[] = [
+  "school_admin",
+  "head_teacher",
+  "deputy_head_teacher",
+  "dos",
+  "hod",
+  "class_teacher",
+  "subject_teacher",
+  "librarian",
+];
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL, section: "Home" },
@@ -101,7 +142,7 @@ const NAV: NavItem[] = [
     to: "/subscription",
     label: "Subscription",
     icon: CreditCard,
-    roles: ["school_admin", "head_teacher", "dos"],
+    roles: ["school_admin"],
     section: "Administration",
   },
   {
@@ -113,11 +154,147 @@ const NAV: NavItem[] = [
   },
   {
     to: "/finance",
-    label: "Finance",
-    icon: Landmark,
-    roles: ["school_admin", "head_teacher", "bursar", "hod"],
+    label: "Bursar dashboard",
+    icon: LayoutDashboard,
+    roles: FINANCE_ROLES,
     module: "finance",
-    section: "Operations",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-receivables",
+    label: "Receivables & arrears",
+    icon: HandCoins,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-invoices",
+    label: "Invoices & receipts",
+    icon: ReceiptText,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-payments",
+    label: "Payments",
+    icon: Banknote,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-fees",
+    label: "Fees & billing",
+    icon: BadgeDollarSign,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-expenses",
+    label: "Expenses & payables",
+    icon: Wallet,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-procurement",
+    label: "Procurement",
+    icon: BookOpenCheck,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-banking",
+    label: "Banking & cash",
+    icon: Landmark,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-accounting",
+    label: "Accounting & journals",
+    icon: ArrowLeftRight,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-budgets",
+    label: "Budgets",
+    icon: PiggyBank,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-payroll",
+    label: "Payroll",
+    icon: Users,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-payroll-staff",
+    label: "Payroll staff",
+    icon: Users,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-hod-requests",
+    label: "HOD requests",
+    icon: HandCoins,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-assets",
+    label: "Assets & inventory",
+    icon: Vault,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-grants",
+    label: "Grants & aid",
+    icon: HandCoins,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-reports",
+    label: "Finance reports",
+    icon: FileBarChart,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-approvals",
+    label: "Approvals",
+    icon: FileText,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
+  },
+  {
+    to: "/finance-settings",
+    label: "Finance settings",
+    icon: Settings2,
+    roles: FINANCE_ROLES,
+    module: "finance",
+    section: "Bursar",
   },
   {
     to: "/academics",
@@ -131,7 +308,7 @@ const NAV: NavItem[] = [
     to: "/library",
     label: "Library",
     icon: Library,
-    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "librarian"],
+    roles: ["head_teacher", "deputy_head_teacher", "dos", "librarian"],
     module: "library",
     section: "Operations",
   },
@@ -161,10 +338,13 @@ const NAV: NavItem[] = [
     to: "/assessments",
     label: "Enter marks",
     icon: ClipboardCheck,
+    // School administrators keep oversight of marks through Reports and the
+    // marks approval screens; this workspace belongs to the people who actually
+    // capture marks (DOS, HOD and teachers). The route itself is unchanged, so
+    // administrators can still be added back here without touching the page.
     roles: [
       "dos",
       "hod",
-      "school_admin",
       "head_teacher",
       "deputy_head_teacher",
       "subject_teacher",
@@ -172,6 +352,13 @@ const NAV: NavItem[] = [
     ],
     module: "academics",
     section: "Teaching & results",
+  },
+  {
+    to: "/finance-requests",
+    label: "Finance requests",
+    icon: HandCoins,
+    roles: ["hod"],
+    section: "Requests",
   },
   {
     to: "/approval",
@@ -231,6 +418,8 @@ const NAV: NavItem[] = [
     to: "/account-settings",
     label: "My settings",
     icon: Settings2,
+    // Personal account details (name, password) stay available to every role;
+    // school-wide configuration is disabled for the Bursar below.
     roles: ["super_admin", ...SCHOOL_ROLES, "bursar"],
     section: "Administration",
   },
@@ -238,7 +427,7 @@ const NAV: NavItem[] = [
     to: "/settings",
     label: "Settings",
     icon: Settings2,
-    roles: [...SCHOOL_ROLES, "bursar"],
+    roles: SCHOOL_ROLES,
     section: "Administration",
   },
   {
@@ -250,7 +439,15 @@ const NAV: NavItem[] = [
   },
 ];
 
-const NAV_SECTION_ORDER = ["Home", "Setup", "Teaching & results", "Operations", "Administration"];
+const NAV_SECTION_ORDER = [
+  "Home",
+  "Bursar",
+  "Setup",
+  "Teaching & results",
+  "Requests",
+  "Operations",
+  "Administration",
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: me } = useCurrentUser();
@@ -259,10 +456,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isMobile = useIsMobile();
+  // Module metadata is stable (Tier 1): 30 min stale, 60 min GC
   const { data: moduleMap } = useQuery({
-    queryKey: ["enabled-modules", me?.profile?.school_id ?? null],
+    ...stableDataQueryOptions(["enabled-modules", me?.profile?.school_id ?? null]),
     enabled: !!me?.profile?.school_id,
     queryFn: async () => getEnabledModuleMap(supabase, me?.profile?.school_id ?? null),
+  });
+
+  // Subscription status (Tier 4): 5 min stale (reduced from 60s for efficiency).
+  // A school-scoped, non-admin user whose subscription has expired sees only the blocking screen.
+  const isSuperAdmin = !!me?.roles?.includes("super_admin");
+  const isSchoolScopedUser = !!me?.profile?.school_id && !isSuperAdmin;
+  const { data: subscriptionState } = useQuery({
+    ...subscriptionQueryOptions(["shell-subscription-status", me?.profile?.school_id ?? null]),
+    enabled: isSchoolScopedUser,
+    queryFn: () => getSchoolSubscriptionStatus(),
   });
   const [labelsVisible, setLabelsVisible] = React.useState(() => !isMobile);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
@@ -270,6 +478,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const preloadPage = React.useCallback((to: string) => void router.preloadRoute({ to }), [router]);
+
+  // A route guard that turned the user away parks one message for us to show,
+  // so a blocked deep link explains itself instead of silently bouncing.
+  React.useEffect(() => {
+    const notice = takeAccessNotice();
+    if (notice) toast.error(notice);
+  }, [pathname]);
 
   React.useEffect(() => {
     setLabelsVisible(!isMobile);
@@ -298,14 +513,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!isMobile) return;
 
-    const root = document.querySelector("main");
-    if (!root) return;
-
+    // Defer table decoration until the browser is idle: it walks the DOM and
+    // must never compete with first paint / first interaction.
+    let observer: MutationObserver | null = null;
     let frame: number | null = null;
+    let idleId: number | null = null;
+    let cancelled = false;
     const decorateTables = () => {
       if (frame !== null) return;
       frame = window.requestAnimationFrame(() => {
         frame = null;
+        const root = document.querySelector("main");
+        if (!root) return;
         root.querySelectorAll("table.w-full").forEach((table) => {
           table.setAttribute("data-responsive-table", "true");
 
@@ -328,14 +547,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       });
     };
 
-    decorateTables();
+    const start = () => {
+      if (cancelled) return;
+      decorateTables();
+      const root = document.querySelector("main");
+      if (!root) return;
+      observer = new MutationObserver(decorateTables);
+      observer.observe(root, { childList: true, subtree: true });
+    };
 
-    const observer = new MutationObserver(decorateTables);
-    observer.observe(root, { childList: true, subtree: true });
+    if (typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(start, { timeout: 1500 });
+    } else {
+      idleId = window.setTimeout(start, 300);
+    }
 
     return () => {
-      observer.disconnect();
+      cancelled = true;
+      observer?.disconnect();
       if (frame !== null) window.cancelAnimationFrame(frame);
+      if (idleId !== null) {
+        if (typeof window.cancelIdleCallback === "function") {
+          try {
+            window.cancelIdleCallback(idleId);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (_ignored) {
+            window.clearTimeout(idleId);
+          }
+        } else {
+          window.clearTimeout(idleId);
+        }
+      }
     };
   }, [isMobile, pathname]);
 
@@ -365,8 +607,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   async function signOut() {
     await queryClient.cancelQueries();
     queryClient.clear();
+    clearCachedUser();
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
+  }
+
+  // Non-admin school users whose subscription has expired get the full-screen,
+  // non-dismissible blocking message instead of any dashboard content.
+  const isSchoolAdmin = !!me?.roles?.includes("school_admin");
+  if (
+    isSchoolScopedUser &&
+    !isSchoolAdmin &&
+    subscriptionState?.status === "expired"
+  ) {
+    const schoolName = me?.school?.name ?? "your school";
+    const userName = (me?.profile as { full_name?: string } | null)?.full_name ?? me?.email ?? "there";
+    return (
+      <SubscriptionExpiredBlock
+        userName={userName}
+        schoolName={schoolName}
+      />
+    );
   }
 
   return (
@@ -416,7 +677,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <nav className="flex-1 space-y-1 overflow-y-auto p-3">
             {items.map((item, index) => {
-              const active = pathname.startsWith(item.to);
+              // Match the route itself or a child path, so /finance-payroll no
+              // longer also highlights the /finance dashboard entry.
+              const active =
+                pathname === item.to || pathname.startsWith(`${item.to}/`);
               const showSection = item.section && item.section !== items[index - 1]?.section;
               return (
                 <React.Fragment key={item.to}>
@@ -448,7 +712,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="border-t border-sidebar-border px-3 py-2">
             <div className={cn(!labelsVisible && "flex justify-center")}>
-              <NotificationPanel showLabel={labelsVisible} />
+              <Suspense fallback={null}>
+                <NotificationPanel showLabel={labelsVisible} />
+              </Suspense>
             </div>
           </div>
 
@@ -533,7 +799,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </nav>
 
               <div className="border-t border-sidebar-border px-3 py-2">
-                <NotificationPanel />
+                <Suspense fallback={null}>
+                  <NotificationPanel />
+                </Suspense>
               </div>
 
               <div className="border-t border-sidebar-border p-3">
@@ -651,7 +919,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
               </div>
-              <NotificationPanel />
+              <Suspense fallback={null}>
+                <NotificationPanel showLabel={false} />
+              </Suspense>
               <div className="hidden items-center gap-2 md:flex">
                 <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
                   {primaryRole ? ROLE_LABELS[primaryRole] : "No role"}

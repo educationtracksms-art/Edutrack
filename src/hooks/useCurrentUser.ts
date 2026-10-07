@@ -72,10 +72,42 @@ export const ROLE_HIERARCHY_LEVELS: RoleHierarchyLevel[] = [
   },
 ];
 
+const USER_CACHE_KEY = "edutrack-current-user";
+
+function readCachedUser() {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.localStorage.getItem(USER_CACHE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.userId) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedUser(user: unknown) {
+  if (typeof window === "undefined") return;
+  try {
+    if (!user) window.localStorage.removeItem(USER_CACHE_KEY);
+    else window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+  } catch {
+    // Private mode / quota — non-fatal.
+  }
+}
+
+export function clearCachedUser() {
+  writeCachedUser(null);
+}
+
 export async function fetchCurrentUser() {
-  const { data: auth } = await supabase.auth.getUser();
-  const user = auth.user;
-  if (!user) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const sessionUser = sessionData.session?.user ?? null;
+  if (!sessionUser) {
+    writeCachedUser(null);
+    return null;
+  }
 
   const [{ data: profile }, { data: roles }] = await Promise.all([
     supabase
@@ -83,9 +115,9 @@ export async function fetchCurrentUser() {
       .select(
         "id, full_name, email, initials, phone, school_id, department_id, is_active, must_change_password",
       )
-      .eq("id", user.id)
+      .eq("id", sessionUser.id)
       .maybeSingle(),
-    supabase.from("user_roles").select("role").eq("user_id", user.id),
+    supabase.from("user_roles").select("role").eq("user_id", sessionUser.id),
   ]);
 
   let school = null;
@@ -99,28 +131,39 @@ export async function fetchCurrentUser() {
   }
 
   const roleList = (roles ?? []).map((r) => r.role as AppRole);
-  return {
-    userId: user.id,
-    email: user.email ?? "",
+  const result = {
+    userId: sessionUser.id,
+    email: (profile as any)?.email ?? sessionUser.email ?? "",
     profile,
     school,
     roles: roleList,
     isSuperAdmin: roleList.includes("super_admin"),
-    mustChangePassword: !!profile?.must_change_password,
+    mustChangePassword: !!(profile as any)?.must_change_password,
   };
+  writeCachedUser(result);
+  return result;
 }
 
 export function currentUserQueryOptions() {
   return {
     queryKey: ["current-user"] as const,
-    staleTime: 5 * 60_000,
-    gcTime: 15 * 60_000,
+    initialData: readCachedUser,
+    initialDataUpdatedAt: () => Date.now(),
+    staleTime: 10 * 60_000, // Tier 2: User data, 10 min
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: fetchCurrentUser,
   };
 }
 
 export function useCurrentUser() {
-  return useQuery(currentUserQueryOptions());
+  return useQuery({
+    ...currentUserQueryOptions(),
+    // While the shell is already interactive, revalidate silently so role
+    // changes propagate without blocking paint.
+    refetchOnMount: true,
+  });
 }
 
 export function hasAny(roles: AppRole[] | undefined, allowed: AppRole[]) {

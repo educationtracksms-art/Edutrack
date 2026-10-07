@@ -9,6 +9,9 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/lib/__tests__/*.test.ts\"",
+    "test:finance": "node --test src/lib/__tests__/finance-calc.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {

@@ -4,7 +4,49 @@ import { ArrowUpRight, Facebook, Instagram, Mail, Menu, Phone, Sparkles, Twitter
 import { useEffect, useState, type ReactNode } from "react";
 
 import logoUrl from "@/assets/logo-optimized.png";
-import pageHero from "@/assets/hero/hero-2.jpg";
+
+function WebsiteHeroBanner() {
+  const [bg, setBg] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      import("@/assets/hero/hero-2.jpg").then((m) => {
+        if (!cancelled) setBg(m.default);
+      });
+    const w = window;
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(() => void load(), { timeout: 2000 });
+      return () => {
+        cancelled = true;
+        w.cancelIdleCallback(id);
+      };
+    }
+    const id = w.setTimeout(() => void load(), 400);
+    return () => {
+      cancelled = true;
+      w.clearTimeout(id);
+    };
+  }, []);
+  return (
+    <section className="relative isolate overflow-hidden bg-slate-950 text-white">
+      {bg ? (
+        <div className="absolute inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url(" + bg + ")" }} />
+      ) : null}
+      <div className="absolute inset-0 -z-10 bg-slate-950/65" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-primary/35" />
+      <div className="mx-auto max-w-7xl px-6 py-14 sm:px-8 md:py-20 lg:px-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Education Track SMS</p>
+        <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+          Better tools for better-run schools.
+        </h1>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
+          Explore the ideas, features, and resources that help schools across Uganda work with
+          more clarity and confidence.
+        </p>
+      </div>
+    </section>
+  );
+}
 
 export function PublicShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -123,23 +165,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
       <main>
         {location.pathname.startsWith("/website-pages") ? (
-          <section
-            className="relative isolate overflow-hidden bg-slate-950 text-white"
-            style={{ backgroundImage: `url(${pageHero})`, backgroundSize: "cover", backgroundPosition: "center" }}
-          >
-            <div className="absolute inset-0 -z-10 bg-slate-950/65" />
-            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-primary/35" />
-            <div className="mx-auto max-w-7xl px-6 py-14 sm:px-8 md:py-20 lg:px-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Education Track SMS</p>
-              <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-                Better tools for better-run schools.
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
-                Explore the ideas, features, and resources that help schools across Uganda work with
-                more clarity and confidence.
-              </p>
-            </div>
-          </section>
+          <WebsiteHeroBanner />
         ) : null}
         {children}
       </main>

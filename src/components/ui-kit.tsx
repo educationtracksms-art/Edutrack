@@ -102,7 +102,7 @@ export function Btn({
 }: {
   children: ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "accent" | "ghost";
+  variant?: "primary" | "accent" | "ghost" | "danger";
   type?: "button" | "submit";
   disabled?: boolean;
 }) {
@@ -113,6 +113,8 @@ export function Btn({
       "border border-accent bg-accent text-accent-foreground shadow-sm shadow-accent/20 hover:-translate-y-px hover:brightness-95 hover:shadow-md",
     ghost:
       "border border-border bg-background text-foreground shadow-sm hover:-translate-y-px hover:border-primary/40 hover:bg-primary-soft hover:text-primary hover:shadow-md",
+    danger:
+      "border border-destructive/30 bg-destructive/10 text-destructive hover:-translate-y-px hover:border-destructive/50 hover:bg-destructive/15",
   };
   return (
     <button

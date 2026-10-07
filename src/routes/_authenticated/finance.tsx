@@ -32,6 +32,7 @@ import {
   reviewPurchaseRequest,
   setSchoolFees,
   submitBudgetRevision,
+  updateStudentPayCode,
   updateBudgetStatus,
 } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
@@ -39,12 +40,16 @@ import { friendlyAdminError } from "@/lib/admin-errors";
 type FinanceTab =
   | "overview"
   | "fees"
+  | "pay-codes"
   | "collections"
   | "budgets"
   | "procurement"
   | "reports";
 
+import { requireFinanceAccess } from "@/lib/route-guards";
+
 export const Route = createFileRoute("/_authenticated/finance")({
+  beforeLoad: ({ context }) => requireFinanceAccess(context),
   head: () => ({
     meta: [
       { title: "Finance · EduTrack" },
@@ -61,10 +66,9 @@ function FinancePage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const canView =
-    !!schoolId && hasAny(me?.roles, ["school_admin", "head_teacher", "bursar", "hod"]);
-  const canReviewFinance = hasAny(me?.roles, ["super_admin", "school_admin", "head_teacher"]);
-  const canSetFees = hasAny(me?.roles, ["school_admin", "bursar"]);
+  const canView = !!schoolId && hasAny(me?.roles, ["bursar"]);
+  const canReviewFinance = hasAny(me?.roles, ["bursar"]);
+  const canSetFees = hasAny(me?.roles, ["bursar"]);
   const db = supabase as any;
   const [invoiceForm, setInvoiceForm] = useState({
     studentId: "",
@@ -96,6 +100,7 @@ function FinancePage() {
     feeName: "Tuition",
     amount: "0",
   });
+  const [payCodeForm, setPayCodeForm] = useState({ studentId: "", schpayCode: "" });
   const [budgetForm, setBudgetForm] = useState({
     financialYearId: "",
     title: `Budget ${new Date().getFullYear()}`,
@@ -155,7 +160,7 @@ function FinancePage() {
         db.from("financial_years").select("*").eq("school_id", schoolId!),
         db
           .from("students")
-          .select("id, full_name, student_number, fees_balance, class_id, stream_id")
+          .select("id, full_name, student_number, schpay_code, fees_balance, class_id, stream_id")
           .eq("school_id", schoolId!)
           .is("deleted_at", null)
           .order("full_name"),
@@ -301,24 +306,25 @@ function FinancePage() {
     (sum, student) => sum + Number(student.fees_balance ?? 0),
     0,
   );
-  const paymentMethodTotals = scopedPayments.reduce<Record<string, number>>((totals, payment) => {
+  const paymentMethodTotals: Record<string, number> = {};
+  for (const payment of scopedPayments as any[]) {
     const method = payment.payment_method || "other";
-    totals[method] = (totals[method] ?? 0) + Number(payment.amount ?? 0);
-    return totals;
-  }, {});
-  const budgetUtilization = scopedBudgetLines.reduce<
-    Record<string, { budget: number; actual: number; committed: number }>
-  >((summary, line: any) => {
+    paymentMethodTotals[method] = (paymentMethodTotals[method] ?? 0) + Number(payment.amount ?? 0);
+  }
+  const budgetUtilization: Record<
+    string,
+    { budget: number; actual: number; committed: number }
+  > = {};
+  for (const line of scopedBudgetLines as any[]) {
     const category = line.budget_category || "Uncategorised";
-    const current = summary[category] ?? { budget: 0, actual: 0, committed: 0 };
+    const current = budgetUtilization[category] ?? { budget: 0, actual: 0, committed: 0 };
     current.budget += Number(
       line.approved_amount ?? line.revised_amount ?? line.proposed_amount ?? 0,
     );
     current.actual += Number(line.actual_amount ?? 0);
     current.committed += Number(line.committed_amount ?? 0);
-    summary[category] = current;
-    return summary;
-  }, {});
+    budgetUtilization[category] = current;
+  }
   const currentAcademicYear = (data?.academicYears ?? []).find((year: any) => year.is_current);
   const selectedFeeYearId = feeForm.academicYearId || currentAcademicYear?.id || "";
   const currentTerm = (data?.terms ?? []).find(
@@ -395,6 +401,20 @@ function FinancePage() {
       queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
       queryClient.invalidateQueries({ queryKey: ["students"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+  const payCodeMutation = useMutation({
+    mutationFn: async () => {
+      if (!payCodeForm.studentId) throw new Error("Select a learner first");
+      if (!payCodeForm.schpayCode.trim()) throw new Error("Enter the payment code");
+      return updateStudentPayCode({ data: payCodeForm });
+    },
+    onSuccess: () => {
+      toast.success("Learner payment code saved");
+      setPayCodeForm({ studentId: "", schpayCode: "" });
+      queryClient.invalidateQueries({ queryKey: ["finance-dashboard", schoolId] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -780,7 +800,7 @@ function FinancePage() {
             </p>
           </div>
           <Pill tone="success">
-            {hasAny(me?.roles, ["bursar"]) ? "Bursar workspace" : "School workspace"}
+            Bursar workspace
           </Pill>
         </div>
       </div>
@@ -793,6 +813,7 @@ function FinancePage() {
           [
             ["overview", "Overview"],
             ["fees", "Set school fees"],
+            ["pay-codes", "Payment codes"],
             ["collections", "Fees & collections"],
             ["budgets", "Budgets"],
             ["procurement", "Procurement"],
@@ -889,8 +910,7 @@ function FinancePage() {
         {!canSetFees ? (
           <Panel title="Set school fees">
             <p className="text-sm text-muted-foreground">
-              Only the bursar or school administrator can set learner fees. Your finance records
-              remain visible in your assigned school scope.
+              Only the bursar can set learner fees.
             </p>
           </Panel>
         ) : (
@@ -1038,6 +1058,55 @@ function FinancePage() {
             </Panel>
           </>
         )}
+      </div>
+
+      <div className={activeTab === "pay-codes" ? "space-y-4" : "hidden"}>
+        <Panel title="Assign learner payment code">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Each learner has one unique SchPay code. Codes are assigned and maintained by the bursar.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Learner">
+              <select
+                className={inputClass}
+                value={payCodeForm.studentId}
+                onChange={(event) => {
+                  const student = ((data?.students ?? []) as any[]).find(
+                    (item) => item.id === event.target.value,
+                  );
+                  setPayCodeForm({
+                    studentId: event.target.value,
+                    schpayCode: student?.schpay_code ?? "",
+                  });
+                }}
+              >
+                <option value="">Select learner</option>
+                {((data?.students ?? []) as any[]).map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.full_name}
+                    {student.student_number ? ` · ${student.student_number}` : ""}
+                    {student.schpay_code ? ` · ${student.schpay_code}` : " · No code assigned"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="SchPay code">
+              <input
+                className={inputClass}
+                value={payCodeForm.schpayCode}
+                onChange={(event) =>
+                  setPayCodeForm({ ...payCodeForm, schpayCode: event.target.value.toUpperCase() })
+                }
+                placeholder="Enter unique payment code"
+              />
+            </Field>
+          </div>
+          <div className="mt-4">
+            <Btn variant="accent" onClick={() => payCodeMutation.mutate()} disabled={payCodeMutation.isPending}>
+              {payCodeMutation.isPending ? "Saving code..." : "Save payment code"}
+            </Btn>
+          </div>
+        </Panel>
       </div>
 
       <div className={activeTab === "collections" ? "space-y-4" : "hidden"}>

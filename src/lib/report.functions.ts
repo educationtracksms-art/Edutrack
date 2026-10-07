@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireRateLimitedSupabaseAuth as requireSupabaseAuth } from "@/integrations/supabase/rate-limited-auth-middleware";
 import { buildReportCards } from "./report.server";
 
 const REPORT_PRINT_ROLES = ["dos", "school_admin", "head_teacher", "deputy_head_teacher", "super_admin"];
@@ -38,4 +38,3 @@ export const getALevelReportCards = createServerFn({ method: "POST" })
     await requireReportPrintAccess(context.supabase, context.userId);
     return buildReportCards(context.supabase, data.studentIds, data.termId ?? null, "advanced");
   });
-

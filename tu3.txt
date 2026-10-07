@@ -1,0 +1,6 @@
+﻿
+> typecheck
+> tsc --noEmit
+
+src/routes/_authenticated/academics/scheduling/calendar.tsx(2,3): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/academics/scheduling/calendar.tsx(3,1): error TS1128: Declaration or statement expected.

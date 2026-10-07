@@ -608,6 +608,7 @@ export type Database = {
           is_read: boolean;
           school_id: string | null;
           title: string;
+          type: string;
           user_id: string | null;
         };
         Insert: {
@@ -617,6 +618,7 @@ export type Database = {
           is_read?: boolean;
           school_id?: string | null;
           title: string;
+          type?: string;
           user_id?: string | null;
         };
         Update: {
@@ -626,6 +628,7 @@ export type Database = {
           is_read?: boolean;
           school_id?: string | null;
           title?: string;
+          type?: string;
           user_id?: string | null;
         };
         Relationships: [
@@ -902,10 +905,20 @@ export type Database = {
           ends_at: string | null;
           id: string;
           notes: string | null;
+          payment_confirmed_at: string | null;
+          payment_confirmed_by: string | null;
+          payment_reference: string | null;
           plan_id: string;
           school_id: string;
           starts_at: string;
-          status: "trial" | "active" | "past_due" | "expired" | "cancelled";
+          status:
+            | "trial"
+            | "active"
+            | "past_due"
+            | "expired"
+            | "cancelled"
+            | "pending"
+            | "confirmed";
           updated_at: string;
         };
         Insert: {
@@ -917,10 +930,20 @@ export type Database = {
           ends_at?: string | null;
           id?: string;
           notes?: string | null;
+          payment_confirmed_at?: string | null;
+          payment_confirmed_by?: string | null;
+          payment_reference?: string | null;
           plan_id: string;
           school_id: string;
           starts_at?: string;
-          status?: "trial" | "active" | "past_due" | "expired" | "cancelled";
+          status?:
+            | "trial"
+            | "active"
+            | "past_due"
+            | "expired"
+            | "cancelled"
+            | "pending"
+            | "confirmed";
           updated_at?: string;
         };
         Update: {
@@ -932,10 +955,20 @@ export type Database = {
           ends_at?: string | null;
           id?: string;
           notes?: string | null;
+          payment_confirmed_at?: string | null;
+          payment_confirmed_by?: string | null;
+          payment_reference?: string | null;
           plan_id?: string;
           school_id?: string;
           starts_at?: string;
-          status?: "trial" | "active" | "past_due" | "expired" | "cancelled";
+          status?:
+            | "trial"
+            | "active"
+            | "past_due"
+            | "expired"
+            | "cancelled"
+            | "pending"
+            | "confirmed";
           updated_at?: string;
         };
         Relationships: [];
@@ -946,6 +979,9 @@ export type Database = {
           created_at: string;
           description: string | null;
           display_order: number;
+          duration_days: number | null;
+          duration_unit: string;
+          duration_value: number;
           id: string;
           is_active: boolean;
           is_platform_only: boolean;
@@ -957,6 +993,9 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           display_order?: number;
+          duration_days?: number | null;
+          duration_unit?: string;
+          duration_value?: number;
           id?: string;
           is_active?: boolean;
           is_platform_only?: boolean;
@@ -968,6 +1007,9 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           display_order?: number;
+          duration_days?: number | null;
+          duration_unit?: string;
+          duration_value?: number;
           id?: string;
           is_active?: boolean;
           is_platform_only?: boolean;
@@ -1802,11 +1844,28 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      can_view_subscription: { Args: never; Returns: boolean };
-      can_manage_academics: { Args: never; Returns: boolean };
+            can_view_subscription: { Args: never; Returns: boolean };
+      consume_server_function_rate_limit: {
+        Args: never;
+        Returns: {
+          allowed: boolean;
+          remaining: number;
+          reset_at: string;
+        }[];
+      };
+      change_own_school_subscription: {
+        Args: {
+          p_plan_id: string;
+          p_status: string;
+          p_starts_at: string;
+          p_ends_at?: string;
+          p_auto_renew?: boolean;
+        };
+        Returns: Database["public"]["Tables"]["school_subscriptions"]["Row"];
+      };
+      current_school_id: { Args: never; Returns: string };
       can_manage_school: { Args: never; Returns: boolean };
       can_view_all_students: { Args: never; Returns: boolean };
-      current_school_id: { Args: never; Returns: string };
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];

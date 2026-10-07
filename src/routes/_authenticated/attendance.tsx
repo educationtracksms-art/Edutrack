@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
+import { useClassesAndStreams } from "@/hooks/useClassesAndStreams";
+import { stableDataQueryOptions, volatileDataQueryOptions } from "@/lib/query-cache-config";
 import { Btn, Field, PageHeader, Panel, ResponsiveTable, inputClass } from "@/components/ui-kit";
 import { isModuleEnabled } from "@/lib/modules";
 import { deleteAttendanceSummary } from "@/lib/admin.functions";
@@ -73,33 +75,33 @@ function AttendancePage() {
   const [rollCall, setRollCall] = useState<Record<string, RollCallStatus>>({});
   const deleteSummaryFn = useServerFn(deleteAttendanceSummary);
 
+  const { data: classesAndStreams } = useClassesAndStreams();
+  const classes = classesAndStreams?.classes ?? [];
+  const streams = classesAndStreams?.streams ?? [];
+
   const { data, isLoading } = useQuery({
-    queryKey: ["attendance", schoolId, date],
+    ...stableDataQueryOptions(["attendance-structure", schoolId]),
     enabled: !!schoolId,
     queryFn: async () => {
-      const [students, classes, streams, terms] = await Promise.all([
-        supabase
-          .from("students")
-          .select("id, full_name, class_id, stream_id")
-          .is("deleted_at", null)
-          .order("full_name"),
-        supabase.from("classes").select("id, name, class_teacher_id").order("name"),
-        supabase.from("streams").select("id, name, class_id, stream_teacher_id").order("name"),
-        supabase.from("terms").select("id, is_current"),
-      ]);
+      const { data: students } = await supabase
+        .from("students")
+        .select("id, full_name, class_id, stream_id")
+        .is("deleted_at", null)
+        .order("full_name");
+
+      const { data: terms } = await supabase.from("terms").select("id, is_current");
 
       return {
-        students: students.data ?? [],
-        classes: classes.data ?? [],
-        streams: streams.data ?? [],
-        // The system administrator controls the active term. Never fall back to an arbitrary term.
-        term: (terms.data ?? []).find((t) => t.is_current) ?? null,
+        students: students ?? [],
+        classes,
+        streams,
+        term: (terms ?? []).find((t) => t.is_current) ?? null,
       };
     },
   });
 
   const { data: summaries } = useQuery({
-    queryKey: ["attendance-summaries", schoolId, data?.term?.id, classFilter],
+    ...volatileDataQueryOptions(["attendance-summaries", schoolId, data?.term?.id, classFilter]),
     enabled: !!schoolId && !!data?.term?.id,
     queryFn: async () => {
       const { data: summaryRows } = await supabase
@@ -111,7 +113,7 @@ function AttendancePage() {
   });
 
   const { data: dailyRecords } = useQuery({
-    queryKey: ["attendance-roll-call", schoolId, data?.term?.id, date],
+    ...volatileDataQueryOptions(["attendance-roll-call", schoolId, data?.term?.id, date]),
     enabled: !!schoolId && !!data?.term?.id,
     queryFn: async () => {
       const { data: rows, error } = await supabase
@@ -125,7 +127,7 @@ function AttendancePage() {
   });
 
   const { data: termRecords } = useQuery({
-    queryKey: ["attendance-roll-call-term", schoolId, data?.term?.id],
+    ...volatileDataQueryOptions(["attendance-roll-call-term", schoolId, data?.term?.id]),
     enabled: !!schoolId && !!data?.term?.id,
     queryFn: async () => {
       const { data: rows, error } = await supabase

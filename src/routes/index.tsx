@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import hero1 from "@/assets/hero/hero-1.jpg";
-import hero2 from "@/assets/hero/hero-2.jpg";
-import hero3 from "@/assets/hero/hero-3.jpg";
+// Dynamic import keeps hero images off the critical initial JS bundle.
+// The public shell (Shared by all non-authenticated pages) stays lean for /auth
+// visitors who only need the logo and form.
+const hero1 = (await import("@/assets/hero/hero-1.jpg")).default;
 import { PublicShell } from "@/components/layout/PublicShell";
 
 export const Route = createFileRoute("/")({
@@ -26,24 +27,65 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
-const HERO_IMAGES = [hero1, hero2, hero3];
+const HERO_IMAGES = [hero1];
 
 function Landing() {
   const [heroIndex, setHeroIndex] = useState(0);
+  const [extraHeros, setExtraHeros] = useState<string[]>([]);
+  const loadedOnce = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // Keep this idle: the hero above is already painted. The remaining two
+    // images load async so the landing bundle stays small for /auth visitors.
+    const load = async () => {
+      const [m2, m3] = await Promise.all([
+        import("@/assets/hero/hero-2.jpg"),
+        import("@/assets/hero/hero-3.jpg"),
+      ]);
+      if (!cancelled) setExtraHeros([m2.default, m3.default]);
+    };
+
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(() => void load(), { timeout: 2000 });
+      return () => {
+        cancelled = true;
+        (window as unknown as { cancelIdleCallback: (id: number) => void }).cancelIdleCallback(
+          id,
+        );
+      };
+    }
+
+    // Fallback: load after a short delay so the critical render is never blocked.
+    const id = window.setTimeout(() => void load(), 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [loadedOnce.current]);
+
+  loadedOnce.current = true;
+
+  const images = extraHeros.length ? [hero1, ...extraHeros] : HERO_IMAGES;
+
+  useEffect(() => {
+    if (images.length < 2) return;
     const interval = window.setInterval(() => {
-      setHeroIndex((current) => (current + 1) % HERO_IMAGES.length);
+      setHeroIndex((current) => (current + 1) % images.length);
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [images.length]);
 
   return (
     <PublicShell>
       <section className="relative overflow-hidden">
         <div className="absolute inset-0">
-          {HERO_IMAGES.map((image, index) => (
+          {images.map((image, index) => (
             <div
               key={image}
               className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${

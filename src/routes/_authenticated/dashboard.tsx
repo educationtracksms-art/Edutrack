@@ -88,7 +88,10 @@ function useDashboardData(
 ) {
   return useQuery({
     queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId, isHod, departmentId],
-    staleTime: 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    placeholderData: (previous) => previous,
     retry: 1,
     queryFn: async () => {
       if (!isSuper && !schoolId) return EMPTY_DASHBOARD;
@@ -98,28 +101,33 @@ function useDashboardData(
           ? (query: any) => query.eq("school_id", schoolId)
           : (query: any) => query;
 
-      const [students, assessments, subjects, classes, streams, terms, teacherAllocations, departmentsResult] =
+      const [students, assessments, subjects, classes, streams, terms, teacherAllocations, departmentsResult, schoolsResult, profilesResult, activityResult] =
         await Promise.all([
           schoolQuery(
             supabase
               .from("students")
-              .select("id, full_name, gender, status, class_id, stream_id, school_id"),
+              .select("id, full_name, gender, status, class_id, stream_id, school_id")
+              .order("full_name", { ascending: true })
+              .limit(2000),
           ),
           schoolQuery(
             supabase
               .from("assessments")
               .select(
-                "id, student_id, subject_id, term_id, formative, summative, status, school_id, approved_by, approved_at",
-              ),
+                "id, student_id, subject_id, term_id, formative, summative, status, school_id",
+              )
+              .order("created_at", { ascending: false })
+              .limit(3000),
           ),
           supabase.from("subjects").select("id, name"),
-          schoolQuery(supabase.from("classes").select("id, name, class_teacher_id")),
-          schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id")),
+          schoolQuery(supabase.from("classes").select("id, name, class_teacher_id").limit(500)),
+          schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id").limit(500)),
           schoolQuery(
             supabase
               .from("terms")
               .select("id, name, is_current")
-              .order("start_date", { ascending: false }),
+              .order("start_date", { ascending: false })
+              .limit(20),
           ),
           isTeacher && teacherId
             ? supabase
@@ -129,41 +137,53 @@ function useDashboardData(
             : Promise.resolve({ data: [] as any[] }),
           isTeacher
             ? Promise.resolve({ data: [] as any[] })
-            : schoolQuery(supabase.from("departments").select("id, name")),
+            : schoolQuery(supabase.from("departments").select("id, name").limit(200)),
+          isTeacher
+            ? Promise.resolve({ data: [] as any[] })
+            : schoolQuery(supabase.from("schools").select("id, name, status").limit(50)),
+          isTeacher
+            ? Promise.resolve({ data: [] as any[] })
+            : schoolQuery(
+                supabase
+                  .from("profiles")
+                  .select("id, full_name, school_id")
+                  .order("full_name", { ascending: true })
+                  .limit(2000),
+              ),
+          isTeacher
+            ? Promise.resolve({ data: [] as any[] })
+            : schoolQuery(
+                supabase
+                  .from("audit_logs")
+                  .select("action, user_name, created_at")
+                  .order("created_at", { ascending: false })
+                  .limit(8),
+              ),
         ]);
 
-      const [schoolsResult, profilesResult, activityResult] = await Promise.all([
-        isTeacher
-          ? Promise.resolve({ data: [] as any[] })
-          : schoolQuery(supabase.from("schools").select("id, name, status")),
-        isTeacher
-          ? Promise.resolve({ data: [] as any[] })
-          : schoolQuery(supabase.from("profiles").select("id, full_name, school_id")),
-        isTeacher
-          ? Promise.resolve({ data: [] as any[] })
-          : schoolQuery(
-              supabase
-                .from("audit_logs")
-                .select("action, user_name, created_at")
-                .order("created_at", { ascending: false })
-                .limit(8),
-            ),
-      ]);
-      let requestsQuery = schoolQuery(
-        supabase
-          .from("purchase_requests")
-          .select("id, request_number, department_name, item_description, requested_amount, approved_amount, approval_status, status, created_at")
-          .order("created_at", { ascending: false }),
-      );
-      if (isHod) {
+      let purchaseRequestsResult: { data: any[] } = { data: [] as any[] };
+      if (!isTeacher && !isHod) {
+        purchaseRequestsResult = await schoolQuery(
+          supabase
+            .from("purchase_requests")
+            .select("id, request_number, department_name, item_description, requested_amount, approved_amount, approval_status, status, created_at")
+            .order("created_at", { ascending: false })
+            .limit(200),
+        );
+      } else if (!isTeacher && isHod) {
+        let requestsQuery = schoolQuery(
+          supabase
+            .from("purchase_requests")
+            .select("id, request_number, department_name, item_description, requested_amount, approved_amount, approval_status, status, created_at")
+            .order("created_at", { ascending: false })
+            .limit(200),
+        );
         const departmentName = (departmentsResult.data ?? []).find(
-          (department: any) => department.id === departmentId,
+          (department) => department.id === departmentId,
         )?.name;
         requestsQuery = requestsQuery.eq("department_name", departmentName ?? "__unassigned__");
+        purchaseRequestsResult = await requestsQuery;
       }
-      const purchaseRequestsResult = isTeacher
-        ? { data: [] as any[] }
-        : await requestsQuery;
       return {
         schools: schoolsResult.data ?? [],
         students: students.data ?? [],
@@ -204,12 +224,26 @@ function Dashboard() {
 
 function DashboardLoadingState({ label, description }: { label: string; description: string }) {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
-        <div className="mx-auto h-12 w-12 animate-pulse rounded-full bg-primary/15" />
-        <h1 className="mt-4 text-xl font-semibold">{label}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+    <div className="space-y-4" aria-busy="true" aria-live="polite">
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-7">
+        <div className="h-5 w-32 animate-pulse rounded-full bg-muted" />
+        <div className="mt-3 h-8 w-64 max-w-full animate-pulse rounded-xl bg-muted" />
+        <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded-lg bg-muted/70" />
       </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-6"
+          >
+            <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
+            <div className="mt-3 h-8 w-20 animate-pulse rounded-lg bg-muted" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">
+        {label}: {description}
+      </span>
     </div>
   );
 }
@@ -226,6 +260,10 @@ function EmptyDashboardState({ title, description }: { title: string; descriptio
 function PlatformDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["platform-stats"],
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: async () => {
       try {
         const { data, error } = await supabase.rpc("platform_school_stats");
@@ -827,6 +865,10 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const { data: moduleMap } = useQuery({
     queryKey: ["enabled-modules", schoolId],
     enabled: !!schoolId,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: async () => getEnabledModuleMap(supabase, schoolId),
   });
   const moduleToggleMutation = useMutation({
@@ -903,17 +945,23 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const termById = new Map((data?.terms ?? []).map((item: any) => [item.id, item]));
   const { data: timetableSummary } = useQuery({
     queryKey: ["dashboard-timetable", schoolId],
-    enabled: !!schoolId && isDos && timetableEnabled,
+    enabled: !!schoolId && isDos && timetableEnabled && !!data,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: async () => {
       const [entries, allocations] = await Promise.all([
         supabase
           .from("timetable_entries")
           .select("id, teacher_id, class_id, stream_id, subject_id, is_published, school_id")
-          .eq("school_id", schoolId!),
+          .eq("school_id", schoolId!)
+          .limit(2000),
         supabase
           .from("teacher_allocations")
           .select("id, teacher_id, class_id, stream_id, subject_id, school_id")
-          .eq("school_id", schoolId!),
+          .eq("school_id", schoolId!)
+          .limit(2000),
       ]);
       return {
         entries: entries.data ?? [],

@@ -11,6 +11,13 @@ Add these in **Vercel → Project → Settings → Environment Variables**:
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+Authenticated server functions share a Supabase Postgres-backed limit of 120
+requests per user per minute. Apply the `server_function_rate_limits` migration
+to the Supabase project before deploying. The limit is enforced atomically by a
+database function; no Redis service or additional environment variables are
+required. Rejected requests return HTTP 429 with a `Retry-After` header. If the
+Supabase rate-limit check fails, requests fail closed with HTTP 503.
+
 Use the correct environment scope:
 
 - **Production** for the live site

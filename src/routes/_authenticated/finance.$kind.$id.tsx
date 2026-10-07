@@ -14,7 +14,10 @@ import {
 } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
 
+import { requireFinanceAccess } from "@/lib/route-guards";
+
 export const Route = createFileRoute("/_authenticated/finance/$kind/$id")({
+  beforeLoad: ({ context }) => requireFinanceAccess(context),
   component: FinanceDetailPage,
 });
 
@@ -23,7 +26,7 @@ function FinanceDetailPage() {
   const { kind, id } = Route.useParams();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const canView = hasAny(me?.roles, ["head_teacher", "bursar", "hod"]);
+  const canView = !!schoolId && hasAny(me?.roles, ["bursar"]);
   const db = supabase as any;
   const [note, setNote] = useState("");
   const isHod = hasAny(me?.roles, ["hod"]);

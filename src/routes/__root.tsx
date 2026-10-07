@@ -133,12 +133,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "publisher", href: SEO_CONFIG.authorUrl },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "preconnect", href: "https://www.google-analytics.com" },
       { rel: "preconnect", href: "https://api.educationtrack.ug" },
-      { rel: "dns-prefetch", href: "https://www.google-analytics.com" },
       { rel: "dns-prefetch", href: "https://api.educationtrack.ug" },
       { rel: "dns-prefetch", href: "https://fonts.googleapis.com" },
-      { rel: "preload", href: "/favicon.png", as: "image" },
       { rel: "preload", href: "/favicon.png", as: "image" },
     ],
     scripts: [

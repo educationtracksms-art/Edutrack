@@ -25,6 +25,10 @@ export function NotificationPanel({
   const { data: notifications = [] } = useQuery({
     queryKey,
     enabled: !!me?.userId,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notifications")

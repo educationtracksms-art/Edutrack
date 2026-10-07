@@ -1,413 +1,453 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { CreditCard, Info } from "lucide-react";
-
-import { supabase } from "@/integrations/supabase/client";
-import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
-import { PageHeader, Panel, Pill, Stat } from "@/components/ui-kit";
-import { changeOwnSchoolSubscription } from "@/lib/admin.functions";
+import { CreditCard, Calendar, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { supabase } from "@/integrations/supabase/client";
+import { currentUserQueryOptions, hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
+import { PageHeader, Panel, Pill } from "@/components/ui-kit";
+import { setAccessNotice } from "@/lib/access-notice";
+import {
+  createSchoolSubscription,
+  cancelSchoolSubscription,
+} from "@/lib/subscription.functions";
+import { SubscriptionExpiredBlock } from "@/components/subscription/SubscriptionExpiredBlock";
+import { checkSubscriptionExpired } from "@/lib/subscription-guard";
+
 export const Route = createFileRoute("/_authenticated/subscription")({
+  beforeLoad: async ({ context }) => {
+    // Only the School Admin may open the Subscription page. Super Admin keeps
+    // full platform access; every other school user gets redirected with 403-style notice.
+    const currentUser = await context.queryClient.fetchQuery(currentUserQueryOptions());
+    if (!currentUser) throw redirect({ to: "/auth" });
+    const allowed =
+      currentUser.roles.includes("school_admin") || currentUser.isSuperAdmin;
+    if (!allowed) {
+      setAccessNotice(
+        "Only the School Administrator can access the Subscription page.",
+      );
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Subscription · EduTrack" },
-      {
-        name: "description",
-        content: "View your school's EduTrack subscription and payment history.",
-      },
+      { name: "description", content: "View and manage your school's EduTrack subscription." },
     ],
   }),
   component: SubscriptionPage,
 });
 
-type Subscription = {
-  id: string;
-  plan_id: string;
-  status: "trial" | "active" | "past_due" | "expired" | "cancelled";
-  starts_at: string;
-  ends_at: string | null;
-  notes: string | null;
-  auto_renew: boolean;
-  created_at: string;
-};
 type Plan = {
   id: string;
   name: string;
   price: number;
-  billing_cycle: string;
+  duration_value: number;
+  duration_unit: string;
+  duration_days: number;
   description: string | null;
-  is_platform_only?: boolean;
+  is_active: boolean;
+  is_platform_only: boolean;
+  display_order: number;
+  created_at: string;
 };
-type Payment = {
+
+type ActiveSubscription = {
   id: string;
-  amount: number;
-  currency: string;
-  payment_date: string;
-  method: string;
-  reference: string | null;
+  plan_id: string;
   status: string;
+  starts_at: string;
+  ends_at: string | null;
+  payment_reference: string | null;
+  plan: Plan;
 };
 
-function actualStatus(subscription: Subscription | undefined) {
-  if (!subscription) return "not_configured";
-  const today = new Date().toISOString().slice(0, 10);
-  if (
-    subscription.ends_at &&
-    subscription.ends_at < today &&
-    ["trial", "active", "past_due"].includes(subscription.status)
-  )
-    return "expired";
-  return subscription.status;
+function money(amount: number): string {
+  return `UGX ${Number(amount).toLocaleString()}`;
 }
 
-function tone(status: string): "success" | "warning" | "muted" | "danger" {
-  if (status === "active") return "success";
-  if (status === "trial" || status === "past_due") return "warning";
-  if (status === "expired" || status === "cancelled") return "danger";
-  return "muted";
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-UG", { year: "numeric", month: "long", day: "numeric" });
 }
 
-function label(status: string) {
-  return status === "not_configured" ? "Not configured" : status.replaceAll("_", " ");
+function durationLabel(value: number, unit: string): string {
+  const labels: Record<string, string> = { days: "Days", weeks: "Weeks", months: "Months", years: "Years" };
+  if (value === 1) return `1 ${unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
+  return `${value} ${labels[unit] ?? unit}`;
 }
 
-function money(amount: number, currency = "UGX") {
-  return `${currency} ${Number(amount).toLocaleString()}`;
+function statusBadge(status: string): { tone: "success" | "warning" | "muted" | "danger"; label: string } {
+  const map: Record<string, { tone: "success" | "warning" | "muted" | "danger"; label: string }> = {
+    active: { tone: "success", label: "Active" },
+    trial: { tone: "warning", label: "Trial" },
+    past_due: { tone: "warning", label: "Past Due" },
+    pending: { tone: "muted", label: "Pending Confirmation" },
+    confirmed: { tone: "muted", label: "Confirmed" },
+    expired: { tone: "danger", label: "Expired" },
+    cancelled: { tone: "danger", label: "Cancelled" },
+    not_configured: { tone: "muted", label: "Not Configured" },
+  };
+  return map[status] ?? { tone: "muted" as const, label: status };
 }
 
 function SubscriptionPage() {
   const { data: me, isLoading: userLoading } = useCurrentUser();
+  const queryClient = useQueryClient();
   const schoolId = (me?.profile as { school_id?: string } | null)?.school_id ?? null;
-  const canView = hasAny(me?.roles, ["school_admin", "head_teacher", "dos"]);
+  const canView = hasAny(me?.roles, ["school_admin", "super_admin"]);
+  const isSchoolAdmin = me?.roles.includes("school_admin");
+  const isLoading = userLoading || !me;
 
-  const { data: subscriptions = [], isLoading } = useQuery({
-    queryKey: ["school-subscriptions", schoolId],
+  const { data: expiredCheck } = useQuery({
+    queryKey: ["subscription-expired-check", schoolId],
+    enabled: !!schoolId && canView && !isSchoolAdmin,
+    staleTime: 60_000,
+    queryFn: async () => (await checkSubscriptionExpired({ queryClient })) as boolean,
+  });
+
+  const showBlockingScreen = !isSchoolAdmin && expiredCheck === true;
+
+  const { data: currentSub } = useQuery({
+    queryKey: ["active-subscription", schoolId],
     enabled: !!schoolId && canView,
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("school_subscriptions")
-        .select("id,plan_id,status,starts_at,ends_at,notes,auto_renew,created_at")
+        .select(`id, plan_id, status, starts_at, ends_at, payment_reference,
+          subscription_plans (id, name, price, duration_value, duration_unit, duration_days, description, is_active, is_platform_only)`)
         .eq("school_id", schoolId!)
-        .order("created_at", { ascending: false });
+        .in("status", ["trial", "active", "past_due", "pending", "confirmed"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (error) throw new Error(error.message);
-      return (data ?? []) as Subscription[];
+      if (!data) return null;
+      const row = data as unknown as {
+        id: string;
+        plan_id: string;
+        status: string;
+        starts_at: string;
+        ends_at: string | null;
+        payment_reference: string | null;
+        subscription_plans: Plan;
+      };
+      return {
+        id: row.id,
+        plan_id: row.plan_id,
+        status: row.status,
+        starts_at: row.starts_at,
+        ends_at: row.ends_at,
+        payment_reference: row.payment_reference,
+        plan: row.subscription_plans,
+      } as ActiveSubscription;
     },
   });
+
   const { data: plans = [] } = useQuery({
-    queryKey: ["subscription-plans", schoolId],
+    queryKey: ["subscription-plans-list", schoolId],
     enabled: !!schoolId && canView,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("subscription_plans")
-        .select("id,name,price,billing_cycle,description,is_platform_only");
+        .select("id, name, price, duration_value, duration_unit, duration_days, description, is_active, is_platform_only, display_order, created_at")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+        .order("created_at", { ascending: true });
       if (error) throw new Error(error.message);
       return (data ?? []) as Plan[];
     },
   });
-  const { data: payments = [] } = useQuery({
-    queryKey: ["school-payments", schoolId],
-    enabled: !!schoolId && canView,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("school_payments")
-        .select("id,amount,currency,payment_date,method,reference,status")
-        .eq("school_id", schoolId!)
-        .order("payment_date", { ascending: false })
-        .order("created_at", { ascending: false });
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Payment[];
+
+  const subscribeMutation = useMutation({
+    mutationFn: (planId: string) => createSchoolSubscription({ data: { planId } }),
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success("Subscription created", {
+          description: `Reference: ${result.subscription.payment_reference}. Complete payment to activate.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["active-subscription", schoolId] });
+      }
     },
-  });
-  const { data: ultimateSubscription = false } = useQuery({
-    queryKey: ["current-school-ultimate", schoolId],
-    enabled: !!schoolId && canView,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc(
-        "current_school_has_ultimate_subscription",
-      );
-      if (error) throw new Error(error.message);
-      return Boolean(data);
+    onError: (error: Error) => {
+      if (error.message.includes("already has an active")) toast.error(error.message);
+      else toast.error("Could not create subscription");
     },
   });
 
-  const subscription = useMemo(
-    () =>
-      subscriptions.find((item) => ["trial", "active", "past_due"].includes(item.status)) ??
-      subscriptions[0],
-    [subscriptions],
-  );
-  const status = actualStatus(subscription);
-  const plan = plans.find((item) => item.id === subscription?.plan_id);
-  const confirmedTotal = payments
-    .filter((payment) => payment.status === "confirmed")
-    .reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const queryClient = useQueryClient();
-  const [selectedPlan, setSelectedPlan] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<Subscription["status"]>("active");
-  const [startsAt, setStartsAt] = useState(new Date().toISOString().slice(0, 10));
-  const [endsAt, setEndsAt] = useState("");
-  const [autoRenew, setAutoRenew] = useState(true);
-  const changeMutation = useMutation({
-    mutationFn: () =>
-      changeOwnSchoolSubscription({
-        data: {
-          planId: selectedPlan,
-          status: selectedStatus,
-          startsAt,
-          endsAt: endsAt || undefined,
-          autoRenew,
-        },
-      }),
+  const cancelMutation = useMutation({
+    mutationFn: (subId: string) =>
+      cancelSchoolSubscription({ data: { subscriptionId: subId } }),
     onSuccess: () => {
-      toast.success("Subscription updated");
-      queryClient.invalidateQueries({ queryKey: ["school-subscriptions", schoolId] });
+      toast.success("Subscription cancelled");
+      queryClient.invalidateQueries({ queryKey: ["active-subscription", schoolId] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
-  const isUltimate = ultimateSubscription || plan?.is_platform_only === true;
 
-  if (userLoading || !me || (canView && isLoading)) {
+  if (isLoading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
-        Loading subscription details…
+      <div className="flex min-h-[300px] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
-  if (!canView) {
-    return (
-      <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
-        <h1 className="text-xl font-semibold">Subscription details are restricted</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Only the School Administrator, Head Teacher and Director of Studies can view billing for
-          this school.
-        </p>
-      </div>
-    );
-  }
+
+  if (showBlockingScreen) return <SubscriptionExpiredBlock />;
+
   if (!schoolId) {
     return (
-      <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
-        <h1 className="text-xl font-semibold">No school linked</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Ask the platform administrator to link your account to a school.
-        </p>
+      <div className="flex min-h-[300px] items-center justify-center">
+        <Panel title="Subscription">
+          <p className="text-sm text-muted-foreground">Not linked to a school. Contact the Super Admin.</p>
+        </Panel>
       </div>
     );
   }
 
+  if (!canView) {
+    return (
+      <div className="flex min-h-[300px] items-center justify-center">
+        <Panel title="Subscription">
+          <p className="text-sm text-muted-foreground">
+            Only School Admins, Head Teachers, and DOS can access this page.
+          </p>
+        </Panel>
+      </div>
+    );
+  }
+
+  const sub = currentSub;
+  const status = sub?.status ?? "not_configured";
+  const subBadge = statusBadge(status);
+  const hasOpenSub = ["trial", "active", "past_due", "pending", "confirmed"].includes(status);
+  const isPending = status === "pending";
+  const blockNewSub = hasOpenSub && !isPending;
   return (
     <div>
       <PageHeader
-        title="School subscription"
         eyebrow="Billing"
-        description={
-          isUltimate
-            ? "Your Ultimate subscription is managed by the EduTrack Super Admin."
-            : "Manage your school subscription plan and status."
-        }
-        actions={
-          <div className="flex items-center gap-2 rounded-xl border border-primary/15 bg-primary-soft px-3 py-2 text-xs text-primary">
-            <CreditCard className="h-4 w-4" /> Platform managed
-          </div>
-        }
+        title="Subscription"
+        description="Manage your school's EduTrack subscription plan and payment."
       />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Current status"
-          value={label(status)}
-          hint={subscription?.ends_at ? `Until ${subscription.ends_at}` : "No end date set"}
-        />
-        <Stat
-          label="Plan"
-          value={plan?.name ?? "—"}
-          hint={plan ? `${money(plan.price)}/${plan.billing_cycle}` : "Contact platform admin"}
-        />
-        <Stat label="Payments recorded" value={payments.length} />
-        <Stat label="Confirmed total" value={money(confirmedTotal)} />
-      </div>
 
-      {!subscription && (
-        <div className="mt-4 flex gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-4 text-sm">
-          <Info className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-          <div>
-            <p className="font-semibold">No subscription has been assigned yet</p>
-            <p className="mt-1 text-muted-foreground">
-              Ask your EduTrack Super Admin to select a plan and activate your school.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(18rem,0.75fr)_minmax(0,1.25fr)]">
-        <Panel title="Subscription details">
-          <div className="space-y-4 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Status</span>
-              <Pill tone={tone(status)}>{label(status)}</Pill>
+      {sub && (
+        <Panel title={`Current Subscription — ${sub.plan.name}`} className="mb-6">
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="flex items-center gap-3">
+              <Pill tone={subBadge.tone}>{subBadge.label}</Pill>
+              {isPending && (
+                <span className="text-xs text-muted-foreground">
+                  Awaiting Super Admin payment confirmation.
+                </span>
+              )}
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Plan</span>
-              <span className="font-medium">{plan?.name ?? "—"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Billing cycle</span>
-              <span className="font-medium capitalize">{plan?.billing_cycle ?? "—"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Starts</span>
-              <span className="font-medium">{subscription?.starts_at ?? "—"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Ends</span>
-              <span className="font-medium">{subscription?.ends_at ?? "No end date"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Auto-renew</span>
-              <span className="font-medium">
-                {subscription?.auto_renew ? "Enabled" : "Not enabled"}
-              </span>
-            </div>
-            {subscription?.notes && (
-              <div className="border-t border-border pt-4">
-                <p className="text-muted-foreground">Note from platform admin</p>
-                <p className="mt-1 whitespace-pre-wrap">{subscription.notes}</p>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span>Start: {formatDate(sub.starts_at)}</span>
               </div>
-            )}
-          </div>
-        </Panel>
-        <Panel title="Payment history">
-          {payments.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="pb-2">Date</th>
-                    <th className="pb-2">Amount</th>
-                    <th className="pb-2">Method</th>
-                    <th className="pb-2">Status</th>
-                    <th className="pb-2">Reference</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((payment) => (
-                    <tr key={payment.id} className="border-t border-border">
-                      <td className="py-3">{payment.payment_date}</td>
-                      <td className="font-medium">{money(payment.amount, payment.currency)}</td>
-                      <td className="capitalize">{payment.method.replaceAll("_", " ")}</td>
-                      <td>
-                        <Pill
-                          tone={
-                            payment.status === "confirmed"
-                              ? "success"
-                              : payment.status === "pending"
-                                ? "warning"
-                                : "danger"
-                          }
-                        >
-                          {payment.status}
-                        </Pill>
-                      </td>
-                      <td className="text-muted-foreground">{payment.reference ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span>End: {formatDate(sub.ends_at)}</span>
+              </div>
+              {sub.payment_reference && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CreditCard className="h-4 w-4" />
+                  <span className="font-mono text-xs">{sub.payment_reference}</span>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              No payment records are available yet.
+            <div className="text-sm font-semibold">
+              {money(sub.plan.price)} / {durationLabel(sub.plan.duration_value, sub.plan.duration_unit)}
+            </div>
+          </div>
+
+          {sub.plan.description && (
+            <p className="mt-4 text-sm text-muted-foreground">{sub.plan.description}</p>
+          )}
+
+          {isPending && (
+            <div className="mt-5 rounded-2xl border border-accent/20 bg-accent/5 p-5 text-sm">
+              <p className="font-medium">
+                Your payment is being reviewed. Please wait for system confirmation. You will be
+                notified once your subscription is activated.
+              </p>
+              <p className="mt-2 text-muted-foreground">Reference: {sub.payment_reference}</p>
             </div>
           )}
-        </Panel>
-      </div>
-      {!isUltimate && (
-        <Panel title="Change subscription" className="mt-4">
-          <form
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!selectedPlan) return toast.error("Choose a plan");
-              changeMutation.mutate();
-            }}
-          >
-            <label className="text-sm">
-              Plan
-              <select
-                className="mt-1 w-full rounded-lg border border-border bg-background p-2"
-                value={selectedPlan}
-                onChange={(event) => setSelectedPlan(event.target.value)}
-              >
-                <option value="">Select plan</option>
-                {plans
-                  .filter((item) => !item.is_platform_only)
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              Status
-              <select
-                className="mt-1 w-full rounded-lg border border-border bg-background p-2"
-                value={selectedStatus}
-                onChange={(event) =>
-                  setSelectedStatus(event.target.value as Subscription["status"])
-                }
-              >
-                {["trial", "active", "past_due", "expired", "cancelled"].map((item) => (
-                  <option key={item} value={item}>
-                    {item.replaceAll("_", " ")}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              Starts
-              <input
-                type="date"
-                className="mt-1 w-full rounded-lg border border-border bg-background p-2"
-                value={startsAt}
-                onChange={(event) => setStartsAt(event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Ends
-              <input
-                type="date"
-                className="mt-1 w-full rounded-lg border border-border bg-background p-2"
-                value={endsAt}
-                onChange={(event) => setEndsAt(event.target.value)}
-              />
-            </label>
-            <div className="flex items-end gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={autoRenew}
-                  onChange={(event) => setAutoRenew(event.target.checked)}
-                />{" "}
-                Auto-renew
-              </label>
-              <button
-                type="submit"
-                disabled={changeMutation.isPending}
-                className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
-              >
-                {changeMutation.isPending ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </form>
+
+          {!isPending && isSchoolAdmin && (
+            <button
+              type="button"
+              onClick={() => cancelMutation.mutate(sub.id)}
+              disabled={cancelMutation.isPending}
+              className="mt-4 text-sm text-destructive hover:underline disabled:opacity-40"
+            >
+              {cancelMutation.isPending ? "Cancelling..." : "Cancel this subscription"}
+            </button>
+          )}
         </Panel>
       )}
-      <p className="mt-4 rounded-2xl border border-primary/10 bg-primary-soft px-4 py-3 text-xs text-muted-foreground">
-        {isUltimate
-          ? "Ultimate is a lifetime plan and cannot be changed by school users. Contact the EduTrack Super Admin for any platform-level change."
-          : "School billing roles can change the plan and subscription status here. Payment records remain managed by the EduTrack Super Admin."}
+
+
+
+      {(!hasOpenSub || isPending) && plans.length > 0 && (
+        <Panel title="Available Plans" className="mb-6">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan) => {
+              const startDate = sub?.starts_at ?? new Date().toISOString().slice(0, 10);
+              const computedEnd = new Date(startDate + "T00:00:00");
+              computedEnd.setDate(computedEnd.getDate() + Number(plan.duration_days));
+              const endDateStr = computedEnd.toISOString().slice(0, 10);
+              const isSelected = sub?.plan_id === plan.id;
+
+              return (
+                <div
+                  key={plan.id}
+                  className={`rounded-2xl border p-5 shadow-[var(--shadow-card)] transition-all ${
+                    isSelected ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/20"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold">{plan.name}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{money(plan.price)}</p>
+                    </div>
+                    <Pill tone={plan.is_platform_only ? "muted" : "success"}>
+                      {plan.is_platform_only ? "Platform" : "Available"}
+                    </Pill>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>
+                      {durationLabel(plan.duration_value, plan.duration_unit)} — {plan.duration_days} days
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 rounded-xl bg-muted/40 p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Start Date</span>
+                      <span className="font-medium">{formatDate(startDate)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">End Date</span>
+                      <span className="font-medium">{formatDate(endDateStr)}</span>
+                    </div>
+                  </div>
+
+                  {plan.description && (
+                    <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{plan.description}</p>
+                  )}
+
+                  <div className="mt-5 flex items-center gap-3">
+                    {isSelected && isPending ? (
+                      <Pill tone="muted">Subscribed — Pending</Pill>
+                    ) : isSelected && !isPending ? (
+                      <Pill tone="success">Currently Active</Pill>
+                    ) : blockNewSub ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="flex-1 rounded-lg bg-primary/50 px-4 py-2 text-sm text-primary/60 cursor-not-allowed"
+                      >
+                        Cancel active sub first
+                      </button>
+                    ) : subscribeMutation.isPending ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="flex-1 rounded-lg bg-primary/50 px-4 py-2 text-sm text-primary/60 cursor-not-allowed"
+                      >
+                        Subscribing...
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => subscribeMutation.mutate(plan.id)}
+                        className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        Subscribe
+                      </button>
+                    )}
+                  </div>
+
+                  {blockNewSub && (
+                    <p className="mt-2 text-xs text-destructive">
+                      This school already has an active subscription. Cancel it first.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+
+      {plans.length === 0 && (
+        <Panel title="Available Plans">
+          <p className="text-sm text-muted-foreground">
+            No active plans available. Contact the Super Admin.
+          </p>
+        </Panel>
+      )}
+
+      {isPending && sub && (
+        <Panel title="Payment Instructions" className="mt-6 border-accent/20 bg-accent/5">
+          <div className="flex items-start gap-4">
+            <AlertCircle className="mt-1 h-6 w-6 shrink-0 text-accent" />
+            <div>
+              <h3 className="text-base font-bold">Complete Your Payment</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                To complete your subscription, please pay using any of the numbers below:
+              </p>
+
+              <div className="mt-4 grid gap-3 rounded-xl border border-border bg-card p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">MTN</span>
+                  <span className="font-mono text-sm">0760228289</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Airtel</span>
+                  <span className="font-mono text-sm">0702188557</span>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-primary/10 bg-primary-soft p-4 text-sm">
+                <p>
+                  <strong>Amount:</strong> {money(sub.plan.price)}
+                  <br />
+                  <strong>Duration:</strong>{" "}
+                  {durationLabel(sub.plan.duration_value, sub.plan.duration_unit)}
+                  <br />
+                  <strong>Reference:</strong> {sub.payment_reference}
+                </p>
+              </div>
+
+              <p className="mt-4 text-sm text-muted-foreground">
+                After payment, please wait for system confirmation. Your subscription will be activated
+                once payment is confirmed by the system administrator.
+              </p>
+
+              <p className="mt-3 text-sm text-muted-foreground">
+                Your payment is being reviewed. Please wait for system confirmation. You will be
+                notified once your subscription is activated.
+              </p>
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      <p className="mt-6 text-xs text-muted-foreground">
+        Subscription management is restricted to School Administrators. Payment records are managed by
+        the EduTrack Super Admin. Contact them to confirm your payment.
       </p>
     </div>
   );
 }
+

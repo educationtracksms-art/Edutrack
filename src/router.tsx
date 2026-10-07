@@ -6,11 +6,15 @@ export const getRouter = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        // Most school configuration changes are infrequent. Keep shared data
-        // warm so navigating between screens does not hit Supabase repeatedly.
-        staleTime: 30_000,
-        gcTime: 10 * 60_000,
+        // Increased defaults for better caching during navigation.
+        // Most school data (classes, streams, departments) changes infrequently.
+        // Stable data (Tier 1) uses 30 min stale time; user data (Tier 2) uses 10 min.
+        // Route-level queries override for specific data tiers.
+        staleTime: 10 * 60_000,
+        gcTime: 15 * 60_000,
         refetchOnWindowFocus: false,
+        refetchOnMount: false,
+        refetchOnReconnect: false,
         retry: 1,
       },
     },

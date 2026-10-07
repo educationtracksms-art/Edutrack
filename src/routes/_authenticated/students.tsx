@@ -14,6 +14,8 @@ import {
 } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { hasAny, SCHOOL_ROLES, useCurrentUser } from "@/hooks/useCurrentUser";
+import { useClassesAndStreams } from "@/hooks/useClassesAndStreams";
+import { stableDataQueryOptions } from "@/lib/query-cache-config";
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { uploadImage } from "@/lib/storage";
 import { getEnabledModuleMap } from "@/lib/modules";
@@ -73,40 +75,22 @@ function StudentsPage() {
     class_id: "",
     stream_id: "",
     house: "",
-    schpay_code: "",
     parent_name: "",
     parent_phone: "",
   });
 
-  const { data: classes } = useQuery({
-    queryKey: ["classes"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("classes")
-        .select("id, name, class_teacher_id")
-        .order("name");
-      if (error) throw new Error(`Unable to load classes: ${error.message}`);
-      return data ?? [];
-    },
-  });
-  const { data: streams } = useQuery({
-    queryKey: ["streams"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("streams")
-        .select("id, name, class_id, stream_teacher_id");
-      if (error) throw new Error(`Unable to load streams: ${error.message}`);
-      return data ?? [];
-    },
-  });
+  const { data: classesAndStreams } = useClassesAndStreams();
+  const classes = classesAndStreams?.classes ?? [];
+  const streams = classesAndStreams?.streams ?? [];
+  
   const { data: modules } = useQuery({
-    queryKey: ["enabled-modules", schoolId],
+    ...stableDataQueryOptions(["enabled-modules", schoolId]),
     enabled: !!schoolId,
     queryFn: async () => getEnabledModuleMap(supabase, schoolId),
   });
   const feesEnabled = modules?.get("fees") ?? true;
   const { data: students } = useQuery({
-    queryKey: ["students"],
+    ...stableDataQueryOptions(["students"]),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("students")
@@ -183,7 +167,6 @@ function StudentsPage() {
         class_id: form.class_id,
         stream_id: form.stream_id || null,
         house: form.house || null,
-        schpay_code: form.schpay_code || null,
         parent_name: form.parent_name || null,
         parent_phone: form.parent_phone || null,
         photo_url: photoUrl,
@@ -226,7 +209,6 @@ function StudentsPage() {
         class_id: form.class_id,
         stream_id: form.stream_id || null,
         house: form.house || null,
-        schpay_code: form.schpay_code || null,
         parent_name: form.parent_name || null,
         parent_phone: form.parent_phone || null,
       };
@@ -292,7 +274,6 @@ function StudentsPage() {
       class_id: "",
       stream_id: "",
       house: "",
-      schpay_code: "",
       parent_name: "",
       parent_phone: "",
     });
@@ -313,7 +294,6 @@ function StudentsPage() {
       class_id: student.class_id ?? "",
       stream_id: student.stream_id ?? "",
       house: student.house ?? "",
-      schpay_code: student.schpay_code ?? "",
       parent_name: student.parent_name ?? "",
       parent_phone: student.parent_phone ?? "",
     });
@@ -403,7 +383,6 @@ function StudentsPage() {
         class_name: ["class", "classname", "level"],
         stream_name: ["stream", "streamname"],
         house: ["house"],
-        schpay_code: ["schpaycode", "paymentcode"],
         parent_name: ["parentname", "guardianname"],
         parent_phone: ["parentphone", "guardianphone", "phone"],
       };
@@ -458,7 +437,6 @@ function StudentsPage() {
           class_id: classMatch.id,
           stream_id: streamMatch?.id ?? null,
           house: valueFor("house") || null,
-          schpay_code: valueFor("schpay_code") || null,
           parent_name: valueFor("parent_name") || null,
           parent_phone: valueFor("parent_phone") || null,
           status: "pending",
@@ -599,13 +577,6 @@ function StudentsPage() {
                 className={inputClass}
                 value={form.house}
                 onChange={(e) => setForm({ ...form, house: e.target.value })}
-              />
-            </Field>
-            <Field label="SCHPAY code">
-              <input
-                className={inputClass}
-                value={form.schpay_code}
-                onChange={(e) => setForm({ ...form, schpay_code: e.target.value })}
               />
             </Field>
             <Field label="Parent / guardian">
