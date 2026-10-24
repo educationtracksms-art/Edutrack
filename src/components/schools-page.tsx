@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { CreditCard, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +27,14 @@ import {
   Stat,
   inputClass,
 } from "@/components/ui-kit";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type SubscriptionStatus =
   "trial" | "active" | "past_due" | "expired" | "cancelled" | "not_configured";
@@ -118,6 +127,12 @@ export function SchoolsPage({
   const changePlanStatus = useServerFn(setSubscriptionPlanStatus);
 
   const [billingSchoolId, setBillingSchoolId] = useState<string | null>(null);
+  const [creatingSchool, setCreatingSchool] = useState(false);
+  const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [schoolSearch, setSchoolSearch] = useState("");
+  const [schoolStatusFilter, setSchoolStatusFilter] = useState<"all" | School["status"]>("all");
+  const [billingSaving, setBillingSaving] = useState(false);
+  const [copyingCredentials, setCopyingCredentials] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const [form, setForm] = useState({
@@ -188,7 +203,7 @@ export function SchoolsPage({
       return (data ?? []) as Subscription[];
     },
   });
-  const { data: payments = [] } = useQuery({
+  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
     queryKey: ["school-payments", billingSchoolId],
     enabled: isSuperAdmin && !!billingSchoolId,
     queryFn: async () => {
@@ -217,6 +232,13 @@ export function SchoolsPage({
   const selectedSchool = schools.find((school) => school.id === billingSchoolId);
   const selectedSubscription = billingSchoolId ? currentBySchool.get(billingSchoolId) : undefined;
   const selectedPlan = plans.find((plan) => plan.id === selectedSubscription?.plan_id);
+  const filteredSchools = useMemo(() => {
+    const query = schoolSearch.trim().toLowerCase();
+    return schools.filter((school) => {
+      const matchesQuery = !query || `${school.name} ${school.code}`.toLowerCase().includes(query);
+      return matchesQuery && (schoolStatusFilter === "all" || school.status === schoolStatusFilter);
+    });
+  }, [schoolSearch, schoolStatusFilter, schools]);
 
   useEffect(() => {
     if (!billingSchoolId) return;
@@ -260,6 +282,7 @@ export function SchoolsPage({
     },
     onSuccess: (result) => {
       setIssued({ email: form.adminEmail, password: result.oneTimePassword });
+      setCreatingSchool(false);
       setForm({
         name: "",
         code: "",
@@ -316,8 +339,11 @@ export function SchoolsPage({
     },
     onSuccess: () => {
       setEditingPlanId(null);
+      setPlanDialogOpen(false);
       setPlanForm({ name: "", price: "", billingCycle: "monthly", durationValue: "1", durationUnit: "months", description: "" });
       queryClient.invalidateQueries({ queryKey: ["subscription-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-subscriptions"] });
       toast.success("Subscription plan saved");
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -328,6 +354,8 @@ export function SchoolsPage({
       changePlanStatus({ data: { id: plan.id, isActive: !plan.is_active } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscription-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-subscriptions"] });
       toast.success("Plan availability updated");
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -372,6 +400,8 @@ export function SchoolsPage({
     if (billing.amount && (!Number.isFinite(amount) || amount <= 0)) {
       return toast.error("Payment amount must be greater than zero");
     }
+    let subscriptionSaved = false;
+    setBillingSaving(true);
     try {
       const subscription = await changeSubscription({
         data: {
@@ -384,6 +414,7 @@ export function SchoolsPage({
           notes: billing.notes.trim() || undefined,
         },
       });
+      subscriptionSaved = true;
       if (amount > 0) {
         await recordPayment({
           data: {
@@ -402,14 +433,43 @@ export function SchoolsPage({
       queryClient.invalidateQueries({ queryKey: ["school-payments", billingSchoolId] });
       queryClient.invalidateQueries({ queryKey: ["schools"] });
       toast.success(amount > 0 ? "Subscription and payment saved" : "Subscription saved");
+      setBillingSchoolId(null);
     } catch (error) {
-      toast.error(friendlyAdminError(error as Error));
+      if (subscriptionSaved) {
+        queryClient.invalidateQueries({ queryKey: ["school-subscriptions"] });
+        queryClient.invalidateQueries({ queryKey: ["schools"] });
+        toast.error(`Subscription saved, but the payment was not recorded: ${friendlyAdminError(error as Error)}`);
+      } else {
+        toast.error(friendlyAdminError(error as Error));
+      }
+    } finally {
+      setBillingSaving(false);
     }
   }
 
   return (
     <div>
-      <PageHeader title={title} description={description} />
+      <PageHeader
+        title={title}
+        description={description}
+        actions={
+          <>
+            <Btn variant="accent" onClick={() => setCreatingSchool(true)}>
+              <span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" /> Add school</span>
+            </Btn>
+            <Btn
+              variant="ghost"
+              onClick={() => {
+                setEditingPlanId(null);
+                setPlanForm({ name: "", price: "", billingCycle: "monthly", durationValue: "1", durationUnit: "months", description: "" });
+                setPlanDialogOpen(true);
+              }}
+            >
+              <span className="inline-flex items-center gap-2"><CreditCard className="h-4 w-4" /> New plan</span>
+            </Btn>
+          </>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
@@ -440,8 +500,22 @@ export function SchoolsPage({
         />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(20rem,0.8fr)]">
-        <Panel title="Registered schools">
+      <div className="mt-4">
+        <Panel title="Schools">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">Search tenants, review subscription status, and manage billing.</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <label className="relative block sm:w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input aria-label="Search schools" placeholder="Search name or code" className={`${inputClass} pl-9`} value={schoolSearch} onChange={(event) => setSchoolSearch(event.target.value)} />
+              </label>
+              <select aria-label="Filter schools by tenant status" className={`${inputClass} sm:w-40`} value={schoolStatusFilter} onChange={(event) => setSchoolStatusFilter(event.target.value as typeof schoolStatusFilter)}>
+                <option value="all">All tenants</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
           <ResponsiveTable
             desktop={
               <table className="w-full text-sm">
@@ -455,7 +529,7 @@ export function SchoolsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {schools.map((school) => {
+                  {filteredSchools.map((school) => {
                     const subscription = currentBySchool.get(school.id);
                     const status = effectiveStatus(subscription);
                     const plan = plans.find((item) => item.id === subscription?.plan_id);
@@ -475,17 +549,20 @@ export function SchoolsPage({
                           </Pill>
                         </td>
                         <td className="text-right">
-                          <Btn variant="ghost" onClick={() => setBillingSchoolId(school.id)}>
-                            Manage
-                          </Btn>
+                          <div className="flex justify-end gap-2">
+                            <Btn variant="ghost" onClick={() => setBillingSchoolId(school.id)}>Manage</Btn>
+                            <Btn variant={school.status === "active" ? "danger" : "accent"} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ schoolId: school.id, status: school.status === "active" ? "suspended" : "active" })}>
+                              {school.status === "active" ? "Suspend" : "Activate"}
+                            </Btn>
+                          </div>
                         </td>
                       </tr>
                     );
                   })}
-                  {!schools.length && (
+                  {!filteredSchools.length && (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                        No schools yet.
+                        {schools.length ? "No schools match those filters." : "No schools yet. Add your first school to get started."}
                       </td>
                     </tr>
                   )}
@@ -494,7 +571,7 @@ export function SchoolsPage({
             }
             mobile={
               <>
-                {schools.map((school) => {
+                {filteredSchools.map((school) => {
                   const subscription = currentBySchool.get(school.id);
                   const status = effectiveStatus(subscription);
                   const plan = plans.find((item) => item.id === subscription?.plan_id);
@@ -510,18 +587,21 @@ export function SchoolsPage({
                         </div>
                         <Pill tone={statusTone(status)}>{statusLabel(status)}</Pill>
                       </div>
-                      <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
                         <span className="text-muted-foreground">{plan?.name ?? "No plan"}</span>
-                        <Btn variant="ghost" onClick={() => setBillingSchoolId(school.id)}>
-                          Manage
-                        </Btn>
+                        <div className="flex gap-2">
+                          <Btn variant="ghost" onClick={() => setBillingSchoolId(school.id)}>Manage</Btn>
+                          <Btn variant={school.status === "active" ? "danger" : "accent"} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ schoolId: school.id, status: school.status === "active" ? "suspended" : "active" })}>
+                            {school.status === "active" ? "Suspend" : "Activate"}
+                          </Btn>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
-                {!schools.length && (
+                {!filteredSchools.length && (
                   <div className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-                    No schools yet.
+                    {schools.length ? "No schools match those filters." : "No schools yet. Add your first school to get started."}
                   </div>
                 )}
               </>
@@ -529,7 +609,13 @@ export function SchoolsPage({
           />
         </Panel>
 
-        <Panel title="Add a school">
+        <Dialog open={creatingSchool} onOpenChange={setCreatingSchool}>
+          <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Create a school</DialogTitle>
+              <DialogDescription>Add the school profile and its first administrator account.</DialogDescription>
+            </DialogHeader>
+        <div className="space-y-5">
           <form
             className="space-y-3"
             onSubmit={(event) => {
@@ -537,6 +623,11 @@ export function SchoolsPage({
               createMutation.mutate();
             }}
           >
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <div>
+                <h3 className="text-sm font-semibold">School details</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Enter the tenant name and contact information.</p>
+              </div>
             <Field label="School name">
               <input
                 required
@@ -575,6 +666,12 @@ export function SchoolsPage({
                 onChange={(event) => setForm({ ...form, phone: event.target.value })}
               />
             </Field>
+            </section>
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <div>
+                <h3 className="text-sm font-semibold">Administrator account</h3>
+                <p className="mt-1 text-xs text-muted-foreground">The first sign-in uses a one-time password.</p>
+              </div>
             <Field label="Administrator name">
               <input
                 required
@@ -592,25 +689,52 @@ export function SchoolsPage({
                 onChange={(event) => setForm({ ...form, adminEmail: event.target.value })}
               />
             </Field>
+            </section>
             <Btn type="submit" variant="accent" disabled={createMutation.isPending}>
               {createMutation.isPending ? "Creating…" : "Create school"}
             </Btn>
           </form>
-          {issued && (
-            <div className="mt-4 rounded-lg border border-accent/40 bg-accent-soft p-3 text-sm">
-              <p className="font-semibold">One-time password issued</p>
-              <p className="mt-1 break-all text-muted-foreground">{issued.email}</p>
-              <p className="mt-1 font-mono text-base">{issued.password}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Share it securely. The administrator must change it at first sign-in.
-              </p>
-            </div>
-          )}
-        </Panel>
+        </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={!!issued} onOpenChange={(open) => { if (!open) setIssued(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>School created</DialogTitle>
+              <DialogDescription>Share this one-time password securely. It will not be shown again after closing.</DialogDescription>
+            </DialogHeader>
+            {issued && (
+              <div className="space-y-3 rounded-xl border border-accent/30 bg-accent-soft p-4 text-sm">
+                <div><p className="text-xs text-muted-foreground">Administrator email</p><p className="break-all font-medium">{issued.email}</p></div>
+                <div><p className="text-xs text-muted-foreground">One-time password</p><p className="font-mono text-lg font-semibold">{issued.password}</p></div>
+                <p className="text-xs text-muted-foreground">The administrator must set a private password at first sign-in.</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Btn variant="ghost" disabled={copyingCredentials} onClick={async () => {
+                if (!issued) return;
+                setCopyingCredentials(true);
+                try {
+                  await navigator.clipboard.writeText(`Email: ${issued.email}\nOne-time password: ${issued.password}`);
+                  toast.success("Sign-in details copied");
+                } catch {
+                  toast.error("Could not copy. Select the details and copy them manually.");
+                } finally {
+                  setCopyingCredentials(false);
+                }
+              }}>{copyingCredentials ? "Copying…" : "Copy sign-in details"}</Btn>
+              <Btn variant="accent" onClick={() => setIssued(null)}>Done</Btn>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {billingSchoolId && (
-        <Panel title={`Manage billing · ${selectedSchool?.name ?? "School"}`} className="mt-4">
+      <Dialog open={!!billingSchoolId} onOpenChange={(open) => { if (!open) setBillingSchoolId(null); }}>
+        <DialogContent className="max-h-[92dvh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage billing · {selectedSchool?.name ?? "School"}</DialogTitle>
+            <DialogDescription>Update this school’s subscription and review its payment history.</DialogDescription>
+          </DialogHeader>
           <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-muted/50 p-4">
             <Pill tone={statusTone(effectiveStatus(selectedSubscription))}>
               {statusLabel(effectiveStatus(selectedSubscription))}
@@ -623,13 +747,14 @@ export function SchoolsPage({
                 Ends {selectedSubscription.ends_at}
               </span>
             )}
-            <Btn variant="ghost" onClick={() => setBillingSchoolId(null)}>
-              Close
-            </Btn>
           </div>
           <div className="grid gap-6 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
-            <form className="space-y-3" onSubmit={saveBilling}>
-              <p className="text-sm font-semibold">Assign subscription</p>
+            <form className="space-y-4" onSubmit={saveBilling}>
+              <div className="space-y-3 rounded-xl border border-border p-4">
+                <div>
+                  <h3 className="text-sm font-semibold">Subscription settings</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Choose the plan, access status and subscription dates.</p>
+                </div>
               <Field label="Plan">
                 <select
                   required
@@ -708,11 +833,12 @@ export function SchoolsPage({
                   onChange={(event) => setBilling({ ...billing, notes: event.target.value })}
                 />
               </Field>
-              <div className="border-t border-border pt-4">
-                <p className="mb-3 text-sm font-semibold">
-                  Record payment now{" "}
-                  <span className="font-normal text-muted-foreground">(optional)</span>
-                </p>
+              </div>
+              <div className="space-y-3 rounded-xl border border-border p-4">
+                <div>
+                  <h3 className="text-sm font-semibold">Record payment <span className="font-normal text-muted-foreground">(optional)</span></h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Leave the amount blank if you are only changing the subscription.</p>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Amount (UGX)">
                     <input
@@ -772,8 +898,8 @@ export function SchoolsPage({
                   />
                 </Field>
               </div>
-              <Btn type="submit" variant="accent">
-                Save subscription{billing.amount ? " and payment" : ""}
+              <Btn type="submit" variant="accent" disabled={billingSaving}>
+                {billingSaving ? "Saving…" : `Save subscription${billing.amount ? " and payment" : ""}`}
               </Btn>
             </form>
             <div>
@@ -853,11 +979,29 @@ export function SchoolsPage({
               )}
             </div>
           </div>
-        </Panel>
-      )}
+        </DialogContent>
+      </Dialog>
 
       <Panel title="Subscription plans" className="mt-4">
-        <div className="grid gap-6 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Create, update, or archive the plans available to schools.</p>
+          <Btn variant="accent" onClick={() => { setEditingPlanId(null); setPlanForm({ name: "", price: "", billingCycle: "monthly", durationValue: "1", durationUnit: "months", description: "" }); setPlanDialogOpen(true); }}>
+            <span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" /> New plan</span>
+          </Btn>
+        </div>
+        <div className="space-y-2">
+          <Dialog open={planDialogOpen} onOpenChange={(open) => {
+            setPlanDialogOpen(open);
+            if (!open) {
+              setEditingPlanId(null);
+              setPlanForm({ name: "", price: "", billingCycle: "monthly", durationValue: "1", durationUnit: "months", description: "" });
+            }
+          }}>
+            <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{editingPlanId ? "Edit subscription plan" : "Create subscription plan"}</DialogTitle>
+                <DialogDescription>Set pricing and duration. Duration updates apply to new subscriptions only.</DialogDescription>
+              </DialogHeader>
           <form
             className="space-y-3"
             onSubmit={(event) => {
@@ -937,19 +1081,11 @@ export function SchoolsPage({
               <Btn type="submit" variant="accent" disabled={planMutation.isPending}>
                 {editingPlanId ? "Update plan" : "Create plan"}
               </Btn>
-              {editingPlanId && (
-                <Btn
-                  variant="ghost"
-                  onClick={() => {
-                    setEditingPlanId(null);
-                    setPlanForm({ name: "", price: "", billingCycle: "monthly", durationValue: "1", durationUnit: "months", description: "" });
-                  }}
-                >
-                  Cancel
-                </Btn>
-              )}
+              <Btn variant="ghost" onClick={() => setPlanDialogOpen(false)}>Cancel</Btn>
             </div>
           </form>
+            </DialogContent>
+          </Dialog>
           <div className="space-y-2">
             {plans.map((plan) => (
               <div
@@ -991,6 +1127,7 @@ export function SchoolsPage({
                         durationUnit: plan.duration_unit ?? "months",
                         description: plan.description ?? "",
                       });
+                      setPlanDialogOpen(true);
                     }}
                   >
                     Edit

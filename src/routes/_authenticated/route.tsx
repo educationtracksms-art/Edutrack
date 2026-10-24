@@ -16,18 +16,30 @@ export const Route = createFileRoute("/_authenticated")({
     if (currentUser.mustChangePassword && location.pathname !== "/change-password") {
       throw redirect({ to: "/change-password" });
     }
+    // Password changes must remain available even when subscription state
+    // cannot be loaded or the school's subscription has expired.
+    if (location.pathname === "/change-password") {
+      return { user: { id: currentUser.userId, email: currentUser.email } };
+    }
     // Subscription expiry check on every authenticated route using a short-TTL cache.
     const isSuperAdmin = currentUser.isSuperAdmin;
     const schoolId = currentUser.school?.id ?? null;
     const isSchoolScoped = !!schoolId && !isSuperAdmin;
 
     if (isSchoolScoped) {
-      const { status } = await context.queryClient.fetchQuery({
-        queryKey: ["subscription-status", schoolId],
-        staleTime: 60_000,
-        gcTime: 5 * 60_000,
-        queryFn: () => getSchoolSubscriptionStatus(),
-      });
+      let status: string | undefined;
+      try {
+        ({ status } = await context.queryClient.fetchQuery({
+          queryKey: ["subscription-status", schoolId],
+          staleTime: 60_000,
+          gcTime: 5 * 60_000,
+          queryFn: () => getSchoolSubscriptionStatus(),
+        }));
+      } catch (error) {
+        // A subscription lookup outage must not crash every authenticated route.
+        // AppShell still applies the expired-subscription screen when a status is available.
+        console.error("Could not check school subscription status", error);
+      }
 
       if (status === "expired") {
         const isSchoolAdmin = currentUser.roles.includes("school_admin");

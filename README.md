@@ -1,12 +1,4 @@
-<<<<<<< HEAD
-
-# School Connect
-
-=======
-
 # Education Track School Management System
-
-> > > > > > > aba4fe8f3fe34a872f429f374700164ac11398b5
 
 # Build a Multi-Tenant School Management & Report Card System
 

@@ -25,7 +25,7 @@ const secondaryLink =
 
 function UsersPage() {
   const navigate = useNavigate();
-  const { isSuper, people, peopleLoading, schoolNameFor } = useUsersData();
+  const { isSuper, people, peopleLoading, peopleError, schoolNameFor } = useUsersData();
   const { resetMutation, deleteMutation } = useStaffUserMutations();
   const count = (people ?? []).length;
 
@@ -57,6 +57,10 @@ function UsersPage() {
               <div key={row} className="h-12 w-full animate-pulse rounded-xl bg-muted" />
             ))}
             <span className="sr-only">Loading staff accounts…</span>
+          </div>
+        ) : peopleError ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">
+            Could not load user accounts: {peopleError.message}
           </div>
         ) : count === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-12 text-center">

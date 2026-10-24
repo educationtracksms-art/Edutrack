@@ -439,7 +439,7 @@ function FeaturesPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="mt-10 rounded-3xl border border-border bg-muted/40 p-6 md:p-8">
+        <div className="mt-10 rounded-2xl border border-border bg-muted/40 p-6 md:p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">
             Why this matters
           </p>

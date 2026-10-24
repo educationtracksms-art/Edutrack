@@ -85,7 +85,7 @@ function AcademicsOverview() {
           <Link
             key={card.to}
             to={card.to}
-            className="group flex flex-col rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="group flex flex-col rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-colors duration-150 hover:border-primary/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <span className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary">

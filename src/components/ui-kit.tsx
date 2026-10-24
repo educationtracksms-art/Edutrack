@@ -13,7 +13,7 @@ export function PageHeader({
   eyebrow?: string;
 }) {
   return (
-    <div className="no-print mb-5 flex flex-col gap-3 rounded-3xl border border-border bg-[linear-gradient(135deg,var(--color-card),var(--color-primary-soft))] p-5 shadow-[var(--shadow-card)] sm:mb-6 sm:gap-4 sm:p-7">
+    <div className="no-print mb-5 flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:mb-6 sm:gap-4 sm:p-7">
       <div className="min-w-0">
         <p className="mb-3 inline-flex rounded-full border border-primary/10 bg-primary-soft px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-primary">
           {eyebrow}
@@ -43,7 +43,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`min-w-0 rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-6 ${className}`}
+      className={`min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6 ${className}`}
     >
       {title && (
         <h2 className="mb-5 text-base font-bold tracking-tight text-foreground">{title}</h2>
@@ -63,7 +63,7 @@ export function Stat({
   hint?: string;
 }) {
   return (
-    <div className="group rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:border-primary/25 sm:p-6">
+    <div className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-primary/25 sm:p-6">
       <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </p>
@@ -108,20 +108,20 @@ export function Btn({
 }) {
   const styles: Record<string, string> = {
     primary:
-      "border border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:-translate-y-px hover:bg-primary/90 hover:shadow-md",
+      "border border-primary bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
     accent:
-      "border border-accent bg-accent text-accent-foreground shadow-sm shadow-accent/20 hover:-translate-y-px hover:brightness-95 hover:shadow-md",
+      "border border-accent bg-accent text-accent-foreground shadow-sm hover:brightness-95",
     ghost:
-      "border border-border bg-background text-foreground shadow-sm hover:-translate-y-px hover:border-primary/40 hover:bg-primary-soft hover:text-primary hover:shadow-md",
+      "border border-border bg-background text-foreground shadow-sm hover:border-primary/40 hover:bg-primary-soft hover:text-primary",
     danger:
-      "border border-destructive/30 bg-destructive/10 text-destructive hover:-translate-y-px hover:border-destructive/50 hover:bg-destructive/15",
+      "border border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/50 hover:bg-destructive/15",
   };
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-10 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150 active:translate-y-px disabled:opacity-60 sm:w-auto ${styles[variant]}`}
+      className={`min-h-10 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-colors duration-150 disabled:opacity-60 sm:w-auto ${styles[variant]}`}
     >
       {children}
     </button>
@@ -146,7 +146,7 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-ring focus:ring-4 focus:ring-ring/10";
+  "w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-ring focus:ring-4 focus:ring-ring/10";
 
 export function PasswordInput({
   className = inputClass,

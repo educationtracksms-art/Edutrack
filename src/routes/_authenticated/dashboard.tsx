@@ -225,7 +225,7 @@ function Dashboard() {
 function DashboardLoadingState({ label, description }: { label: string; description: string }) {
   return (
     <div className="space-y-4" aria-busy="true" aria-live="polite">
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-7">
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-7">
         <div className="h-5 w-32 animate-pulse rounded-full bg-muted" />
         <div className="mt-3 h-8 w-64 max-w-full animate-pulse rounded-xl bg-muted" />
         <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded-lg bg-muted/70" />
@@ -234,7 +234,7 @@ function DashboardLoadingState({ label, description }: { label: string; descript
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-6"
+            className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-6"
           >
             <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
             <div className="mt-3 h-8 w-20 animate-pulse rounded-lg bg-muted" />
@@ -1114,7 +1114,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         actions={
           <Link
             to="/workflow"
-            className="inline-flex min-h-10 items-center justify-center rounded-xl bg-accent px-3.5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-all hover:-translate-y-px hover:brightness-95"
+            className="inline-flex min-h-10 items-center justify-center rounded-xl bg-accent px-3.5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-colors hover:brightness-95"
           >
             Open school workflow
           </Link>
@@ -1490,6 +1490,18 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
           gradeBuckets={gradeBuckets}
           trend={trend}
           genderSplit={genderSplit}
+          statusBreakdown={[
+            { name: "Approved", value: approved },
+            { name: "Submitted", value: submitted },
+            { name: "Rejected", value: rejected },
+            { name: "Draft", value: draft },
+          ].filter((b) => b.value > 0)}
+          classDistribution={data.classes
+            .map((cls: any) => ({
+              name: cls.name.length > 10 ? `${cls.name.slice(0, 10)}...` : cls.name,
+              students: data.students.filter((s: any) => s.class_id === cls.id).length,
+            }))
+            .filter((c: any) => c.students > 0)}
         />
       </Suspense>
 

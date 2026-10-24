@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
 export type AppRole =
   | "super_admin"
@@ -74,14 +75,47 @@ export const ROLE_HIERARCHY_LEVELS: RoleHierarchyLevel[] = [
 
 const USER_CACHE_KEY = "edutrack-current-user";
 
-function readCachedUser() {
+/**
+ * Shape of the cached current-user record. Kept in sync with the object built
+ * by `fetchCurrentUser` — the localStorage cache must satisfy the same type so
+ * TanStack Query infers `CurrentUser` instead of `any` for every consumer.
+ */
+export type CurrentUser = {
+  userId: string;
+  email: string;
+  /** Columns selected by `fetchCurrentUser` — not the full profiles row. */
+  profile:
+    | Pick<
+        Database["public"]["Tables"]["profiles"]["Row"],
+        | "id"
+        | "full_name"
+        | "email"
+        | "initials"
+        | "phone"
+        | "school_id"
+        | "department_id"
+        | "is_active"
+        | "must_change_password"
+      >
+    | null;
+  /** Columns selected by `fetchCurrentUser` — not the full schools row. */
+  school: Pick<
+    Database["public"]["Tables"]["schools"]["Row"],
+    "id" | "name" | "code" | "logo_url" | "status"
+  > | null;
+  roles: AppRole[];
+  isSuperAdmin: boolean;
+  mustChangePassword: boolean;
+};
+
+function readCachedUser(): CurrentUser | undefined {
   if (typeof window === "undefined") return undefined;
   try {
     const raw = window.localStorage.getItem(USER_CACHE_KEY);
     if (!raw) return undefined;
     const parsed = JSON.parse(raw);
     if (!parsed?.userId) return undefined;
-    return parsed;
+    return parsed as CurrentUser;
   } catch {
     return undefined;
   }
@@ -101,7 +135,7 @@ export function clearCachedUser() {
   writeCachedUser(null);
 }
 
-export async function fetchCurrentUser() {
+export async function fetchCurrentUser(): Promise<CurrentUser | null> {
   const { data: sessionData } = await supabase.auth.getSession();
   const sessionUser = sessionData.session?.user ?? null;
   if (!sessionUser) {
@@ -120,7 +154,7 @@ export async function fetchCurrentUser() {
     supabase.from("user_roles").select("role").eq("user_id", sessionUser.id),
   ]);
 
-  let school = null;
+  let school: CurrentUser["school"] = null;
   if (profile?.school_id) {
     const { data } = await supabase
       .from("schools")
@@ -131,14 +165,14 @@ export async function fetchCurrentUser() {
   }
 
   const roleList = (roles ?? []).map((r) => r.role as AppRole);
-  const result = {
+  const result: CurrentUser = {
     userId: sessionUser.id,
-    email: (profile as any)?.email ?? sessionUser.email ?? "",
+    email: profile?.email ?? sessionUser.email ?? "",
     profile,
     school,
     roles: roleList,
     isSuperAdmin: roleList.includes("super_admin"),
-    mustChangePassword: !!(profile as any)?.must_change_password,
+    mustChangePassword: !!profile?.must_change_password,
   };
   writeCachedUser(result);
   return result;

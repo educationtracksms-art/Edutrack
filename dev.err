@@ -1,0 +1,69 @@
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+[RateLimit] Supabase rate-limit check unavailable; using in-memory fallback. {
+  code: 'PGRST202',
+  details: 'Searched for the function public.consume_server_function_rate_limit without parameters or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.',
+  hint: null,
+  message: 'Could not find the function public.consume_server_function_rate_limit without parameters in the schema cache'
+}
+[RateLimit] Supabase rate-limit check unavailable; using in-memory fallback. {
+  code: 'PGRST202',
+  details: 'Searched for the function public.consume_server_function_rate_limit without parameters or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.',
+  hint: null,
+  message: 'Could not find the function public.consume_server_function_rate_limit without parameters in the schema cache'
+}
+[RateLimit] Supabase rate-limit check unavailable; using in-memory fallback. {
+  code: 'PGRST202',
+  details: 'Searched for the function public.consume_server_function_rate_limit without parameters or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.',
+  hint: null,
+  message: 'Could not find the function public.consume_server_function_rate_limit without parameters in the schema cache'
+}
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13
+Error: EPERM: operation not permitted, rename 'D:\Edutrack\.tanstack\tmp\1de7afe9-ad6076da861a87cef81b1b9becdc6e7a' -> 'D:\Edutrack\src\routeTree.gen.ts'
+    at file:///D:/Edutrack/node_modules/@tanstack/router-generator/dist/esm/generator.js:143:13

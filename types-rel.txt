@@ -1,0 +1,546 @@
+﻿tables: 116, with relationships: 111
+
+academic_years (1)
+   school_id -> schools (academic_years_school_id_fkey)
+
+account_categories (1)
+   school_id -> schools (account_categories_school_id_fkey)
+
+approval_actions (3)
+   school_id -> schools (approval_actions_school_id_fkey)
+   request_id -> approval_requests (approval_actions_request_id_fkey)
+   actor_id -> profiles (approval_actions_actor_id_fkey)
+
+approval_requests (3)
+   school_id -> schools (approval_requests_school_id_fkey)
+   requested_by -> profiles (approval_requests_requested_by_fkey)
+   decided_by -> profiles (approval_requests_decided_by_fkey)
+
+approval_rules (1)
+   school_id -> schools (approval_rules_school_id_fkey)
+
+approved_invoices (4)
+   school_id -> schools (approved_invoices_school_id_fkey)
+   supplier_id -> suppliers (approved_invoices_supplier_id_fkey)
+   purchase_order_id -> purchase_orders (approved_invoices_purchase_order_id_fkey)
+   approved_by -> profiles (approved_invoices_approved_by_fkey)
+
+assessment_edit_grants (2)
+   school_id -> schools (assessment_edit_grants_school_id_fkey)
+   assessment_id -> assessments (assessment_edit_grants_assessment_id_fkey)
+
+assessment_periods (2)
+   school_id -> schools (assessment_periods_school_id_fkey)
+   term_id -> terms (assessment_periods_term_id_fkey)
+
+assessments (4)
+   school_id -> schools (assessments_school_id_fkey)
+   student_id -> students (assessments_student_id_fkey)
+   subject_id -> subjects (assessments_subject_id_fkey)
+   term_id -> terms (assessments_term_id_fkey)
+
+attendance_absence_alerts (4)
+   school_id -> schools (attendance_absence_alerts_school_id_fkey)
+   student_id -> students (attendance_absence_alerts_student_id_fkey)
+   term_id -> terms (attendance_absence_alerts_term_id_fkey)
+   notified_by -> profiles (attendance_absence_alerts_notified_by_fkey)
+
+attendance_records (3)
+   school_id -> schools (attendance_records_school_id_fkey)
+   student_id -> students (attendance_records_student_id_fkey)
+   term_id -> terms (attendance_records_term_id_fkey)
+
+attendance_summaries (3)
+   school_id -> schools (attendance_summaries_school_id_fkey)
+   student_id -> students (attendance_summaries_student_id_fkey)
+   term_id -> terms (attendance_summaries_term_id_fkey)
+
+audit_logs (1)
+   school_id -> schools (audit_logs_school_id_fkey)
+
+audit_logs_finance (2)
+   school_id -> schools (audit_logs_finance_school_id_fkey)
+   user_id -> profiles (audit_logs_finance_user_id_fkey)
+
+budget_lines (3)
+   school_id -> schools (budget_lines_school_id_fkey)
+   budget_id -> budgets (budget_lines_budget_id_fkey)
+   account_id -> chart_of_accounts (budget_lines_account_id_fkey)
+
+budgets (4)
+   school_id -> schools (budgets_school_id_fkey)
+   financial_year_id -> financial_years (budgets_financial_year_id_fkey)
+   approved_by -> profiles (budgets_approved_by_fkey)
+   created_by -> profiles (budgets_created_by_fkey)
+
+chart_of_accounts (2)
+   school_id -> schools (chart_of_accounts_school_id_fkey)
+   parent_account_id -> chart_of_accounts (chart_of_accounts_parent_account_id_fkey)
+
+classes (1)
+   school_id -> schools (classes_school_id_fkey)
+
+co_curricular (3)
+   school_id -> schools (co_curricular_school_id_fkey)
+   student_id -> students (co_curricular_student_id_fkey)
+   term_id -> terms (co_curricular_term_id_fkey)
+
+collection_actions (4)
+   school_id -> schools (collection_actions_school_id_fkey)
+   case_id -> collection_cases (collection_actions_case_id_fkey)
+   student_id -> students (collection_actions_student_id_fkey)
+   performed_by -> profiles (collection_actions_performed_by_fkey)
+
+collection_cases (6)
+   school_id -> schools (collection_cases_school_id_fkey)
+   student_id -> students (collection_cases_student_id_fkey)
+   class_id -> classes (collection_cases_class_id_fkey)
+   stream_id -> streams (collection_cases_stream_id_fkey)
+   assigned_to -> profiles (collection_cases_assigned_to_fkey)
+   created_by -> profiles (collection_cases_created_by_fkey)
+
+credit_notes (4)
+   school_id -> schools (credit_notes_school_id_fkey)
+   student_id -> students (credit_notes_student_id_fkey)
+   invoice_id -> student_invoices (credit_notes_invoice_id_fkey)
+   issued_by -> profiles (credit_notes_issued_by_fkey)
+
+debit_notes (4)
+   school_id -> schools (debit_notes_school_id_fkey)
+   student_id -> students (debit_notes_student_id_fkey)
+   invoice_id -> student_invoices (debit_notes_invoice_id_fkey)
+   issued_by -> profiles (debit_notes_issued_by_fkey)
+
+department_heads (4)
+   school_id -> schools (department_heads_school_id_fkey)
+   department_id -> departments (department_heads_department_id_fkey)
+   teacher_id -> profiles (department_heads_teacher_id_fkey)
+   assigned_by -> profiles (department_heads_assigned_by_fkey)
+
+departments (1)
+   school_id -> schools (departments_school_id_fkey)
+
+donors (1)
+   school_id -> schools (donors_school_id_fkey)
+
+feature_toggles (1)
+   school_id -> schools (feature_toggles_school_id_fkey)
+
+fee_adjustments (9)
+   school_id -> schools (fee_adjustments_school_id_fkey)
+   student_id -> students (fee_adjustments_student_id_fkey)
+   academic_year_id -> academic_years (fee_adjustments_academic_year_id_fkey)
+   term_id -> terms (fee_adjustments_term_id_fkey)
+   fee_category_id -> fee_categories (fee_adjustments_fee_category_id_fkey)
+   invoice_id -> student_invoices (fee_adjustments_invoice_id_fkey)
+   approval_request_id -> approval_requests (fee_adjustments_approval_request_id_fkey)
+   requested_by -> profiles (fee_adjustments_requested_by_fkey)
+   approved_by -> profiles (fee_adjustments_approved_by_fkey)
+
+fee_categories (1)
+   school_id -> schools (fee_categories_school_id_fkey)
+
+fee_structure_lines (3)
+   school_id -> schools (fee_structure_lines_school_id_fkey)
+   structure_id -> fee_structures (fee_structure_lines_structure_id_fkey)
+   fee_category_id -> fee_categories (fee_structure_lines_fee_category_id_fkey)
+
+fee_structures (7)
+   school_id -> schools (fee_structures_school_id_fkey)
+   academic_year_id -> academic_years (fee_structures_academic_year_id_fkey)
+   term_id -> terms (fee_structures_term_id_fkey)
+   class_id -> classes (fee_structures_class_id_fkey)
+   stream_id -> streams (fee_structures_stream_id_fkey)
+   created_by -> profiles (fee_structures_created_by_fkey)
+   published_by -> profiles (fee_structures_published_by_fkey)
+
+finance_attachments (3)
+   school_id -> schools (finance_attachments_school_id_fkey)
+   verified_by -> profiles (finance_attachments_verified_by_fkey)
+   uploaded_by -> profiles (finance_attachments_uploaded_by_fkey)
+
+finance_bank_accounts (3)
+   school_id -> schools (finance_bank_accounts_school_id_fkey)
+   branch_id -> finance_branches (finance_bank_accounts_branch_id_fkey)
+   created_by -> profiles (finance_bank_accounts_created_by_fkey)
+
+finance_bank_reconciliation_items (4)
+   school_id -> schools (finance_bank_reconciliation_items_school_id_fkey)
+   reconciliation_id -> finance_bank_reconciliations (finance_bank_reconciliation_items_reconciliation_id_fkey)
+   bank_transaction_id -> finance_bank_transactions (finance_bank_reconciliation_items_bank_transaction_id_fkey)
+   matched_by -> profiles (finance_bank_reconciliation_items_matched_by_fkey)
+
+finance_bank_reconciliations (4)
+   school_id -> schools (finance_bank_reconciliations_school_id_fkey)
+   bank_account_id -> finance_bank_accounts (finance_bank_reconciliations_bank_account_id_fkey)
+   prepared_by -> profiles (finance_bank_reconciliations_prepared_by_fkey)
+   completed_by -> profiles (finance_bank_reconciliations_completed_by_fkey)
+
+finance_bank_transactions (3)
+   school_id -> schools (finance_bank_transactions_school_id_fkey)
+   bank_account_id -> finance_bank_accounts (finance_bank_transactions_bank_account_id_fkey)
+   created_by -> profiles (finance_bank_transactions_created_by_fkey)
+
+finance_branches (1)
+   school_id -> schools (finance_branches_school_id_fkey)
+
+finance_cash_accounts (4)
+   school_id -> schools (finance_cash_accounts_school_id_fkey)
+   branch_id -> finance_branches (finance_cash_accounts_branch_id_fkey)
+   cashier_id -> profiles (finance_cash_accounts_cashier_id_fkey)
+   created_by -> profiles (finance_cash_accounts_created_by_fkey)
+
+finance_cash_transactions (3)
+   school_id -> schools (finance_cash_transactions_school_id_fkey)
+   cash_account_id -> finance_cash_accounts (finance_cash_transactions_cash_account_id_fkey)
+   recorded_by -> profiles (finance_cash_transactions_recorded_by_fkey)
+
+finance_communications (3)
+   school_id -> schools (finance_communications_school_id_fkey)
+   student_id -> students (finance_communications_student_id_fkey)
+   sent_by -> profiles (finance_communications_sent_by_fkey)
+
+finance_cost_centers (2)
+   school_id -> schools (finance_cost_centers_school_id_fkey)
+   department_id -> departments (finance_cost_centers_department_id_fkey)
+
+finance_funds (1)
+   school_id -> schools (finance_funds_school_id_fkey)
+
+finance_mobile_money_accounts (2)
+   school_id -> schools (finance_mobile_money_accounts_school_id_fkey)
+   created_by -> profiles (finance_mobile_money_accounts_created_by_fkey)
+
+finance_mobile_money_transactions (4)
+   school_id -> schools (finance_mobile_money_transactions_school_id_fkey)
+   mobile_money_account_id -> finance_mobile_money_accounts (finance_mobile_money_transactions_mobile_money_account_id_fkey)
+   student_id -> students (finance_mobile_money_transactions_student_id_fkey)
+   created_by -> profiles (finance_mobile_money_transactions_created_by_fkey)
+
+finance_number_sequences (1)
+   school_id -> schools (finance_number_sequences_school_id_fkey)
+
+finance_payment_methods (1)
+   school_id -> schools (finance_payment_methods_school_id_fkey)
+
+finance_permission_catalog (0)
+
+finance_petty_cash_accounts (3)
+   school_id -> schools (finance_petty_cash_accounts_school_id_fkey)
+   custodian_id -> profiles (finance_petty_cash_accounts_custodian_id_fkey)
+   created_by -> profiles (finance_petty_cash_accounts_created_by_fkey)
+
+finance_petty_cash_transactions (4)
+   school_id -> schools (finance_petty_cash_transactions_school_id_fkey)
+   petty_cash_account_id -> finance_petty_cash_accounts (finance_petty_cash_transactions_petty_cash_account_id_fkey)
+   approved_by -> profiles (finance_petty_cash_transactions_approved_by_fkey)
+   created_by -> profiles (finance_petty_cash_transactions_created_by_fkey)
+
+finance_requests (3)
+   school_id -> schools (finance_requests_school_id_fkey)
+   hod_id -> profiles (finance_requests_hod_id_fkey)
+   reviewed_by -> profiles (finance_requests_reviewed_by_fkey)
+
+finance_role_permissions (3)
+   school_id -> schools (finance_role_permissions_school_id_fkey)
+   permission_key -> finance_permission_catalog (finance_role_permissions_permission_key_fkey)
+   updated_by -> profiles (finance_role_permissions_updated_by_fkey)
+
+finance_settings (2)
+   school_id -> schools (finance_settings_school_id_fkey)
+   created_by -> profiles (finance_settings_created_by_fkey)
+
+finance_user_permissions (4)
+   school_id -> schools (finance_user_permissions_school_id_fkey)
+   user_id -> profiles (finance_user_permissions_user_id_fkey)
+   permission_key -> finance_permission_catalog (finance_user_permissions_permission_key_fkey)
+   updated_by -> profiles (finance_user_permissions_updated_by_fkey)
+
+financial_aid_awards (3)
+   school_id -> schools (financial_aid_awards_school_id_fkey)
+   student_id -> students (financial_aid_awards_student_id_fkey)
+   reviewed_by -> profiles (financial_aid_awards_reviewed_by_fkey)
+
+financial_periods (3)
+   school_id -> schools (financial_periods_school_id_fkey)
+   financial_year_id -> financial_years (financial_periods_financial_year_id_fkey)
+   term_id -> terms (financial_periods_term_id_fkey)
+
+financial_years (1)
+   school_id -> schools (financial_years_school_id_fkey)
+
+fixed_assets (2)
+   school_id -> schools (fixed_assets_school_id_fkey)
+   created_by -> profiles (fixed_assets_created_by_fkey)
+
+formative_marks (6)
+   school_id -> schools (formative_marks_school_id_fkey)
+   student_id -> students (formative_marks_student_id_fkey)
+   subject_id -> subjects (formative_marks_subject_id_fkey)
+   term_id -> terms (formative_marks_term_id_fkey)
+   submitted_by -> profiles (formative_marks_submitted_by_fkey)
+   approved_by -> profiles (formative_marks_approved_by_fkey)
+
+goods_receipts (3)
+   school_id -> schools (goods_receipts_school_id_fkey)
+   purchase_order_id -> purchase_orders (goods_receipts_purchase_order_id_fkey)
+   received_by -> profiles (goods_receipts_received_by_fkey)
+
+grading_identifier_scales (1)
+   school_id -> schools (grading_identifier_scales_school_id_fkey)
+
+grading_scales (1)
+   school_id -> schools (grading_scales_school_id_fkey)
+
+grants (3)
+   school_id -> schools (grants_school_id_fkey)
+   donor_id -> donors (grants_donor_id_fkey)
+   created_by -> profiles (grants_created_by_fkey)
+
+identifier_scales (1)
+   school_id -> schools (identifier_scales_school_id_fkey)
+
+inventory_items (1)
+   school_id -> schools (inventory_items_school_id_fkey)
+
+journal_entries (3)
+   school_id -> schools (journal_entries_school_id_fkey)
+   transaction_id -> transactions (journal_entries_transaction_id_fkey)
+   created_by -> profiles (journal_entries_created_by_fkey)
+
+journal_entry_lines (3)
+   school_id -> schools (journal_entry_lines_school_id_fkey)
+   journal_entry_id -> journal_entries (journal_entry_lines_journal_entry_id_fkey)
+   account_id -> chart_of_accounts (journal_entry_lines_account_id_fkey)
+
+library_books (1)
+   school_id -> schools (library_books_school_id_fkey)
+
+library_loans (5)
+   school_id -> schools (library_loans_school_id_fkey)
+   book_id -> library_books (library_loans_book_id_fkey)
+   student_id -> students (library_loans_student_id_fkey)
+   user_id -> profiles (library_loans_user_id_fkey)
+   issued_by -> profiles (library_loans_issued_by_fkey)
+
+login_events (0)
+
+notifications (1)
+   school_id -> schools (notifications_school_id_fkey)
+
+payment_allocations (6)
+   school_id -> schools (payment_allocations_school_id_fkey)
+   payment_id -> payments (payment_allocations_payment_id_fkey)
+   invoice_id -> student_invoices (payment_allocations_invoice_id_fkey)
+   installment_id -> payment_plan_installments (payment_allocations_installment_id_fkey)
+   fee_category_id -> fee_categories (payment_allocations_fee_category_id_fkey)
+   created_by -> profiles (payment_allocations_created_by_fkey)
+
+payment_plan_installments (2)
+   school_id -> schools (payment_plan_installments_school_id_fkey)
+   plan_id -> payment_plans (payment_plan_installments_plan_id_fkey)
+
+payment_plans (6)
+   school_id -> schools (payment_plans_school_id_fkey)
+   student_id -> students (payment_plans_student_id_fkey)
+   academic_year_id -> academic_years (payment_plans_academic_year_id_fkey)
+   term_id -> terms (payment_plans_term_id_fkey)
+   created_by -> profiles (payment_plans_created_by_fkey)
+   approved_by -> profiles (payment_plans_approved_by_fkey)
+
+payment_promises (4)
+   school_id -> schools (payment_promises_school_id_fkey)
+   student_id -> students (payment_promises_student_id_fkey)
+   case_id -> collection_cases (payment_promises_case_id_fkey)
+   recorded_by -> profiles (payment_promises_recorded_by_fkey)
+
+payment_vouchers (4)
+   school_id -> schools (payment_vouchers_school_id_fkey)
+   approved_invoice_id -> approved_invoices (payment_vouchers_approved_invoice_id_fkey)
+   prepared_by -> profiles (payment_vouchers_prepared_by_fkey)
+   approved_by -> profiles (payment_vouchers_approved_by_fkey)
+
+payments (5)
+   school_id -> schools (payments_school_id_fkey)
+   student_id -> students (payments_student_id_fkey)
+   transaction_id -> transactions (payments_transaction_id_fkey)
+   receipt_id -> receipts (payments_receipt_id_fkey)
+   created_by -> profiles (payments_created_by_fkey)
+
+payroll_items (2)
+   school_id -> schools (payroll_items_school_id_fkey)
+   payroll_run_id -> payroll_runs (payroll_items_payroll_run_id_fkey)
+
+payroll_runs (3)
+   school_id -> schools (payroll_runs_school_id_fkey)
+   created_by -> profiles (payroll_runs_created_by_fkey)
+   approved_by -> profiles (payroll_runs_approved_by_fkey)
+
+payroll_staff (2)
+   school_id -> schools (payroll_staff_school_id_fkey)
+   created_by -> profiles (payroll_staff_created_by_fkey)
+
+profiles (1)
+   school_id -> schools (profiles_school_id_fkey)
+
+purchase_orders (4)
+   school_id -> schools (purchase_orders_school_id_fkey)
+   purchase_request_id -> purchase_requests (purchase_orders_purchase_request_id_fkey)
+   supplier_id -> suppliers (purchase_orders_supplier_id_fkey)
+   ordered_by -> profiles (purchase_orders_ordered_by_fkey)
+
+purchase_requests (4)
+   school_id -> schools (purchase_requests_school_id_fkey)
+   budget_id -> budgets (purchase_requests_budget_id_fkey)
+   supplier_id -> suppliers (purchase_requests_supplier_id_fkey)
+   requested_by -> profiles (purchase_requests_requested_by_fkey)
+
+receipts (1)
+   school_id -> schools (receipts_school_id_fkey)
+
+refunds (9)
+   school_id -> schools (refunds_school_id_fkey)
+   student_id -> students (refunds_student_id_fkey)
+   payment_id -> payments (refunds_payment_id_fkey)
+   receipt_id -> receipts (refunds_receipt_id_fkey)
+   requested_by -> profiles (refunds_requested_by_fkey)
+   reviewed_by -> profiles (refunds_reviewed_by_fkey)
+   approved_by -> profiles (refunds_approved_by_fkey)
+   paid_by -> profiles (refunds_paid_by_fkey)
+   approval_request_id -> approval_requests (refunds_approval_request_id_fkey)
+
+report_comment_rules (1)
+   school_id -> schools (report_comment_rules_school_id_fkey)
+
+report_comments (3)
+   school_id -> schools (report_comments_school_id_fkey)
+   student_id -> students (report_comments_student_id_fkey)
+   term_id -> terms (report_comments_term_id_fkey)
+
+school_events (1)
+   school_id -> schools (school_events_school_id_fkey)
+
+school_payments (2)
+   school_id -> schools (school_payments_school_id_fkey)
+   subscription_id -> school_subscriptions (school_payments_subscription_id_fkey)
+
+school_subscriptions (2)
+   school_id -> schools (school_subscriptions_school_id_fkey)
+   plan_id -> subscription_plans (school_subscriptions_plan_id_fkey)
+
+schools (0)
+
+server_function_rate_limits (0)
+
+staff_assignments (4)
+   school_id -> schools (staff_assignments_school_id_fkey)
+   user_id -> profiles (staff_assignments_user_id_fkey)
+   department_id -> departments (staff_assignments_department_id_fkey)
+   assigned_by -> profiles (staff_assignments_assigned_by_fkey)
+
+streams (2)
+   school_id -> schools (streams_school_id_fkey)
+   class_id -> classes (streams_class_id_fkey)
+
+student_fee_assignments (7)
+   school_id -> schools (student_fee_assignments_school_id_fkey)
+   student_id -> students (student_fee_assignments_student_id_fkey)
+   class_id -> classes (student_fee_assignments_class_id_fkey)
+   stream_id -> streams (student_fee_assignments_stream_id_fkey)
+   academic_year_id -> academic_years (student_fee_assignments_academic_year_id_fkey)
+   term_id -> terms (student_fee_assignments_term_id_fkey)
+   set_by -> profiles (student_fee_assignments_set_by_fkey)
+
+student_guardians (2)
+   school_id -> schools (student_guardians_school_id_fkey)
+   student_id -> students (student_guardians_student_id_fkey)
+
+student_history (2)
+   school_id -> schools (student_history_school_id_fkey)
+   student_id -> students (student_history_student_id_fkey)
+
+student_invoice_items (2)
+   school_id -> schools (student_invoice_items_school_id_fkey)
+   invoice_id -> student_invoices (student_invoice_items_invoice_id_fkey)
+
+student_invoices (5)
+   school_id -> schools (student_invoices_school_id_fkey)
+   student_id -> students (student_invoices_student_id_fkey)
+   financial_year_id -> financial_years (student_invoices_financial_year_id_fkey)
+   term_id -> terms (student_invoices_term_id_fkey)
+   created_by -> profiles (student_invoices_created_by_fkey)
+
+student_promotions (2)
+   school_id -> schools (student_promotions_school_id_fkey)
+   student_id -> students (student_promotions_student_id_fkey)
+
+student_subjects (3)
+   school_id -> schools (student_subjects_school_id_fkey)
+   student_id -> students (student_subjects_student_id_fkey)
+   subject_id -> subjects (student_subjects_subject_id_fkey)
+
+students (3)
+   school_id -> schools (students_school_id_fkey)
+   class_id -> classes (students_class_id_fkey)
+   stream_id -> streams (students_stream_id_fkey)
+
+subject_papers (2)
+   school_id -> schools (subject_papers_school_id_fkey)
+   subject_id -> subjects (subject_papers_subject_id_fkey)
+
+subjects (1)
+   school_id -> schools (subjects_school_id_fkey)
+
+subscription_expiry_notifications (2)
+   subscription_id -> school_subscriptions (subscription_expiry_notifications_subscription_id_fkey)
+   school_id -> schools (subscription_expiry_notifications_school_id_fkey)
+
+subscription_plans (0)
+
+suppliers (1)
+   school_id -> schools (suppliers_school_id_fkey)
+
+tax_rates (1)
+   school_id -> schools (tax_rates_school_id_fkey)
+
+teacher_allocation_history (1)
+   school_id -> schools (teacher_allocation_history_school_id_fkey)
+
+teacher_allocations (5)
+   school_id -> schools (teacher_allocations_school_id_fkey)
+   teacher_id -> profiles (teacher_allocations_teacher_id_fkey)
+   subject_id -> subjects (teacher_allocations_subject_id_fkey)
+   class_id -> classes (teacher_allocations_class_id_fkey)
+   stream_id -> streams (teacher_allocations_stream_id_fkey)
+
+teacher_attendance (1)
+   school_id -> schools (teacher_attendance_school_id_fkey)
+
+terms (2)
+   school_id -> schools (terms_school_id_fkey)
+   academic_year_id -> academic_years (terms_academic_year_id_fkey)
+
+timetable_entries (6)
+   school_id -> schools (timetable_entries_school_id_fkey)
+   academic_year_id -> academic_years (timetable_entries_academic_year_id_fkey)
+   term_id -> terms (timetable_entries_term_id_fkey)
+   class_id -> classes (timetable_entries_class_id_fkey)
+   stream_id -> streams (timetable_entries_stream_id_fkey)
+   subject_id -> subjects (timetable_entries_subject_id_fkey)
+
+timetable_periods (3)
+   school_id -> schools (timetable_periods_school_id_fkey)
+   academic_year_id -> academic_years (timetable_periods_academic_year_id_fkey)
+   term_id -> terms (timetable_periods_term_id_fkey)
+
+timetable_settings (3)
+   school_id -> schools (timetable_settings_school_id_fkey)
+   academic_year_id -> academic_years (timetable_settings_academic_year_id_fkey)
+   term_id -> terms (timetable_settings_term_id_fkey)
+
+transactions (2)
+   school_id -> schools (transactions_school_id_fkey)
+   created_by -> profiles (transactions_created_by_fkey)
+
+user_roles (1)
+   school_id -> schools (user_roles_school_id_fkey)

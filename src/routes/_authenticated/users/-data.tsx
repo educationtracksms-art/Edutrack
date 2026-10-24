@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
+  listStaffUsers,
   createStaffUser,
   updateStaffUser,
   resetUserPassword,
@@ -64,24 +65,20 @@ export function useUsersData() {
       (await supabase.from("schools").select("id, name").order("name")).data ?? [],
   });
 
-  const { data: people, isLoading: peopleLoading } = useQuery({
+  const listUsers = useServerFn(listStaffUsers);
+  const { data: people = [], isLoading: peopleLoading, error: peopleError } = useQuery({
     queryKey: ["staff"],
-    queryFn: async () => {
-      const [{ data: profiles }, { data: roles }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select(
-            "id, full_name, email, initials, is_active, must_change_password, school_id, department_id",
-          ),
-        supabase.from("user_roles").select("user_id, role"),
-      ]);
-      return (profiles ?? []).map((profile: any) => ({
-        ...profile,
-        roles: (roles ?? [])
-          .filter((r: any) => r.user_id === profile.id)
-          .map((r: any) => r.role as AppRole),
-      }));
-    },
+    queryFn: async () => (await listUsers()).people as Array<{
+      id: string;
+      full_name: string;
+      email: string;
+      initials: string | null;
+      is_active: boolean;
+      must_change_password: boolean;
+      school_id: string | null;
+      department_id: string | null;
+      roles: AppRole[];
+    }>,
   });
 
   const schoolNameFor = (id: string | null) =>
@@ -92,7 +89,7 @@ export function useUsersData() {
     queryClient.invalidateQueries({ queryKey: ["departments"] });
   }
 
-  return { me, queryClient, isSuper, people, peopleLoading, schools, refresh, schoolNameFor };
+  return { me, queryClient, isSuper, people, peopleLoading, peopleError, schools, refresh, schoolNameFor };
 }
 
 /**

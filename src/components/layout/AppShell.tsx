@@ -13,6 +13,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   CreditCard,
+  CircleHelp,
   FileBarChart,
   FileText,
   HandCoins,
@@ -36,7 +37,21 @@ import {
   Vault,
   Wallet,
   X,
-  Workflow,
+} from "lucide-react";
+import {
+  BadgeCheck,
+  BookOpen,
+  CalendarPlus,
+  FileCheck,
+  CircleUser,
+  ClipboardList,
+  Coins,
+  Gauge,
+  Gift,
+  Send,
+  SlidersHorizontal,
+  UserCog,
+  UsersRound,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -44,6 +59,7 @@ import logoUrl from "@/assets/logo-optimized.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import {
   ACADEMIC_MANAGERS,
   ROLE_LABELS,
@@ -94,8 +110,6 @@ const ALL: AppRole[] = [
   "subject_teacher",
 ];
 
-const WORKFLOW_ROLES: AppRole[] = [...ALL, "librarian"];
-
 /**
  * The Bursar sidebar is an allow-list: finance navigation renders for the Bursar
  * role only. See {@link FINANCE_ROUTE_ROLES} in "@/lib/route-guards" for the
@@ -118,13 +132,6 @@ const SCHOOL_OPERATIONS_ROLES: AppRole[] = [
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL, section: "Home" },
   {
-    to: "/workflow",
-    label: "School workflow",
-    icon: Workflow,
-    roles: WORKFLOW_ROLES,
-    section: "Home",
-  },
-  {
     to: "/schools",
     label: "Schools",
     icon: Building2,
@@ -141,7 +148,7 @@ const NAV: NavItem[] = [
   {
     to: "/subscription",
     label: "Subscription",
-    icon: CreditCard,
+    icon: Coins,
     roles: ["school_admin"],
     section: "Administration",
   },
@@ -155,7 +162,7 @@ const NAV: NavItem[] = [
   {
     to: "/finance",
     label: "Bursar dashboard",
-    icon: LayoutDashboard,
+    icon: Gauge,
     roles: FINANCE_ROLES,
     module: "finance",
     section: "Bursar",
@@ -243,7 +250,7 @@ const NAV: NavItem[] = [
   {
     to: "/finance-payroll-staff",
     label: "Payroll staff",
-    icon: Users,
+    icon: UserCog,
     roles: FINANCE_ROLES,
     module: "finance",
     section: "Bursar",
@@ -251,7 +258,7 @@ const NAV: NavItem[] = [
   {
     to: "/finance-hod-requests",
     label: "HOD requests",
-    icon: HandCoins,
+    icon: ClipboardList,
     roles: FINANCE_ROLES,
     module: "finance",
     section: "Bursar",
@@ -267,7 +274,7 @@ const NAV: NavItem[] = [
   {
     to: "/finance-grants",
     label: "Grants & aid",
-    icon: HandCoins,
+    icon: Gift,
     roles: FINANCE_ROLES,
     module: "finance",
     section: "Bursar",
@@ -307,7 +314,7 @@ const NAV: NavItem[] = [
   {
     to: "/library",
     label: "Library",
-    icon: Library,
+    icon: BookOpen,
     roles: ["head_teacher", "deputy_head_teacher", "dos", "librarian"],
     module: "library",
     section: "Operations",
@@ -330,7 +337,7 @@ const NAV: NavItem[] = [
   {
     to: "/events",
     label: "Events",
-    icon: CalendarDays,
+    icon: CalendarPlus,
     roles: SCHOOL_ROLES,
     section: "Operations",
   },
@@ -356,14 +363,14 @@ const NAV: NavItem[] = [
   {
     to: "/finance-requests",
     label: "Finance requests",
-    icon: HandCoins,
+    icon: Send,
     roles: ["hod"],
     section: "Requests",
   },
   {
     to: "/approval",
-    label: "Marks approval",
-    icon: ClipboardCheck,
+    label: "Marks approvals",
+    icon: BadgeCheck,
     roles: ["dos"],
     module: "academics",
     section: "Teaching & results",
@@ -371,7 +378,7 @@ const NAV: NavItem[] = [
   {
     to: "/approved",
     label: "Approved results",
-    icon: ClipboardCheck,
+    icon: FileCheck,
     roles: ["dos"],
     module: "academics",
     section: "Teaching & results",
@@ -410,14 +417,14 @@ const NAV: NavItem[] = [
   {
     to: "/users",
     label: "Staff & roles",
-    icon: Users,
+    icon: UsersRound,
     roles: ["super_admin", "school_admin"],
     section: "Setup",
   },
   {
     to: "/account-settings",
     label: "My settings",
-    icon: Settings2,
+    icon: CircleUser,
     // Personal account details (name, password) stay available to every role;
     // school-wide configuration is disabled for the Bursar below.
     roles: ["super_admin", ...SCHOOL_ROLES, "bursar"],
@@ -426,7 +433,7 @@ const NAV: NavItem[] = [
   {
     to: "/settings",
     label: "Settings",
-    icon: Settings2,
+    icon: SlidersHorizontal,
     roles: SCHOOL_ROLES,
     section: "Administration",
   },
@@ -449,7 +456,19 @@ const NAV_SECTION_ORDER = [
   "Administration",
 ];
 
+const SIDEBAR_PREFERENCE_KEY = "edutrack-sidebar-expanded";
+
+function readSidebarPreference() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
+  useSessionTimeout();
   const { data: me } = useCurrentUser();
   const navigate = useNavigate();
   const router = useRouter();
@@ -472,7 +491,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     enabled: isSchoolScopedUser,
     queryFn: () => getSchoolSubscriptionStatus(),
   });
-  const [labelsVisible, setLabelsVisible] = React.useState(() => !isMobile);
+  const [labelsVisible, setLabelsVisible] = React.useState(readSidebarPreference);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -485,10 +504,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const notice = takeAccessNotice();
     if (notice) toast.error(notice);
   }, [pathname]);
-
-  React.useEffect(() => {
-    setLabelsVisible(!isMobile);
-  }, [isMobile]);
 
   React.useEffect(() => {
     setMobileNavOpen(false);
@@ -593,9 +608,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     item.label.toLowerCase().includes(searchTerm.trim().toLowerCase()),
   );
   const primaryRole = me?.roles?.[0];
-  const sidebarWidth = labelsVisible ? "w-72" : "w-20";
-  const contentOffset = labelsVisible ? "pl-72" : "pl-20";
-  const toggleLabel = labelsVisible ? "Hide words" : "Show words";
+  const sidebarWidth = labelsVisible ? "w-64" : "w-[4.5rem]";
+  const contentOffset = labelsVisible ? "pl-64" : "pl-[4.5rem]";
+  function toggleSidebar() {
+    setLabelsVisible((expanded) => {
+      const next = !expanded;
+      try {
+        window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, String(next));
+      } catch {
+        // Sidebar preference is optional when storage is unavailable.
+      }
+      return next;
+    });
+  }
   const pageTitle =
     pathname === "/"
       ? "Dashboard"
@@ -631,41 +656,42 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,oklch(0.98_0.02_255),var(--color-background)_45%)]">
+    <div className="min-h-screen bg-background">
       {!isMobile && (
         <aside
+          aria-label="Main sidebar"
           className={cn(
-            "no-print fixed inset-y-0 left-0 z-40 flex h-dvh flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl transition-[width] duration-150",
+            "no-print fixed inset-y-0 left-0 z-40 flex h-dvh flex-col border-r border-slate-200/80 bg-white text-slate-700 shadow-[0_12px_36px_-22px_rgba(15,23,42,0.28)] transition-[width,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
             sidebarWidth,
           )}
         >
           <div
             className={cn(
-              "flex items-center gap-3 border-b border-sidebar-border px-3 py-4",
-              !labelsVisible && "justify-center",
+              "flex min-h-[4.5rem] items-center gap-3 border-b border-slate-100 px-3 py-3",
+              !labelsVisible && "flex-col justify-center gap-2 px-2",
             )}
           >
             <img
               src={me?.school?.logo_url || logoUrl}
               alt={`${me?.school?.name || "EduTrack"} logo`}
-              className="h-11 w-11 rounded-full bg-white object-cover"
+              className="h-10 w-10 shrink-0 rounded-xl bg-slate-50 object-cover ring-1 ring-slate-200/80 transition-transform duration-300 hover:scale-[1.03]"
             />
-            {labelsVisible && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold leading-tight">
+            <div className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200", labelsVisible ? "max-w-48 opacity-100" : "max-w-0 flex-none opacity-0")}>
+                <p className="truncate text-sm font-semibold leading-tight tracking-tight text-slate-900">
                   {me?.school?.name || "EduTrack"}
                 </p>
-                <p className="truncate text-xs text-sidebar-foreground/60">School Management</p>
-              </div>
-            )}
+                <p className="truncate text-[11px] text-slate-500">School Management</p>
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="shrink-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={() => setLabelsVisible((value) => !value)}
-              aria-label={labelsVisible ? "Hide sidebar words" : "Show sidebar words"}
-              title={toggleLabel}
+              className="shrink-0 rounded-lg text-slate-500 transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm active:scale-95"
+              onClick={toggleSidebar}
+              aria-label={labelsVisible ? "Collapse sidebar" : "Expand sidebar"}
+              aria-expanded={labelsVisible}
+              aria-controls="desktop-navigation"
+              title={labelsVisible ? "Collapse sidebar" : "Expand sidebar"}
             >
               {labelsVisible ? (
                 <PanelLeftClose className="h-4 w-4" />
@@ -675,7 +701,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
 
-          <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          <nav id="desktop-navigation" aria-label="School tools" className="flex-1 space-y-1 overflow-y-auto p-3">
             {items.map((item, index) => {
               // Match the route itself or a child path, so /finance-payroll no
               // longer also highlights the /finance dashboard entry.
@@ -685,7 +711,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               return (
                 <React.Fragment key={item.to}>
                   {showSection && labelsVisible && (
-                    <p className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/50 first:pt-0">
+                    <p className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 first:pt-0">
                       {item.section}
                     </p>
                   )}
@@ -694,23 +720,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     preload="intent"
                     onPointerDown={() => preloadPage(item.to)}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors",
+                      "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all duration-200 ease-out hover:translate-x-0.5 motion-reduce:transform-none",
                       active
-                        ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                      !labelsVisible && "justify-center px-2",
+                        ? "bg-blue-50 font-semibold text-blue-700 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.10)] before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-blue-600"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
+                      !labelsVisible && "justify-center gap-0 px-2",
                     )}
                     title={!labelsVisible ? item.label : undefined}
                   >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    {labelsVisible && <span className="truncate">{item.label}</span>}
+                    <item.icon className={cn("h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-110", active ? "text-blue-600" : "text-slate-400 group-hover:text-slate-700")} />
+                    <span className={cn("min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,transform,opacity] duration-200", labelsVisible ? "max-w-48 translate-x-0 opacity-100" : "max-w-0 -translate-x-1 opacity-0")}>{item.label}</span>
                   </Link>
                 </React.Fragment>
               );
             })}
           </nav>
 
-          <div className="border-t border-sidebar-border px-3 py-2">
+          <div className="border-t border-slate-100 p-2">
+            <Link
+              to="/help"
+              className={cn(
+                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] text-slate-600 transition-all duration-200 hover:translate-x-0.5 hover:bg-slate-50 hover:text-slate-950",
+                pathname === "/help" && "bg-blue-50 font-semibold text-blue-700",
+                !labelsVisible && "justify-center gap-0 px-2",
+              )}
+              title={!labelsVisible ? "Help & user guide" : undefined}
+            >
+              <CircleHelp className="h-[18px] w-[18px] shrink-0 text-slate-400 transition-colors group-hover:text-blue-600" />
+              <span className={cn("min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,transform,opacity] duration-200", labelsVisible ? "max-w-48 translate-x-0 opacity-100" : "max-w-0 -translate-x-1 opacity-0")}>Help & user guide</span>
+            </Link>
+          </div>
+
+          <div className="border-t border-slate-100 px-2 py-2">
             <div className={cn(!labelsVisible && "flex justify-center")}>
               <Suspense fallback={null}>
                 <NotificationPanel showLabel={labelsVisible} />
@@ -718,16 +759,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="border-t border-sidebar-border p-3 text-xs">
+          <div className="border-t border-slate-100 p-3 text-xs">
             {labelsVisible ? (
               <>
-                <p className="truncate font-medium">{me?.profile?.full_name || me?.email}</p>
-                <p className="text-sidebar-foreground/60">Signed in</p>
+                <p className="truncate font-medium text-slate-800">{me?.profile?.full_name || me?.email}</p>
+                <p className="text-slate-400">Signed in</p>
               </>
             ) : (
               <div className="flex items-center justify-center">
                 <div
-                  className="h-2 w-2 rounded-full bg-sidebar-foreground/40"
+                  className="h-2 w-2 rounded-full bg-emerald-500 ring-4 ring-emerald-50"
                   title={me?.email ?? "Account"}
                 />
               </div>
@@ -735,8 +776,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               onClick={signOut}
               className={cn(
-                "mt-3 flex w-full items-center gap-2 rounded-xl bg-sidebar-accent px-3 py-2 text-sidebar-accent-foreground transition-colors hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
-                !labelsVisible && "justify-center px-2",
+                "mt-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-slate-500 transition-all duration-200 hover:bg-rose-50 hover:text-rose-600 active:scale-[0.98]",
+                !labelsVisible && "justify-center gap-0 px-2",
               )}
               title={!labelsVisible ? "Sign out" : undefined}
             >
@@ -751,30 +792,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetContent
             side="left"
-            className="w-[88vw] max-w-sm bg-sidebar p-0 text-sidebar-foreground"
+            className="w-[88vw] max-w-sm border-slate-200 bg-white p-0 text-slate-700"
           >
-            <SheetHeader className="border-b border-sidebar-border px-4 py-5 text-left">
-              <SheetTitle className="flex items-center gap-3 text-base text-sidebar-foreground">
+            <SheetHeader className="border-b border-slate-100 px-4 py-5 text-left">
+              <SheetTitle className="flex items-center gap-3 text-base text-slate-900">
                 <img
                   src={me?.school?.logo_url || logoUrl}
                   alt={`${me?.school?.name || "EduTrack"} logo`}
-                  className="h-11 w-11 rounded-full bg-white object-cover"
+                  className="h-10 w-10 rounded-xl bg-slate-50 object-cover ring-1 ring-slate-200/80"
                 />
                 <span className="truncate">{me?.school?.name || "EduTrack"}</span>
               </SheetTitle>
-              <SheetDescription className="text-sidebar-foreground/60">
+              <SheetDescription className="text-slate-500">
                 Jump between school tools and account actions.
               </SheetDescription>
             </SheetHeader>
 
             <div className="flex min-h-0 flex-1 flex-col">
-              <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
+              <nav id="mobile-navigation" aria-label="School tools" className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
                 {items.map((item, index) => {
                   const active = pathname.startsWith(item.to);
                   return (
                     <React.Fragment key={item.to}>
                       {item.section && item.section !== items[index - 1]?.section && (
-                        <p className="px-4 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/50 first:pt-0">
+                        <p className="px-4 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 first:pt-0">
                           {item.section}
                         </p>
                       )}
@@ -784,13 +825,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         onPointerDown={() => preloadPage(item.to)}
                         onClick={() => setMobileNavOpen(false)}
                         className={cn(
-                          "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-colors",
+                          "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all duration-200 ease-out hover:translate-x-0.5",
                           active
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                            ? "bg-blue-50 font-semibold text-blue-700"
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
                         )}
                       >
-                        <item.icon className="h-4 w-4 shrink-0" />
+                        <item.icon className={cn("h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-110", active ? "text-blue-600" : "text-slate-400 group-hover:text-slate-700")} />
                         <span className="truncate">{item.label}</span>
                       </Link>
                     </React.Fragment>
@@ -798,22 +839,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 })}
               </nav>
 
-              <div className="border-t border-sidebar-border px-3 py-2">
+              <div className="border-t border-slate-100 p-3">
+                <Link
+                  to="/help"
+                  onClick={() => setMobileNavOpen(false)}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-slate-600 transition-all duration-200 hover:translate-x-0.5 hover:bg-slate-50 hover:text-slate-950",
+                    pathname === "/help" && "bg-blue-50 font-semibold text-blue-700",
+                  )}
+                >
+                  <CircleHelp className="h-[18px] w-[18px] shrink-0 text-slate-400 transition-colors group-hover:text-blue-600" />
+                  <span>Help & user guide</span>
+                </Link>
+              </div>
+
+              <div className="border-t border-slate-100 px-3 py-2">
                 <Suspense fallback={null}>
                   <NotificationPanel />
                 </Suspense>
               </div>
 
-              <div className="border-t border-sidebar-border p-3">
-                <p className="truncate text-sm font-medium">
+              <div className="border-t border-slate-100 p-3">
+                <p className="truncate text-sm font-medium text-slate-800">
                   {me?.profile?.full_name || me?.email}
                 </p>
-                <p className="text-xs text-sidebar-foreground/60">
+                <p className="text-xs text-slate-400">
                   {primaryRole ? ROLE_LABELS[primaryRole] : "No role"}
                 </p>
                 <button
                   onClick={signOut}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-sidebar-accent px-4 py-3 text-sm font-medium text-sidebar-accent-foreground transition-colors hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-rose-50 hover:text-rose-600 active:scale-[0.98]"
                 >
                   <LogOut className="h-4 w-4" />
                   Sign out
@@ -827,11 +882,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "flex min-h-screen min-w-0 flex-col",
-          !isMobile && "transition-[padding-left] duration-150",
+          !isMobile && "transition-[padding-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
           !isMobile && contentOffset,
         )}
       >
-        <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/80 shadow-[0_4px_20px_oklch(0.2_0.04_258_/_0.04)] backdrop-blur-xl">
+        <header className="no-print sticky top-0 z-30 border-b border-border bg-background backdrop-blur">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-3 py-3 sm:flex-nowrap sm:px-4 md:px-5">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               {isMobile ? (
@@ -842,6 +897,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className="shrink-0 md:hidden"
                   onClick={() => setMobileNavOpen(true)}
                   aria-label="Open navigation menu"
+                  aria-expanded={mobileNavOpen}
+                  aria-controls="mobile-navigation"
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
@@ -869,7 +926,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </kbd>
                 </Button>
                 {searchOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background p-2 shadow-xl">
+                  <div className="absolute right-0 top-11 z-50 w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background p-2 shadow-sm">
                     <div className="flex items-center gap-2 border-b border-border px-2 pb-2">
                       <Search className="h-4 w-4 text-muted-foreground" />
                       <input

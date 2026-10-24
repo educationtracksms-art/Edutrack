@@ -31,14 +31,14 @@ const SEO_CONFIG = {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  const lastInvalidatedError = useRef<string | null>(null);
 
+  // NOTE: Intentionally no router.invalidate() here. Invalidating while the
+  // error boundary is rendering triggers a route reload that throws the same
+  // error again, which re-renders this boundary and loops forever
+  // ("Refreshing this route should not loop anymore"). The "Try again" button
+  // calls reset(), which is the supported way to recover from an error.
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
-    const signature = `${error.name}:${error.message}`;
-    if (lastInvalidatedError.current === signature) return;
-    lastInvalidatedError.current = signature;
-    router.invalidate();
   }, [error, router]);
 
   return (

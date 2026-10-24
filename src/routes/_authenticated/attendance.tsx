@@ -11,6 +11,7 @@ import { stableDataQueryOptions, volatileDataQueryOptions } from "@/lib/query-ca
 import { Btn, Field, PageHeader, Panel, ResponsiveTable, inputClass } from "@/components/ui-kit";
 import { isModuleEnabled } from "@/lib/modules";
 import { deleteAttendanceSummary } from "@/lib/admin.functions";
+import { useAbsenceAlerts, useTriggerAbsenceAlerts } from "@/hooks/useAbsenceAlerts";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   beforeLoad: async () => {
@@ -308,6 +309,49 @@ function AttendancePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+function AbsenceAlertsPanel() {
+  const { data: me } = useCurrentUser();
+  const canTrigger = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "dos", "class_teacher"]);
+  const alertsQuery = useAbsenceAlerts(20);
+  const trigger = useTriggerAbsenceAlerts();
+  if (!canTrigger) return null;
+  const alerts = (alertsQuery.data as any)?.alerts ?? [];
+  return (
+    <Panel title="Absence alerts (2+ consecutive days)">
+      <p className="mb-3 text-xs text-muted-foreground">
+        Triggers queue an SMS in finance_communications (status queued) for the external gateway plus an
+        in-app notice to class leadership. Each streak alerts once.
+      </p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Btn
+          variant="accent"
+          onClick={() => trigger.mutate(undefined, {
+            onSuccess: (r: any) => toast.success(`Absence scan complete: ${r.queued} queued, ${r.skipped} already alerted`),
+            onError: (e: Error) => toast.error(e.message),
+          })}
+          disabled={trigger.isPending}
+        >
+          {trigger.isPending ? "Scanning…" : "Scan & queue alerts"}
+        </Btn>
+      </div>
+      {alertsQuery.isPending ? (
+        <p className="text-sm text-muted-foreground">Loading recent alerts…</p>
+      ) : alerts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No absence alerts yet. Learners absent 2 days in a row will appear here.</p>
+      ) : (
+        <div className="space-y-2">
+          {alerts.map((a: any) => (
+            <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm">
+              <span>{String(a.streak_start_date).slice(0, 10)} – {String(a.streak_end_date).slice(0, 10)} · {a.consecutive_days} days</span>
+              <span className="text-xs text-muted-foreground">{a.parent_phone ?? "no parent phone"} · {new Date(a.notified_at).toLocaleDateString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
   return (
     <div>
       <PageHeader
@@ -323,6 +367,10 @@ function AttendancePage() {
           </p>
         </Panel>
       )}
+
+      <div className="mt-4">
+        <AbsenceAlertsPanel />
+      </div>
 
       {data?.term && (
         <Panel>

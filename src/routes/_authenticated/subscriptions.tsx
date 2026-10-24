@@ -320,7 +320,7 @@ function SubscriptionsPage() {
             {plans.map((plan) => (
               <div
                 key={plan.id}
-                className={`rounded-2xl border p-5 shadow-[var(--shadow-card)] transition-all ${
+                className={`rounded-2xl border p-5 shadow-[var(--shadow-card)] transition-colors ${
                   plan.is_active ? "border-border hover:border-primary/25" : "border-border/60 bg-muted/30 opacity-70"
                 }`}
               >
@@ -571,7 +571,7 @@ function PlanFormDialog({
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="text-xl font-bold">{isEdit ? "Edit Plan" : "Create Plan"}</h2>
@@ -718,7 +718,7 @@ function ConfirmPaymentDialog({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="text-xl font-bold">Confirm Payment</h2>
@@ -769,7 +769,7 @@ function ConfirmPaymentDialog({
                 key={item}
                 type="button"
                 onClick={() => setMethod(item)}
-                className={`rounded-lg border p-3 text-sm transition-all ${
+                className={`rounded-lg border p-3 text-sm transition-colors ${
                   method === item
                     ? "border-primary bg-primary/5 font-medium text-primary"
                     : "border-border hover:border-primary/20"
@@ -832,7 +832,7 @@ function RevokeDialog({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="text-xl font-bold">Revoke Subscription</h2>
@@ -916,7 +916,7 @@ function SubscriptionDetailDialog({
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-2xl"
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="text-xl font-bold">Subscription Details</h2>

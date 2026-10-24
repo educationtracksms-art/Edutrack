@@ -1,10 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn, useServerFn } from "@tanstack/react-start";
 
 import { PageHeader, Panel } from "@/components/ui-kit";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
+import { requireRateLimitedSupabaseAuth } from "@/integrations/supabase/rate-limited-auth-middleware";
 
 export const Route = createFileRoute("/_authenticated/env-debug")({
+  beforeLoad: async ({ context }) => {
+    // Server-side enforcement lives in the server function; this only avoids
+    // fetching debug info for users who clearly cannot see it.
+    const currentUser = await context.queryClient.fetchQuery({
+      queryKey: ["current-user"],
+      queryFn: async () => (await import("@/hooks/useCurrentUser")).fetchCurrentUser(),
+      staleTime: 5 * 60_000,
+    });
+    if (!currentUser) throw redirect({ to: "/auth" });
+    if (!hasAny(currentUser.roles, ["super_admin"])) throw redirect({ to: "/dashboard" });
+  },
   head: () => ({
     meta: [
       { title: "Runtime env debug · EduTrack" },
@@ -18,10 +30,21 @@ export const Route = createFileRoute("/_authenticated/env-debug")({
   component: EnvDebug,
 });
 
-const getEnvDebugInfo = createServerFn({ method: "GET" }, async () => {
-  const { getServerSupabaseEnvDebugInfo } = await import("@/integrations/supabase/server-env");
-  return getServerSupabaseEnvDebugInfo();
-});
+const getEnvDebugInfo = createServerFn({ method: "GET" })
+  .middleware([requireRateLimitedSupabaseAuth])
+  .handler(async ({ context }) => {
+    // Authorise on the server: only super admins may read env debug info.
+    const { data: roles } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const roleNames = (roles ?? []).map((row) => row.role);
+    if (!roleNames.includes("super_admin")) {
+      throw new Error("Only super admins can read runtime environment debug info");
+    }
+    const { getServerSupabaseEnvDebugInfo } = await import("@/integrations/supabase/server-env");
+    return getServerSupabaseEnvDebugInfo();
+  });
 
 function EnvDebug() {
   const { data: me, isLoading: isUserLoading } = useCurrentUser();

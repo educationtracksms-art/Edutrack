@@ -584,6 +584,55 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
     return { schoolId: school.id, oneTimePassword: password };
   });
 
+export const listStaffUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    const isSuper = roles.includes("super_admin");
+    if (!isSuper && !roles.includes("school_admin")) {
+      throw new Error("Not allowed to view users");
+    }
+
+    const { data: ownProfile, error: ownProfileError } = await context.supabase
+      .from("profiles")
+      .select("school_id")
+      .eq("id", context.userId)
+      .maybeSingle();
+    if (ownProfileError) throw new Error(ownProfileError.message);
+    if (!isSuper && !ownProfile?.school_id) {
+      throw new Error("Your account is not linked to a school");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let profileQuery = supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, email, initials, is_active, must_change_password, school_id, department_id")
+      .order("full_name");
+    if (!isSuper) profileQuery = profileQuery.eq("school_id", ownProfile!.school_id!);
+
+    const { data: profiles, error: profilesError } = await profileQuery;
+    if (profilesError) throw new Error(profilesError.message);
+    const userIds = (profiles ?? []).map((profile) => profile.id);
+    if (userIds.length === 0) return { people: [] };
+
+    let roleQuery = supabaseAdmin
+      .from("user_roles")
+      .select("user_id, role")
+      .in("user_id", userIds);
+    if (!isSuper) roleQuery = roleQuery.eq("school_id", ownProfile!.school_id!);
+    const { data: userRoles, error: rolesError } = await roleQuery;
+    if (rolesError) throw new Error(rolesError.message);
+
+    return {
+      people: (profiles ?? []).map((profile) => ({
+        ...profile,
+        roles: (userRoles ?? [])
+          .filter((userRole) => userRole.user_id === profile.id)
+          .map((userRole) => userRole.role),
+      })),
+    };
+  });
+
 export const createStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(
@@ -660,10 +709,19 @@ export const createStaffUser = createServerFn({ method: "POST" })
       must_change_password: true,
     };
 
-    await context.supabase.from("profiles").upsert(staffProfilePayload, { onConflict: "id" });
-    await context.supabase
+    const { error: profileError } = await supabaseAdmin.from("profiles").upsert(staffProfilePayload, { onConflict: "id" });
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(uid);
+      throw new Error(profileError.message);
+    }
+    const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: uid, role: data.role as never, school_id: schoolId });
+    if (roleError) {
+      await supabaseAdmin.from("profiles").delete().eq("id", uid);
+      await supabaseAdmin.auth.admin.deleteUser(uid);
+      throw new Error(roleError.message);
+    }
 
     await logAudit(context.supabase, context.userId, schoolId, "USER_CREATED", "profiles", {
       email: data.email,
@@ -736,7 +794,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       if (departmentError) throw new Error(departmentError.message);
       if (!department) throw new Error("The selected department does not belong to this school");
     }
-    const { error: profileError } = await context.supabase
+    const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .update({
         school_id: schoolId,
@@ -748,13 +806,13 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       .eq("id", data.userId);
     if (profileError) throw new Error(profileError.message);
 
-    const { error: roleDeleteError } = await context.supabase
+    const { error: roleDeleteError } = await supabaseAdmin
       .from("user_roles")
       .delete()
       .eq("user_id", data.userId);
     if (roleDeleteError) throw new Error(roleDeleteError.message);
 
-    const { error: roleInsertError } = await context.supabase
+    const { error: roleInsertError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: data.userId, role: data.role as never, school_id: schoolId });
     if (roleInsertError) throw new Error(roleInsertError.message);
@@ -3144,8 +3202,9 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     if (!target) throw new Error("User not found");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
-    const { error: profileError } = await context.supabase
+    const { error: roleError } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    if (roleError) throw new Error(roleError.message);
+    const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .delete()
       .eq("id", data.userId);

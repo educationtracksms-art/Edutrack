@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import logoUrl from "@/assets/logo-optimized.png";
 
 function WebsiteHeroBanner() {
-  const [bg, setBg] = useState(null);
+  const [bg, setBg] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     const load = () =>
@@ -32,8 +32,7 @@ function WebsiteHeroBanner() {
       {bg ? (
         <div className="absolute inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url(" + bg + ")" }} />
       ) : null}
-      <div className="absolute inset-0 -z-10 bg-slate-950/65" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-primary/35" />
+      <div className="absolute inset-0 -z-10 bg-slate-950/70" />
       <div className="mx-auto max-w-7xl px-6 py-14 sm:px-8 md:py-20 lg:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Education Track SMS</p>
         <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
@@ -58,7 +57,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b border-border/70 bg-background/90 shadow-[0_8px_30px_oklch(0.2_0.04_258_/_0.06)] backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-border bg-background backdrop-blur">
         <div className="hidden bg-primary px-4 py-2 text-center text-xs font-medium text-primary-foreground sm:block">
           <span className="inline-flex items-center gap-2">
             Built for ambitious schools across Uganda
@@ -69,7 +68,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
         </div>
         <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-8">
           <Link to="/" className="group flex min-w-0 items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary p-1 shadow-lg shadow-primary/20 transition-transform group-hover:-rotate-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary p-1 shadow-sm transition-transform group-hover:-rotate-3">
               <img src={logoUrl} alt="Education Track SMS logo" className="h-full w-full rounded-xl object-cover" />
             </span>
             <div className="min-w-0">
@@ -91,7 +90,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
           <nav
             id="public-navigation"
-            className={`absolute left-3 right-3 top-[calc(100%+0.75rem)] z-[60] rounded-2xl border border-border bg-background p-3 shadow-2xl shadow-primary/10 md:static md:block md:border-0 md:bg-transparent md:p-0 md:shadow-none ${menuOpen ? "block" : "hidden"} md:block`}
+            className={`absolute left-3 right-3 top-[calc(100%+0.75rem)] z-[60] rounded-2xl border border-border bg-background p-3 shadow-lg md:static md:block md:border-0 md:bg-transparent md:p-0 md:shadow-none ${menuOpen ? "block" : "hidden"} md:block`}
           >
             <div className="flex flex-col gap-1 text-sm md:flex-row md:flex-nowrap md:items-center md:gap-1">
               <Link
@@ -154,7 +153,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
                 to="/auth"
                 preload="intent"
                 onClick={() => setMenuOpen(false)}
-                className="mt-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary px-4 py-2.5 text-center font-semibold text-primary-foreground shadow-md shadow-primary/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 md:mt-0"
+                className="mt-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-4 py-2.5 text-center font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 md:mt-0"
               >
                 Sign in <ArrowUpRight className="h-4 w-4" />
               </Link>
@@ -264,7 +263,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
               </a>
             </div>
             <p className="mt-5 text-sm text-slate-400">
-              © {new Date().getFullYear()} Education Track SMS. All rights reserved.
+              Ã‚Â© {new Date().getFullYear()} Education Track SMS. All rights reserved.
             </p>
           </div>
         </div>

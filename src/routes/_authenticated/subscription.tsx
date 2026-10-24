@@ -155,6 +155,7 @@ function SubscriptionPage() {
         .from("subscription_plans")
         .select("id, name, price, duration_value, duration_unit, duration_days, description, is_active, is_platform_only, display_order, created_at")
         .eq("is_active", true)
+        .eq("is_platform_only", false)
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: true });
       if (error) throw new Error(error.message);
@@ -174,7 +175,7 @@ function SubscriptionPage() {
     },
     onError: (error: Error) => {
       if (error.message.includes("already has an active")) toast.error(error.message);
-      else toast.error("Could not create subscription");
+      else toast.error(error.message || "Could not create subscription");
     },
   });
 
@@ -280,7 +281,7 @@ function SubscriptionPage() {
             </div>
           )}
 
-          {!isPending && isSchoolAdmin && (
+          {isPending && isSchoolAdmin && (
             <button
               type="button"
               onClick={() => cancelMutation.mutate(sub.id)}
@@ -295,7 +296,7 @@ function SubscriptionPage() {
 
 
 
-      {(!hasOpenSub || isPending) && plans.length > 0 && (
+      {!hasOpenSub && plans.length > 0 && (
         <Panel title="Available Plans" className="mb-6">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan) => {
@@ -308,7 +309,7 @@ function SubscriptionPage() {
               return (
                 <div
                   key={plan.id}
-                  className={`rounded-2xl border p-5 shadow-[var(--shadow-card)] transition-all ${
+                  className={`rounded-2xl border p-5 shadow-[var(--shadow-card)] transition-colors ${
                     isSelected ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/20"
                   }`}
                 >

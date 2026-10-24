@@ -75,7 +75,7 @@ function ReportCardSamplesPage() {
           </article>
         </div>
 
-        <div className="mt-10 rounded-3xl border border-border bg-card p-6 md:p-8">
+        <div className="mt-10 rounded-2xl border border-border bg-card p-6 md:p-8">
           <h2 className="text-2xl font-bold tracking-tight">Search terms schools often use</h2>
           <p className="mt-4 text-sm leading-7 text-muted-foreground">
             Visitors often search for phrases like school management system Uganda login, school
@@ -86,7 +86,7 @@ function ReportCardSamplesPage() {
           </p>
         </div>
 
-        <div className="mt-10 rounded-3xl border border-border bg-muted/40 p-6 md:p-8">
+        <div className="mt-10 rounded-2xl border border-border bg-muted/40 p-6 md:p-8">
           <h2 className="text-2xl font-bold tracking-tight">
             Sample report card content schools usually need
           </h2>
@@ -107,7 +107,7 @@ function ReportCardSamplesPage() {
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-2">
-          <article className="rounded-3xl border border-border bg-card p-6 md:p-8">
+          <article className="rounded-2xl border border-border bg-card p-6 md:p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">
               For schools
             </p>
@@ -118,7 +118,7 @@ function ReportCardSamplesPage() {
             </p>
           </article>
 
-          <article className="rounded-3xl border border-border bg-card p-6 md:p-8">
+          <article className="rounded-2xl border border-border bg-card p-6 md:p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">
               For visitors
             </p>

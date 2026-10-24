@@ -1,0 +1,11 @@
+import { createClient } from '@supabase/supabase-js';
+const store = new Map();
+globalThis.localStorage = { getItem: (k)=>store.get(k)??null, setItem:(k,v)=>store.set(k,v), removeItem:(k)=>store.delete(k) };
+const url='https://fahjpdgnaqyzfzqewily.supabase.co';
+const key='sb_publishable_6huI6X4KlIHlX6ol--9cyw_OrGBV6A5';
+const c = createClient(url,key,{auth:{storage:localStorage,persistSession:true,autoRefreshToken:true}});
+const {data,error}=await c.auth.signInWithPassword({email:'admin@test.com',password:'Password123!'});
+console.log('signIn error',error?.message);
+console.log('session present',!!data.session);
+const s=await c.auth.getSession();
+console.log('getSession session present',!!s.data.session);

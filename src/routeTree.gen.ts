@@ -46,6 +46,7 @@ import { Route as AuthenticatedFinanceReceivablesRouteImport } from './routes/_a
 import { Route as AuthenticatedFinanceReportsRouteImport } from './routes/_authenticated/finance-reports'
 import { Route as AuthenticatedFinanceRequestsRouteImport } from './routes/_authenticated/finance-requests'
 import { Route as AuthenticatedFinanceSettingsRouteImport } from './routes/_authenticated/finance-settings'
+import { Route as AuthenticatedHelpRouteImport } from './routes/_authenticated/help'
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedMarksheetRouteImport } from './routes/_authenticated/marksheet'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
@@ -58,7 +59,6 @@ import { Route as AuthenticatedSubscriptionRouteImport } from './routes/_authent
 import { Route as AuthenticatedSubscriptionsRouteImport } from './routes/_authenticated/subscriptions'
 import { Route as AuthenticatedTimetableRouteImport } from './routes/_authenticated/timetable'
 import { Route as AuthenticatedUsersRouteRouteImport } from './routes/_authenticated/users/route'
-import { Route as AuthenticatedWorkflowRouteImport } from './routes/_authenticated/workflow'
 import { Route as WebsitePagesIndexRouteImport } from './routes/website-pages/index'
 import { Route as WebsitePagesAboutRouteImport } from './routes/website-pages/about'
 import { Route as WebsitePagesBlogsRouteImport } from './routes/website-pages/blogs'
@@ -72,8 +72,7 @@ import { Route as AuthenticatedAcademicsClassesRouteImport } from './routes/_aut
 import { Route as AuthenticatedAcademicsGradingRouteImport } from './routes/_authenticated/academics/grading'
 import { Route as AuthenticatedAcademicsSubjectsRouteImport } from './routes/_authenticated/academics/subjects'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
-import { Route as AuthenticatedUsersCreateRouteImport } from './routes/_authenticated/users/create'
-import { Route as AuthenticatedUsersEditRouteImport } from './routes/_authenticated/users/edit'
+import { Route as AuthenticatedUsersDepartmentsRouteImport } from './routes/_authenticated/users/departments'
 import { Route as AuthenticatedUsersNewRouteImport } from './routes/_authenticated/users/new'
 import { Route as WebsitePagesFeaturesSlugRouteImport } from './routes/website-pages/features/$slug'
 import { Route as AuthenticatedFinanceKindIdRouteImport } from './routes/_authenticated/finance.$kind.$id'
@@ -285,6 +284,11 @@ const AuthenticatedFinanceSettingsRoute =
     path: '/finance-settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedHelpRoute = AuthenticatedHelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedLibraryRoute = AuthenticatedLibraryRouteImport.update({
   id: '/library',
   path: '/library',
@@ -346,11 +350,6 @@ const AuthenticatedTimetableRoute = AuthenticatedTimetableRouteImport.update({
 const AuthenticatedUsersRouteRoute = AuthenticatedUsersRouteRouteImport.update({
   id: '/users',
   path: '/users',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedWorkflowRoute = AuthenticatedWorkflowRouteImport.update({
-  id: '/workflow',
-  path: '/workflow',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const WebsitePagesIndexRoute = WebsitePagesIndexRouteImport.update({
@@ -425,17 +424,12 @@ const AuthenticatedUsersIndexRoute = AuthenticatedUsersIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedUsersRouteRoute,
 } as any)
-const AuthenticatedUsersCreateRoute =
-  AuthenticatedUsersCreateRouteImport.update({
-    id: '/create',
-    path: '/create',
+const AuthenticatedUsersDepartmentsRoute =
+  AuthenticatedUsersDepartmentsRouteImport.update({
+    id: '/departments',
+    path: '/departments',
     getParentRoute: () => AuthenticatedUsersRouteRoute,
   } as any)
-const AuthenticatedUsersEditRoute = AuthenticatedUsersEditRouteImport.update({
-  id: '/edit',
-  path: '/edit',
-  getParentRoute: () => AuthenticatedUsersRouteRoute,
-} as any)
 const AuthenticatedUsersNewRoute = AuthenticatedUsersNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -498,6 +492,7 @@ export interface FileRoutesByFullPath {
   '/finance-reports': typeof AuthenticatedFinanceReportsRoute
   '/finance-requests': typeof AuthenticatedFinanceRequestsRoute
   '/finance-settings': typeof AuthenticatedFinanceSettingsRoute
+  '/help': typeof AuthenticatedHelpRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/marksheet': typeof AuthenticatedMarksheetRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -509,7 +504,6 @@ export interface FileRoutesByFullPath {
   '/subscription': typeof AuthenticatedSubscriptionRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
-  '/workflow': typeof AuthenticatedWorkflowRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
@@ -521,8 +515,7 @@ export interface FileRoutesByFullPath {
   '/academics/classes': typeof AuthenticatedAcademicsClassesRoute
   '/academics/grading': typeof AuthenticatedAcademicsGradingRoute
   '/academics/subjects': typeof AuthenticatedAcademicsSubjectsRoute
-  '/users/create': typeof AuthenticatedUsersCreateRoute
-  '/users/edit': typeof AuthenticatedUsersEditRoute
+  '/users/departments': typeof AuthenticatedUsersDepartmentsRoute
   '/users/new': typeof AuthenticatedUsersNewRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
   '/academics/': typeof AuthenticatedAcademicsIndexRoute
@@ -566,6 +559,7 @@ export interface FileRoutesByTo {
   '/finance-reports': typeof AuthenticatedFinanceReportsRoute
   '/finance-requests': typeof AuthenticatedFinanceRequestsRoute
   '/finance-settings': typeof AuthenticatedFinanceSettingsRoute
+  '/help': typeof AuthenticatedHelpRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/marksheet': typeof AuthenticatedMarksheetRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -577,7 +571,6 @@ export interface FileRoutesByTo {
   '/subscription': typeof AuthenticatedSubscriptionRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
-  '/workflow': typeof AuthenticatedWorkflowRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
@@ -589,8 +582,7 @@ export interface FileRoutesByTo {
   '/academics/classes': typeof AuthenticatedAcademicsClassesRoute
   '/academics/grading': typeof AuthenticatedAcademicsGradingRoute
   '/academics/subjects': typeof AuthenticatedAcademicsSubjectsRoute
-  '/users/create': typeof AuthenticatedUsersCreateRoute
-  '/users/edit': typeof AuthenticatedUsersEditRoute
+  '/users/departments': typeof AuthenticatedUsersDepartmentsRoute
   '/users/new': typeof AuthenticatedUsersNewRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
   '/academics': typeof AuthenticatedAcademicsIndexRoute
@@ -638,6 +630,7 @@ export interface FileRoutesById {
   '/_authenticated/finance-reports': typeof AuthenticatedFinanceReportsRoute
   '/_authenticated/finance-requests': typeof AuthenticatedFinanceRequestsRoute
   '/_authenticated/finance-settings': typeof AuthenticatedFinanceSettingsRoute
+  '/_authenticated/help': typeof AuthenticatedHelpRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/marksheet': typeof AuthenticatedMarksheetRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
@@ -649,7 +642,6 @@ export interface FileRoutesById {
   '/_authenticated/subscription': typeof AuthenticatedSubscriptionRoute
   '/_authenticated/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/_authenticated/timetable': typeof AuthenticatedTimetableRoute
-  '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
   '/website-pages/contact-us': typeof WebsitePagesContactUsRoute
@@ -661,8 +653,7 @@ export interface FileRoutesById {
   '/_authenticated/academics/classes': typeof AuthenticatedAcademicsClassesRoute
   '/_authenticated/academics/grading': typeof AuthenticatedAcademicsGradingRoute
   '/_authenticated/academics/subjects': typeof AuthenticatedAcademicsSubjectsRoute
-  '/_authenticated/users/create': typeof AuthenticatedUsersCreateRoute
-  '/_authenticated/users/edit': typeof AuthenticatedUsersEditRoute
+  '/_authenticated/users/departments': typeof AuthenticatedUsersDepartmentsRoute
   '/_authenticated/users/new': typeof AuthenticatedUsersNewRoute
   '/website-pages/features/$slug': typeof WebsitePagesFeaturesSlugRoute
   '/_authenticated/academics/': typeof AuthenticatedAcademicsIndexRoute
@@ -710,6 +701,7 @@ export interface FileRouteTypes {
     | '/finance-reports'
     | '/finance-requests'
     | '/finance-settings'
+    | '/help'
     | '/library'
     | '/marksheet'
     | '/notifications'
@@ -721,7 +713,6 @@ export interface FileRouteTypes {
     | '/subscription'
     | '/subscriptions'
     | '/timetable'
-    | '/workflow'
     | '/website-pages/about'
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
@@ -733,8 +724,7 @@ export interface FileRouteTypes {
     | '/academics/classes'
     | '/academics/grading'
     | '/academics/subjects'
-    | '/users/create'
-    | '/users/edit'
+    | '/users/departments'
     | '/users/new'
     | '/website-pages/features/$slug'
     | '/academics/'
@@ -778,6 +768,7 @@ export interface FileRouteTypes {
     | '/finance-reports'
     | '/finance-requests'
     | '/finance-settings'
+    | '/help'
     | '/library'
     | '/marksheet'
     | '/notifications'
@@ -789,7 +780,6 @@ export interface FileRouteTypes {
     | '/subscription'
     | '/subscriptions'
     | '/timetable'
-    | '/workflow'
     | '/website-pages/about'
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
@@ -801,8 +791,7 @@ export interface FileRouteTypes {
     | '/academics/classes'
     | '/academics/grading'
     | '/academics/subjects'
-    | '/users/create'
-    | '/users/edit'
+    | '/users/departments'
     | '/users/new'
     | '/website-pages/features/$slug'
     | '/academics'
@@ -849,6 +838,7 @@ export interface FileRouteTypes {
     | '/_authenticated/finance-reports'
     | '/_authenticated/finance-requests'
     | '/_authenticated/finance-settings'
+    | '/_authenticated/help'
     | '/_authenticated/library'
     | '/_authenticated/marksheet'
     | '/_authenticated/notifications'
@@ -860,7 +850,6 @@ export interface FileRouteTypes {
     | '/_authenticated/subscription'
     | '/_authenticated/subscriptions'
     | '/_authenticated/timetable'
-    | '/_authenticated/workflow'
     | '/website-pages/about'
     | '/website-pages/blogs'
     | '/website-pages/contact-us'
@@ -872,8 +861,7 @@ export interface FileRouteTypes {
     | '/_authenticated/academics/classes'
     | '/_authenticated/academics/grading'
     | '/_authenticated/academics/subjects'
-    | '/_authenticated/users/create'
-    | '/_authenticated/users/edit'
+    | '/_authenticated/users/departments'
     | '/_authenticated/users/new'
     | '/website-pages/features/$slug'
     | '/_authenticated/academics/'
@@ -1157,6 +1145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinanceSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/help': {
+      id: '/_authenticated/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof AuthenticatedHelpRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/library': {
       id: '/_authenticated/library'
       path: '/library'
@@ -1239,13 +1234,6 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof AuthenticatedUsersRouteRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/workflow': {
-      id: '/_authenticated/workflow'
-      path: '/workflow'
-      fullPath: '/workflow'
-      preLoaderRoute: typeof AuthenticatedWorkflowRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/website-pages/': {
@@ -1339,18 +1327,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersIndexRouteImport
       parentRoute: typeof AuthenticatedUsersRouteRoute
     }
-    '/_authenticated/users/create': {
-      id: '/_authenticated/users/create'
-      path: '/create'
-      fullPath: '/users/create'
-      preLoaderRoute: typeof AuthenticatedUsersCreateRouteImport
-      parentRoute: typeof AuthenticatedUsersRouteRoute
-    }
-    '/_authenticated/users/edit': {
-      id: '/_authenticated/users/edit'
-      path: '/edit'
-      fullPath: '/users/edit'
-      preLoaderRoute: typeof AuthenticatedUsersEditRouteImport
+    '/_authenticated/users/departments': {
+      id: '/_authenticated/users/departments'
+      path: '/departments'
+      fullPath: '/users/departments'
+      preLoaderRoute: typeof AuthenticatedUsersDepartmentsRouteImport
       parentRoute: typeof AuthenticatedUsersRouteRoute
     }
     '/_authenticated/users/new': {
@@ -1410,8 +1391,7 @@ const AuthenticatedAcademicsRouteRouteWithChildren =
   )
 
 interface AuthenticatedUsersRouteRouteChildren {
-  AuthenticatedUsersCreateRoute: typeof AuthenticatedUsersCreateRoute
-  AuthenticatedUsersEditRoute: typeof AuthenticatedUsersEditRoute
+  AuthenticatedUsersDepartmentsRoute: typeof AuthenticatedUsersDepartmentsRoute
   AuthenticatedUsersNewRoute: typeof AuthenticatedUsersNewRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedUsersIdEditRoute: typeof AuthenticatedUsersIdEditRoute
@@ -1419,8 +1399,7 @@ interface AuthenticatedUsersRouteRouteChildren {
 
 const AuthenticatedUsersRouteRouteChildren: AuthenticatedUsersRouteRouteChildren =
   {
-    AuthenticatedUsersCreateRoute: AuthenticatedUsersCreateRoute,
-    AuthenticatedUsersEditRoute: AuthenticatedUsersEditRoute,
+    AuthenticatedUsersDepartmentsRoute: AuthenticatedUsersDepartmentsRoute,
     AuthenticatedUsersNewRoute: AuthenticatedUsersNewRoute,
     AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
     AuthenticatedUsersIdEditRoute: AuthenticatedUsersIdEditRoute,
@@ -1476,6 +1455,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFinanceReportsRoute: typeof AuthenticatedFinanceReportsRoute
   AuthenticatedFinanceRequestsRoute: typeof AuthenticatedFinanceRequestsRoute
   AuthenticatedFinanceSettingsRoute: typeof AuthenticatedFinanceSettingsRoute
+  AuthenticatedHelpRoute: typeof AuthenticatedHelpRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedMarksheetRoute: typeof AuthenticatedMarksheetRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
@@ -1487,7 +1467,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSubscriptionRoute: typeof AuthenticatedSubscriptionRoute
   AuthenticatedSubscriptionsRoute: typeof AuthenticatedSubscriptionsRoute
   AuthenticatedTimetableRoute: typeof AuthenticatedTimetableRoute
-  AuthenticatedWorkflowRoute: typeof AuthenticatedWorkflowRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -1525,6 +1504,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFinanceReportsRoute: AuthenticatedFinanceReportsRoute,
   AuthenticatedFinanceRequestsRoute: AuthenticatedFinanceRequestsRoute,
   AuthenticatedFinanceSettingsRoute: AuthenticatedFinanceSettingsRoute,
+  AuthenticatedHelpRoute: AuthenticatedHelpRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedMarksheetRoute: AuthenticatedMarksheetRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
@@ -1536,7 +1516,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSubscriptionRoute: AuthenticatedSubscriptionRoute,
   AuthenticatedSubscriptionsRoute: AuthenticatedSubscriptionsRoute,
   AuthenticatedTimetableRoute: AuthenticatedTimetableRoute,
-  AuthenticatedWorkflowRoute: AuthenticatedWorkflowRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

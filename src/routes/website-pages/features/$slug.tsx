@@ -51,14 +51,19 @@ function FeatureDetailPage() {
         <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-5xl">{feature.title}</h1>
         <p className="mt-5 text-base leading-7 text-muted-foreground">{feature.summary}</p>
 
-        <div className="mt-8 rounded-3xl border border-border bg-card p-6 md:p-8">
+        <div className="mt-8 rounded-2xl border border-border bg-card p-6 md:p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">Read more</p>
           <div className="mt-4 grid gap-4">
-            {feature.details.map((detail) => (
-              <p key={detail} className="text-sm leading-7 text-muted-foreground">
-                {detail}
-              </p>
-            ))}
+            {feature.sections.flatMap((section) => [
+              <h2 key={`${section.heading}-h`} className="text-base font-semibold">
+                {section.heading}
+              </h2>,
+              ...section.paragraphs.map((paragraph) => (
+                <p key={paragraph} className="text-sm leading-7 text-muted-foreground">
+                  {paragraph}
+                </p>
+              )),
+            ])}
           </div>
         </div>
       </section>

@@ -1,0 +1,249 @@
+﻿
+> typecheck
+> tsc --noEmit
+
+src/components/assessments-page.tsx(851,9): error TS2739: Type '{ classTeacherComment: string; headTeacherComment: string; }' is missing the following properties from type '{ classTeacherComment: string; headTeacherComment: string; games: string; clubs: string; projects: string; }': games, clubs, projects
+src/components/assessments-page.tsx(1003,47): error TS2339: Property 'created_at' does not exist on type '{ studentName: string; subjectName: string; paperName: string; termName: string; gradeDescriptor: string; id: string; student_id: string; subject_id: string; paper_id?: string | null | undefined; ... 10 more ...; grade_descriptor: string | null; }'.
+src/components/assessments-page.tsx(1003,92): error TS2339: Property 'created_at' does not exist on type '{ studentName: string; subjectName: string; paperName: string; termName: string; gradeDescriptor: string; id: string; student_id: string; subject_id: string; paper_id?: string | null | undefined; ... 10 more ...; grade_descriptor: string | null; }'.
+src/components/assessments-page.tsx(1288,24): error TS18048: 'data' is possibly 'undefined'.
+src/components/assessments-page.tsx(1356,13): error TS2322: Type 'string[][]' is not assignable to type '[string, string][]'.
+  Type 'string[]' is not assignable to type '[string, string]'.
+    Target requires 2 element(s) but source may have fewer.
+src/components/assessments-page.tsx(1373,33): error TS18048: 'data' is possibly 'undefined'.
+src/components/assessments-page.tsx(1570,12): error TS18048: 'tableData' is possibly 'undefined'.
+src/components/assessments-page.tsx(2583,35): error TS18048: 'tableData' is possibly 'undefined'.
+src/components/assessments-page.tsx(2584,40): error TS18048: 'tableData' is possibly 'undefined'.
+src/lib/admin.functions.ts(3259,11): error TS2322: Type '{}' is not assignable to type 'string'.
+src/lib/admin.functions.ts(3264,11): error TS2322: Type '{}' is not assignable to type 'string'.
+src/lib/admin.functions.ts(3414,11): error TS2322: Type '{}' is not assignable to type 'string'.
+src/lib/admin.functions.ts(3416,11): error TS2322: Type '{}' is not assignable to type 'string'.
+src/lib/admin.functions.ts(3556,69): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ approved_at?: string | null | undefined; approved_by?: string | null | undefined; created_at?: string | undefined; created_by?: string | null | undefined; department_name?: string | null | undefined; ... 5 more ...; updated_at?: string | undefined; }, Record<...>>'.
+  Type 'Record<string, unknown>' is not assignable to type '{ [x: string]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'unknown' is not assignable to type 'never'.
+src/lib/admin.functions.ts(3787,15): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ approval_status?: string | undefined; approved_amount?: number | undefined; budget_id?: string | null | undefined; created_at?: string | undefined; department_name?: string | null | undefined; ... 9 more ...; updated_at?: string | undefined; }, Record<...>>'.
+  Type 'Record<string, unknown>' is not assignable to type '{ [x: string]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'unknown' is not assignable to type 'never'.
+src/lib/admin.functions.ts(3892,15): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ approval_status?: string | undefined; approved_amount?: number | undefined; budget_id?: string | null | undefined; created_at?: string | undefined; department_name?: string | null | undefined; ... 9 more ...; updated_at?: string | undefined; }, Record<...>>'.
+  Type 'Record<string, unknown>' is not assignable to type '{ [x: string]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'unknown' is not assignable to type 'never'.
+src/lib/admin.functions.ts(3993,15): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ created_at?: string | undefined; department_name?: string | null | undefined; expected_delivery_date?: string | null | undefined; id?: string | undefined; order_date?: string | undefined; ... 8 more ...; updated_at?: string | undefined; }, Record<...>>'.
+  Type 'Record<string, unknown>' is not assignable to type '{ [x: string]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'unknown' is not assignable to type 'never'.
+src/lib/admin.functions.ts(4149,15): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ amount?: number | undefined; approval_note?: string | null | undefined; approval_status?: string | undefined; approved_at?: string | null | undefined; approved_by?: string | null | undefined; ... 11 more ...; updated_at?: string | undefined; }, Record<...>>'.
+  Type 'Record<string, unknown>' is not assignable to type '{ [x: string]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'unknown' is not assignable to type 'never'.
+src/lib/admin.functions.ts(4187,15): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ amount?: number | undefined; approved_at?: string | null | undefined; approved_by?: string | null | undefined; approved_invoice_id?: string | null | undefined; created_at?: string | undefined; ... 10 more ...; voucher_number?: string | undefined; }, Record<...>>'.
+  Type 'Record<string, unknown>' is not assignable to type '{ [x: string]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'unknown' is not assignable to type 'never'.
+src/lib/dos-approvals.ts(81,54): error TS2345: Argument of type '(row: ApprovalRow) => { record_type: "summative"; formative: null; class_id: string | null; stream_id: string | null; student_name: string; subject_name: string; paper_name: string; term_name: string; ... 16 more ...; submitted_by?: string | null; }' is not assignable to parameter of type '(value: { id: string; student_id: string; subject_id: string; paper_id: string | null; term_id: string; exam_type: string; formative: number | null; summative: number | null; is_missing: boolean; ... 4 more ...; submitted_by: string | null; }, index: number, array: { ...; }[]) => { ...; }'.
+  Types of parameters 'row' and 'value' are incompatible.
+    Type '{ id: string; student_id: string; subject_id: string; paper_id: string | null; term_id: string; exam_type: string; formative: number | null; summative: number | null; is_missing: boolean; ... 4 more ...; submitted_by: string | null; }' is not assignable to type 'ApprovalRow'.
+      Types of property 'status' are incompatible.
+        Type 'string' is not assignable to type '"draft" | "submitted" | "approved" | "rejected"'.
+src/lib/report.server.ts(437,65): error TS18047: 'g' is possibly 'null'.
+src/lib/report.server.ts(508,52): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/lib/report.server.ts(511,31): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/lib/report.server.ts(534,61): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/lib/report.server.ts(534,66): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/lib/report.server.ts(558,45): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/routes/_authenticated/academics/-shared.tsx(103,11): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(113,18): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(114,18): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(124,18): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(126,11): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(134,18): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(135,18): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(136,18): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(138,11): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(148,11): error TS2345: Argument of type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is not assignable to parameter of type 'Promise<QueryResult<never[]>>'.
+  Type 'PostgrestFilterBuilder<{ PostgrestVersion: "14.15"; }, { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: string; }; Insert: { created_at?: string | undefined; id?: string | undefined; is_current?: boolean | undefined; name: string; school_id: string; }...' is missing the following properties from type 'Promise<QueryResult<never[]>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(155,11): error TS2345: Argument of type 'PostgrestBuilder<{ PostgrestVersion: "14.15"; }, { report_next_term_begins_on: string | null; } | null, false>' is not assignable to parameter of type 'Promise<QueryResult<null>>'.
+  Type 'PostgrestBuilder<{ PostgrestVersion: "14.15"; }, { report_next_term_begins_on: string | null; } | null, false>' is missing the following properties from type 'Promise<QueryResult<null>>': catch, finally, [Symbol.toStringTag]
+src/routes/_authenticated/academics/-shared.tsx(173,26): error TS2339: Property 'role' does not exist on type 'never'.
+src/routes/_authenticated/academics/-shared.tsx(175,25): error TS2339: Property 'user_id' does not exist on type 'never'.
+src/routes/_authenticated/academics/-shared.tsx(183,62): error TS2339: Property 'id' does not exist on type 'never'.
+src/routes/_authenticated/academics/allocations.tsx(97,17): error TS2345: Argument of type '{ action: string; performed_by: string | null; school_id: string; teacher_id: string; subject_id: string; paper_id: string | null; class_id: string; stream_id: string | null; weekly_periods: number; }' is not assignable to parameter of type 'RejectExcessProperties<{ action: string; class_id?: string | null | undefined; id?: string | undefined; paper_id?: string | null | undefined; performed_at?: string | undefined; performed_by?: string | null | undefined; school_id: string; stream_id?: string | ... 1 more ... | undefined; subject_id?: string | ... 1 mo...'.
+  Type '{ action: string; performed_by: string | null; school_id: string; teacher_id: string; subject_id: string; paper_id: string | null; class_id: string; stream_id: string | null; weekly_periods: number; }' is not assignable to type 'RejectExcessProperties<{ action: string; class_id?: string | null | undefined; id?: string | undefined; paper_id?: string | null | undefined; performed_at?: string | undefined; performed_by?: string | null | undefined; school_id: string; stream_id?: string | ... 1 more ... | undefined; subject_id?: string | ... 1 mo...'.
+    Type '{ action: string; performed_by: string | null; school_id: string; teacher_id: string; subject_id: string; paper_id: string | null; class_id: string; stream_id: string | null; weekly_periods: number; }' is not assignable to type '{ weekly_periods: never; }'.
+      Types of property 'weekly_periods' are incompatible.
+        Type 'number' is not assignable to type 'never'.
+src/routes/_authenticated/academics/allocations.tsx(157,60): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/routes/_authenticated/academics/classes.tsx(221,60): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/routes/_authenticated/academics/subjects.tsx(186,72): error TS2339: Property 'trim' does not exist on type 'never'.
+src/routes/_authenticated/academics/subjects.tsx(241,72): error TS2339: Property 'trim' does not exist on type 'never'.
+src/routes/_authenticated/academics/subjects.tsx(324,9): error TS2322: Type 'any[]' is not assignable to type 'never[]'.
+  Type 'any' is not assignable to type 'never'.
+src/routes/_authenticated/academics/subjects.tsx(502,55): error TS2345: Argument of type '(current: { name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }) => { papers: string[]; name: string; code: string; ... 4 more ...; is_subsidiary: boolean; }' is not assignable to parameter of type 'SetStateAction<{ name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }>'.
+  Type '(current: { name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }) => { papers: string[]; name: string; code: string; ... 4 more ...; is_subsidiary: boolean; }' is not assignable to type '(prevState: { name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }) => { name: string; code: string; department_id: string; ... 4 more ...; papers: never[]; }'.
+    Call signature return types '{ papers: string[]; name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; }' and '{ name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }' are incompatible.
+      The types of 'papers' are incompatible between these types.
+        Type 'string[]' is not assignable to type 'never[]'.
+          Type 'string' is not assignable to type 'never'.
+src/routes/_authenticated/academics/subjects.tsx(514,65): error TS2345: Argument of type '(current: { name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }) => { papers: string[]; name: string; code: string; ... 4 more ...; is_subsidiary: boolean; }' is not assignable to parameter of type 'SetStateAction<{ name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }>'.
+  Type '(current: { name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }) => { papers: string[]; name: string; code: string; ... 4 more ...; is_subsidiary: boolean; }' is not assignable to type '(prevState: { name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }) => { name: string; code: string; department_id: string; ... 4 more ...; papers: never[]; }'.
+    Call signature return types '{ papers: string[]; name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; }' and '{ name: string; code: string; department_id: string; category: string; position: string; points: string; is_subsidiary: boolean; papers: never[]; }' are incompatible.
+      The types of 'papers' are incompatible between these types.
+        Type 'string[]' is not assignable to type 'never[]'.
+          Type 'string' is not assignable to type 'never'.
+src/routes/_authenticated/academics/subjects.tsx(563,56): error TS2322: Type '"info"' is not assignable to type '"warning" | "success" | "muted" | "danger"'.
+src/routes/_authenticated/approval.tsx(65,47): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/routes/_authenticated/approval.tsx(253,70): error TS2339: Property 'paper_name' does not exist on type 'SubmissionSummaryRow'.
+src/routes/_authenticated/approval.tsx(253,92): error TS2339: Property 'paper_name' does not exist on type 'SubmissionSummaryRow'.
+src/routes/_authenticated/approved.tsx(64,47): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/routes/_authenticated/approved.tsx(261,70): error TS2339: Property 'paper_name' does not exist on type 'SubmissionSummaryRow'.
+src/routes/_authenticated/approved.tsx(261,92): error TS2339: Property 'paper_name' does not exist on type 'SubmissionSummaryRow'.
+src/routes/_authenticated/dashboard.tsx(182,12): error TS7006: Parameter 'department' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(458,54): error TS2339: Property 'localeCompare' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(460,58): error TS2339: Property 'name' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(461,60): error TS2339: Property 'name' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(484,60): error TS2339: Property 'localeCompare' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(504,48): error TS2339: Property 'name' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(647,28): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/routes/_authenticated/dashboard.tsx(983,18): error TS7006: Parameter 'assessment' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(984,15): error TS7006: Parameter 'assessment' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1060,52): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1061,50): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1067,49): error TS7006: Parameter 'student' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1068,50): error TS7006: Parameter 'assessment' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1070,58): error TS2339: Property 'full_name' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1072,49): error TS2339: Property 'name' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1078,6): error TS7006: Parameter 'stream' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1080,56): error TS7006: Parameter 'assessment' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1083,34): error TS2339: Property 'class_id' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1084,35): error TS2339: Property 'stream_id' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1096,43): error TS2339: Property 'name' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1152,42): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1245,37): error TS7006: Parameter 'student' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1284,42): error TS7006: Parameter 'cls' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1298,43): error TS7006: Parameter 'stream' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1316,44): error TS7006: Parameter 'assessment' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1350,48): error TS7006: Parameter 'assessment' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1354,29): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/routes/_authenticated/dashboard.tsx(1355,71): error TS2339: Property 'class_id' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1360,71): error TS2339: Property 'stream_id' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1380,46): error TS2339: Property 'mutate' does not exist on type '(opts: RequiredFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: str...'.
+src/routes/_authenticated/dashboard.tsx(1389,54): error TS2339: Property 'isPending' does not exist on type '(opts: RequiredFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: str...'.
+src/routes/_authenticated/dashboard.tsx(1404,46): error TS7006: Parameter 'assessment' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1422,31): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/routes/_authenticated/dashboard.tsx(1423,73): error TS2339: Property 'class_id' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1431,73): error TS2339: Property 'stream_id' does not exist on type '{}'.
+src/routes/_authenticated/dashboard.tsx(1452,44): error TS2339: Property 'mutate' does not exist on type '(opts: RequiredFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: str...'.
+src/routes/_authenticated/dashboard.tsx(1459,52): error TS2339: Property 'isPending' does not exist on type '(opts: RequiredFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id: str...'.
+src/routes/_authenticated/dashboard.tsx(1502,35): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/dashboard.tsx(1502,41): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/routes/_authenticated/env-debug.tsx(53,34): error TS2339: Property 'state' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/env-debug.tsx(65,17): error TS2339: Property 'error' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/env-debug.tsx(68,46): error TS2339: Property 'error' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/env-debug.tsx(83,54): error TS2339: Property 'data' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/env-debug.tsx(86,60): error TS2339: Property 'data' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/env-debug.tsx(89,66): error TS2339: Property 'data' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/env-debug.tsx(93,31): error TS2339: Property 'data' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/env-debug.tsx(97,31): error TS2339: Property 'data' does not exist on type '(options?: OptionalFetcherDataOptions<readonly [FunctionMiddlewareAfterServer<{}, readonly [FunctionMiddlewareAfterServer<{}, unknown, undefined, { supabase: SupabaseClient<Database, "public", "public", { Tables: { academic_years: { Row: { created_at: string; id: string; is_current: boolean; name: string; school_id:...'.
+src/routes/_authenticated/marksheet.tsx(166,28): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/routes/_authenticated/marksheet.tsx(337,46): error TS2554: Expected 2 arguments, but got 1.
+src/routes/_authenticated/reports.tsx(69,5): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(options: DefinedInitialDataOptions<ClassRow[], Error, ClassRow[], readonly unknown[]>, queryClient?: QueryClient | undefined): DefinedUseQueryResult<...>', gave the following error.
+    Type '() => Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'QueryFunction<ClassRow[], readonly unknown[]>'.
+      Type 'Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'ClassRow[] | Promise<ClassRow[]>'.
+        Type 'Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'Promise<ClassRow[]>'.
+          Type '{ id: string; name: string; education_level: string; }[]' is not assignable to type 'ClassRow[]'.
+            Type '{ id: string; name: string; education_level: string; }' is not assignable to type 'ClassRow'.
+              Types of property 'education_level' are incompatible.
+                Type 'string' is not assignable to type '"advanced" | "ordinary" | null'.
+  Overload 2 of 3, '(options: UndefinedInitialDataOptions<ClassRow[], Error, ClassRow[], readonly unknown[]>, queryClient?: QueryClient | undefined): UseQueryResult<...>', gave the following error.
+    Type '() => Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'unique symbol | QueryFunction<ClassRow[], readonly unknown[], never> | undefined'.
+      Type '() => Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'QueryFunction<ClassRow[], readonly unknown[], never>'.
+        Type 'Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'ClassRow[] | Promise<ClassRow[]>'.
+          Type 'Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'Promise<ClassRow[]>'.
+            Type '{ id: string; name: string; education_level: string; }[]' is not assignable to type 'ClassRow[]'.
+              Type '{ id: string; name: string; education_level: string; }' is not assignable to type 'ClassRow'.
+                Types of property 'education_level' are incompatible.
+                  Type 'string' is not assignable to type '"advanced" | "ordinary" | null'.
+  Overload 3 of 3, '(options: UseQueryOptions<ClassRow[], Error, ClassRow[], readonly unknown[]>, queryClient?: QueryClient | undefined): UseQueryResult<NoInfer<ClassRow[]>, Error>', gave the following error.
+    Type '() => Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'unique symbol | QueryFunction<ClassRow[], readonly unknown[], never> | undefined'.
+      Type '() => Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'QueryFunction<ClassRow[], readonly unknown[], never>'.
+        Type 'Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'ClassRow[] | Promise<ClassRow[]>'.
+          Type 'Promise<{ id: string; name: string; education_level: string; }[]>' is not assignable to type 'Promise<ClassRow[]>'.
+            Type '{ id: string; name: string; education_level: string; }[]' is not assignable to type 'ClassRow[]'.
+              Type '{ id: string; name: string; education_level: string; }' is not assignable to type 'ClassRow'.
+                Types of property 'education_level' are incompatible.
+                  Type 'string' is not assignable to type '"advanced" | "ordinary" | null'.
+src/routes/_authenticated/reports.tsx(130,35): error TS2339: Property 'find' does not exist on type 'NonNullable<TQueryFnData>'.
+src/routes/_authenticated/reports.tsx(130,41): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/reports.tsx(135,33): error TS2339: Property 'find' does not exist on type 'NonNullable<TQueryFnData>'.
+src/routes/_authenticated/reports.tsx(135,39): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/reports.tsx(136,33): error TS2339: Property 'find' does not exist on type 'NonNullable<TQueryFnData>'.
+src/routes/_authenticated/reports.tsx(136,39): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/reports.tsx(151,38): error TS2339: Property 'find' does not exist on type 'NonNullable<TQueryFnData>'.
+src/routes/_authenticated/reports.tsx(151,44): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/reports.tsx(171,17): error TS2339: Property 'some' does not exist on type 'NonNullable<TQueryFnData>'.
+src/routes/_authenticated/reports.tsx(172,10): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/reports.tsx(309,16): error TS2339: Property 'filter' does not exist on type 'never[] | NonNullable<TQueryFnData>'.
+  Property 'filter' does not exist on type 'NonNullable<TQueryFnData>'.
+src/routes/_authenticated/reports.tsx(310,18): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/reports.tsx(313,21): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/_authenticated/route.tsx(16,21): error TS2339: Property 'mustChangePassword' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(20,38): error TS2339: Property 'isSuperAdmin' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(21,34): error TS2339: Property 'school' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(33,43): error TS2339: Property 'roles' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(45,42): error TS2339: Property 'school' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(46,41): error TS2339: Property 'profile' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(46,109): error TS2339: Property 'email' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(54,38): error TS2339: Property 'userId' does not exist on type '{}'.
+src/routes/_authenticated/route.tsx(54,65): error TS2339: Property 'email' does not exist on type '{}'.
+src/routes/_authenticated/students.tsx(218,17): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ address?: string | null | undefined; class_id?: string | null | undefined; created_at?: string | undefined; created_by?: string | null | undefined; date_of_birth?: string | null | undefined; ... 19 more ...; verified_by?: string | ... 1 more ... | undefined; }, Record<...>>'.
+  Type 'Record<string, unknown>' is not assignable to type '{ [x: string]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'unknown' is not assignable to type 'never'.
+src/routes/_authenticated/students.tsx(437,21): error TS18048: 'classMatch' is possibly 'undefined'.
+src/routes/_authenticated/students.tsx(479,18): error TS2322: Type '"outline"' is not assignable to type '"ghost" | "danger" | "primary" | "accent" | undefined'.
+src/routes/_authenticated/timetable.tsx(164,43): error TS2345: Argument of type '() => (SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">)[] | ({ ...; } | ... 1 more ... | { ...; })[]' is not assignable to parameter of type '() => PeriodRow[]'.
+  Type '(SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">)[] | ({ ...; } | ... 1 more ... | { ...; })[]' is not assignable to type 'PeriodRow[]'.
+    Type '(SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">)[]' is not assignable to type 'PeriodRow[]'.
+      Type 'SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">' is not assignable to type 'PeriodRow'.
+        Type '{ error: true; } & String' is missing the following properties from type 'PeriodRow': id, period_order, label, start_time, and 3 more.
+src/routes/_authenticated/timetable.tsx(165,47): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">, index: number, array: (SelectQueryError<...> | SelectQueryError<...>)[]) => value is SelectQueryError<...> | SelectQueryError<...>, thisArg?: any): (SelectQueryError<...> | SelectQueryError<...>)[]', gave the following error.
+    Argument of type '(item: PeriodRow) => boolean' is not assignable to parameter of type '(value: SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">, index: number, array: (SelectQueryError<...> | SelectQueryError<...>)[]) => value is SelectQueryError<...> | SelectQueryError<...>'.
+      Types of parameters 'item' and 'value' are incompatible.
+        Type 'SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">' is not assignable to type 'PeriodRow'.
+          Type '{ error: true; } & String' is missing the following properties from type 'PeriodRow': id, period_order, label, start_time, and 3 more.
+  Overload 2 of 2, '(predicate: (value: SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">, index: number, array: (SelectQueryError<...> | SelectQueryError<...>)[]) => unknown, thisArg?: any): (SelectQueryError<...> | SelectQueryError<...>)[]', gave the following error.
+    Argument of type '(item: PeriodRow) => boolean' is not assignable to parameter of type '(value: SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">, index: number, array: (SelectQueryError<...> | SelectQueryError<...>)[]) => unknown'.
+      Types of parameters 'item' and 'value' are incompatible.
+        Type 'SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">' is not assignable to type 'PeriodRow'.
+          Type '{ error: true; } & String' is missing the following properties from type 'PeriodRow': id, period_order, label, start_time, and 3 more.
+src/routes/_authenticated/timetable.tsx(165,73): error TS2339: Property 'is_active' does not exist on type 'PeriodRow'.
+src/routes/_authenticated/timetable.tsx(402,35): error TS2339: Property 'break_start' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">'.
+  Property 'break_start' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/routes/_authenticated/timetable.tsx(403,33): error TS2339: Property 'break_end' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">'.
+  Property 'break_end' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/routes/_authenticated/timetable.tsx(404,35): error TS2339: Property 'lunch_start' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">'.
+  Property 'lunch_start' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/routes/_authenticated/timetable.tsx(405,33): error TS2339: Property 'lunch_end' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type"> | SelectQueryError<"Invalid RelationName cannot infer result type">'.
+  Property 'lunch_end' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/routes/_authenticated/timetable.tsx(681,75): error TS2345: Argument of type 'Record<string, unknown>[]' is not assignable to parameter of type 'RejectExcessProperties<{ academic_year_id?: string | null | undefined; class_id: string; classroom?: string | null | undefined; created_at?: string | undefined; day_of_week: number; end_time: string; id?: string | undefined; ... 8 more ...; updated_at?: string | undefined; }, { ...; }> | RejectExcessProperties<...>[]'.
+  Type 'Record<string, unknown>[]' is not assignable to type 'RejectExcessProperties<{ academic_year_id?: string | null | undefined; class_id: string; classroom?: string | null | undefined; created_at?: string | undefined; day_of_week: number; end_time: string; id?: string | undefined; ... 8 more ...; updated_at?: string | undefined; }, { ...; }>[]'.
+    Type 'Record<string, unknown>' is not assignable to type 'RejectExcessProperties<{ academic_year_id?: string | null | undefined; class_id: string; classroom?: string | null | undefined; created_at?: string | undefined; day_of_week: number; end_time: string; id?: string | undefined; ... 8 more ...; updated_at?: string | undefined; }, { ...; }>'.
+      Type 'Record<string, unknown>' is missing the following properties from type '{ academic_year_id?: string | null | undefined; class_id: string; classroom?: string | null | undefined; created_at?: string | undefined; day_of_week: number; end_time: string; id?: string | undefined; ... 8 more ...; updated_at?: string | undefined; }': class_id, day_of_week, end_time, period, and 5 more.
+src/routes/website-pages/features/$slug.tsx(57,40): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/routes/website-pages/features/$slug.tsx(61,42): error TS7006: Parameter 'paragraph' implicitly has an 'any' type.

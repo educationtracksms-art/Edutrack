@@ -94,8 +94,7 @@ function Landing() {
               style={{ backgroundImage: `url(${image})` }}
             />
           ))}
-          <div className="absolute inset-0 bg-slate-950/60" />
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/20 via-slate-950/35 to-slate-950/80" />
+          <div className="absolute inset-0 bg-slate-950/70" />
         </div>
 
         <div className="relative mx-auto flex min-h-[82vh] max-w-6xl flex-col justify-center px-6 py-20 text-center text-white">
@@ -110,7 +109,7 @@ function Landing() {
             focus more on teaching, learning, parent engagement, and school management system
             workflows used across Uganda.
           </p>
-          <div className="mx-auto mt-8 max-w-3xl rounded-3xl border border-white/15 bg-white/10 px-5 py-4 text-sm leading-7 text-white/90 backdrop-blur">
+          <div className="mx-auto mt-8 max-w-3xl rounded-xl border border-white/20 bg-slate-950/40 px-5 py-4 text-sm leading-7 text-white/90 backdrop-blur">
             Looking for a school management system Uganda login, free download information, free
             offline school management system details, new curriculum sample report card PDF, term 2
             report card wording, or report cards in Uganda? Explore our public pages for

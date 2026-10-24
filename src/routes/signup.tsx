@@ -101,7 +101,7 @@ function SignupPage() {
     return (
       <PublicShell>
         <div className="px-6 py-10">
-          <div className="mx-auto flex max-w-2xl flex-col items-center rounded-3xl border border-border bg-card px-6 py-14 text-center shadow-sm">
+          <div className="mx-auto flex max-w-2xl flex-col items-center rounded-2xl border border-border bg-card px-6 py-14 text-center shadow-sm">
             <CheckCircle2 className="h-14 w-14 text-emerald-500" />
             <h1 className="mt-5 text-3xl font-bold tracking-tight">Your request has been sent</h1>
             <p className="mt-3 max-w-lg text-sm text-muted-foreground">
@@ -132,7 +132,7 @@ function SignupPage() {
     <PublicShell>
       <div className="px-6 py-8">
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-          <section className="rounded-3xl border border-border bg-card p-8 shadow-sm">
+          <section className="rounded-2xl border border-border bg-card p-8 shadow-sm">
             <div className="flex items-center gap-3">
               <img
                 src={logoUrl}
@@ -214,7 +214,7 @@ function SignupPage() {
             </form>
           </section>
 
-          <aside className="rounded-3xl border border-border bg-muted/30 p-8 shadow-sm">
+          <aside className="rounded-2xl border border-border bg-muted/30 p-8 shadow-sm">
             <div className="rounded-2xl bg-background p-5">
               <p className="text-sm font-semibold text-muted-foreground">Request access</p>
               <p className="mt-2 text-sm text-muted-foreground">

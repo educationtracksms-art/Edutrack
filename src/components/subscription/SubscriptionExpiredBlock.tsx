@@ -29,7 +29,7 @@ export function SubscriptionExpiredBlock({
       aria-modal="true"
       aria-label="Subscription expired"
     >
-      <div className="w-full max-w-lg rounded-3xl border border-destructive/20 bg-destructive/5 p-8 shadow-2xl sm:p-10">
+      <div className="w-full max-w-lg rounded-2xl border border-destructive/20 bg-destructive/5 p-8 shadow-lg sm:p-10">
         <div className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
           <FileWarning className="h-7 w-7 text-destructive" />
         </div>
@@ -38,7 +38,7 @@ export function SubscriptionExpiredBlock({
           Subscription Expired
         </p>
 
-        <div className="mt-5 rounded-2xl bg-background/80 p-5 text-left text-sm leading-relaxed text-foreground">
+        <div className="mt-5 rounded-xl border border-border bg-background p-5 text-left text-sm leading-relaxed text-foreground">
           <p className="font-semibold">Hello, {name};</p>
           <p className="mt-2">The {school} subscription has expired.</p>
           <p className="mt-2">Please contact your school administrator for subscription.</p>

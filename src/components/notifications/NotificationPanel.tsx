@@ -97,7 +97,7 @@ export function NotificationPanel({
         )}
       </button>
       {(open || page) && (
-        <div className={page ? "w-full rounded-2xl border border-border bg-card p-4 shadow-sm" : "absolute right-0 top-11 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-3 shadow-xl"}>
+        <div className={page ? "w-full rounded-2xl border border-border bg-card p-4 shadow-sm" : "absolute right-0 top-11 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-3 shadow-md"}>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Notifications</h2>
             <span className="text-xs text-muted-foreground">{unread} unread</span>

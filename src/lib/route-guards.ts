@@ -28,6 +28,9 @@ async function requireRoles(context: GuardContext, allowed: AppRole[], deniedMes
  * The finance module is a Bursar-only area. `super_admin` deliberately has no
  * finance route access: platform administration lives under /schools and
  * /subscriptions, and finance is scoped to a school.
+ *
+ * NOTE: Payments/finance behaviour is frozen by owner request — do not widen
+ * these roles without explicit approval.
  */
 export const FINANCE_ROUTE_ROLES: AppRole[] = ["bursar"];
 
@@ -44,4 +47,39 @@ export function requireHodAccess(context: GuardContext) {
     HOD_ROUTE_ROLES,
     "Only heads of department can open the finance requests workspace.",
   );
+}
+
+/** Every school-scoped role (platform super_admin excluded). */
+export const SCHOOL_SCOPED_ROLES: AppRole[] = [
+  "school_admin",
+  "head_teacher",
+  "deputy_head_teacher",
+  "dos",
+  "hod",
+  "class_teacher",
+  "subject_teacher",
+  "librarian",
+  "bursar",
+];
+
+/** Super-admin-only platform pages (schools, platform subscriptions). */
+export function requireSuperAdmin(context: GuardContext) {
+  return requireRoles(context, ["super_admin"], "Only platform administrators can open this page.");
+}
+
+/** Any authenticated school user — tenant RLS still applies at the data layer. */
+export function requireSchoolAccess(context: GuardContext) {
+  return requireRoles(context, SCHOOL_SCOPED_ROLES);
+}
+
+/**
+ * Shared helper for school pages that also honour the feature-toggle module
+ * system. Keeps the sidebar (presentation) and beforeLoad (enforcement) in sync.
+ */
+export async function requireSchoolModuleAccess(
+  context: GuardContext,
+  allowed: AppRole[],
+  deniedMessage?: string,
+) {
+  return requireRoles(context, allowed, deniedMessage);
 }

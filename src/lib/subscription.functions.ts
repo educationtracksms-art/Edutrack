@@ -401,12 +401,16 @@ export const cancelSchoolSubscription = createServerFn({ method: "POST" })
       );
     }
 
-    const { data: updated, error: updateError } = await context.supabase
-      .from("school_subscriptions")
-      .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("id", data.subscriptionId)
-      .select("id, status")
-      .single();
+    const { data: updated, error: updateError } = isSuper
+      ? await context.supabase
+          .from("school_subscriptions")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("id", data.subscriptionId)
+          .select("id, status")
+          .single()
+      : await (context.supabase as any).rpc("cancel_own_pending_school_subscription", {
+          p_subscription_id: data.subscriptionId,
+        });
 
     if (updateError) throw new Error(updateError.message);
 
@@ -485,36 +489,16 @@ export const confirmPayment = createServerFn({ method: "POST" })
     const paymentRef = subscription.payment_reference
       ?? generatePaymentReference(subscription.school_id, data.subscriptionId);
 
-    const { data: updated, error: updateError } = await context.supabase
-      .from("school_subscriptions")
-      .update({
-        status: "active",
-        payment_reference: paymentRef,
-        payment_confirmed_by: context.userId,
-        payment_confirmed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", data.subscriptionId)
-      .select("id, status, payment_reference, payment_confirmed_at")
-      .single();
-
-    if (updateError) throw new Error(updateError.message);
-
-    await context.supabase.from("school_payments").insert({
-      school_id: subscription.school_id,
-      subscription_id: data.subscriptionId,
-      amount: Number(plan.price),
-      currency: "UGX",
-      payment_date: toDateStr(new Date()),
-      method: data.paymentMethod === "mtn" || data.paymentMethod === "airtel" ? "mobile_money" : data.paymentMethod,
-      reference: paymentRef,
-      status: "confirmed",
-      notes: `Confirmed by Super Admin via ${data.paymentMethod}`,
-      recorded_by: context.userId,
-    }).select("id").single().then(
-      () => undefined,
-      (e: Error) => console.error("Failed to record payment:", e.message),
+    const { data: updated, error: confirmationError } = await (context.supabase as any).rpc(
+      "confirm_school_subscription_payment",
+      {
+        p_subscription_id: data.subscriptionId,
+        p_payment_method: data.paymentMethod,
+        p_confirmed_amount: data.confirmedAmount ?? Number(plan.price),
+        p_payment_reference: paymentRef,
+      },
     );
+    if (confirmationError) throw new Error(confirmationError.message);
 
     await logAudit(
       context.supabase,

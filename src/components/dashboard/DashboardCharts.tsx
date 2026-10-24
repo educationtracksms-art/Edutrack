@@ -27,6 +27,8 @@ type SchoolChartData = {
   gradeBuckets: Array<{ name: string; value: number }>;
   trend: Array<{ term: string; average: number }>;
   genderSplit: Array<{ name: string; value: number }>;
+  statusBreakdown?: Array<{ name: string; value: number }>;
+  classDistribution?: Array<{ name: string; students: number }>;
 };
 
 type DashboardChartsProps =
@@ -117,6 +119,36 @@ export default function DashboardCharts(props: DashboardChartsProps) {
           </PieChart>
         </ResponsiveContainer>
       </Panel>
+
+      {props.statusBreakdown && props.statusBreakdown.length > 0 && (
+        <Panel title="Assessment status">
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={props.statusBreakdown} dataKey="value" nameKey="name" outerRadius={90} label>
+                {props.statusBreakdown.map((entry, index) => (
+                  <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                ))}
+              </Pie>
+              <Legend />
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </Panel>
+      )}
+
+      {props.classDistribution && props.classDistribution.length > 0 && (
+        <Panel title="Learners by class">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={props.classDistribution}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Bar dataKey="students" fill="var(--color-chart-3)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      )}
     </div>
   );
 }
