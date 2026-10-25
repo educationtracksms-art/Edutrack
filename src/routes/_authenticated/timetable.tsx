@@ -816,7 +816,7 @@ function TimetablePage() {
         }
       />
 
-      {hasAny(me?.roles, ["dos"]) && (
+      {hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]) && (
         <div className="mb-4 flex justify-end">
           <Btn
             type="button"

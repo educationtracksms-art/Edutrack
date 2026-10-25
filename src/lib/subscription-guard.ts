@@ -16,7 +16,7 @@ type GuardContext = { queryClient: QueryClient };
  *  - all other school roles → full-screen blocking message
  */
 
-export type SubscriptionStatus = "active" | "trial" | "past_due" | "pending" | "confirmed" | "expired" | "no_school" | "not_configured";
+export type SubscriptionStatus = "active" | "trial" | "past_due" | "pending" | "confirmed" | "expired" | "cancelled" | "no_school" | "not_configured";
 
 export async function requireSubscriptionAccess(
   context: GuardContext,
@@ -50,8 +50,8 @@ export async function requireSubscriptionAccess(
 
   const subStatus = status as SubscriptionStatus;
 
-  if (subStatus === "expired") {
-    // School Admin can only access the Subscription page.
+  if (subStatus !== "active") {
+    // School Admin can only access the Subscription page until active.
     if (currentUser.roles.includes("school_admin")) {
       const currentPath = (context as any).routerState?.pathname ?? "";
       if (currentPath.startsWith("/subscription")) {
@@ -80,7 +80,7 @@ export async function requireSubscriptionAccess(
 }
 
 /**
- * Check if the subscription is expired without redirecting.
+ * Check if the subscription is anything other than active without redirecting.
  * Used by components to decide whether to render the blocking screen.
  */
 export async function checkSubscriptionExpired(context: GuardContext): Promise<boolean> {
@@ -96,11 +96,11 @@ export async function checkSubscriptionExpired(context: GuardContext): Promise<b
     queryFn: () => getSchoolSubscriptionStatus(),
   });
 
-  return status === "expired";
+  return status !== "active";
 }
 
 /**
- * Check if the current user is a school admin whose subscription is expired.
+ * Check if the current user is a school admin whose subscription is not active.
  * They should be able to access ONLY the subscription page.
  */
 export async function isExpiredSchoolAdmin(context: GuardContext): Promise<boolean> {
@@ -116,5 +116,5 @@ export async function isExpiredSchoolAdmin(context: GuardContext): Promise<boole
     queryFn: () => getSchoolSubscriptionStatus(),
   });
 
-  return status === "expired";
+  return status !== "active";
 }

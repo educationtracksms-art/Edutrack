@@ -26,7 +26,7 @@ function DepartmentsPage() {
   const [superSchoolId, setSuperSchoolId] = useState("");
   const activeSchoolId = isSuper ? superSchoolId || null : (me?.profile?.school_id ?? null);
   const { data: departments, isLoading } = useSchoolDepartments(activeSchoolId);
-  const canManage = hasAny(me?.roles, ["super_admin", "school_admin", "head_teacher"]);
+  const canManage = hasAny(me?.roles, ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos"]);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

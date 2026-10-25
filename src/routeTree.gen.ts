@@ -57,6 +57,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedStudentsRouteImport } from './routes/_authenticated/students'
 import { Route as AuthenticatedSubscriptionRouteImport } from './routes/_authenticated/subscription'
 import { Route as AuthenticatedSubscriptionsRouteImport } from './routes/_authenticated/subscriptions'
+import { Route as AuthenticatedSystemUsersRouteImport } from './routes/_authenticated/system-users'
 import { Route as AuthenticatedTimetableRouteImport } from './routes/_authenticated/timetable'
 import { Route as AuthenticatedUsersRouteRouteImport } from './routes/_authenticated/users/route'
 import { Route as WebsitePagesIndexRouteImport } from './routes/website-pages/index'
@@ -342,6 +343,12 @@ const AuthenticatedSubscriptionsRoute =
     path: '/subscriptions',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSystemUsersRoute =
+  AuthenticatedSystemUsersRouteImport.update({
+    id: '/system-users',
+    path: '/system-users',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedTimetableRoute = AuthenticatedTimetableRouteImport.update({
   id: '/timetable',
   path: '/timetable',
@@ -503,6 +510,7 @@ export interface FileRoutesByFullPath {
   '/students': typeof AuthenticatedStudentsRoute
   '/subscription': typeof AuthenticatedSubscriptionRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
+  '/system-users': typeof AuthenticatedSystemUsersRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
@@ -570,6 +578,7 @@ export interface FileRoutesByTo {
   '/students': typeof AuthenticatedStudentsRoute
   '/subscription': typeof AuthenticatedSubscriptionRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
+  '/system-users': typeof AuthenticatedSystemUsersRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
@@ -641,6 +650,7 @@ export interface FileRoutesById {
   '/_authenticated/students': typeof AuthenticatedStudentsRoute
   '/_authenticated/subscription': typeof AuthenticatedSubscriptionRoute
   '/_authenticated/subscriptions': typeof AuthenticatedSubscriptionsRoute
+  '/_authenticated/system-users': typeof AuthenticatedSystemUsersRoute
   '/_authenticated/timetable': typeof AuthenticatedTimetableRoute
   '/website-pages/about': typeof WebsitePagesAboutRoute
   '/website-pages/blogs': typeof WebsitePagesBlogsRoute
@@ -712,6 +722,7 @@ export interface FileRouteTypes {
     | '/students'
     | '/subscription'
     | '/subscriptions'
+    | '/system-users'
     | '/timetable'
     | '/website-pages/about'
     | '/website-pages/blogs'
@@ -779,6 +790,7 @@ export interface FileRouteTypes {
     | '/students'
     | '/subscription'
     | '/subscriptions'
+    | '/system-users'
     | '/timetable'
     | '/website-pages/about'
     | '/website-pages/blogs'
@@ -849,6 +861,7 @@ export interface FileRouteTypes {
     | '/_authenticated/students'
     | '/_authenticated/subscription'
     | '/_authenticated/subscriptions'
+    | '/_authenticated/system-users'
     | '/_authenticated/timetable'
     | '/website-pages/about'
     | '/website-pages/blogs'
@@ -1222,6 +1235,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSubscriptionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/system-users': {
+      id: '/_authenticated/system-users'
+      path: '/system-users'
+      fullPath: '/system-users'
+      preLoaderRoute: typeof AuthenticatedSystemUsersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/timetable': {
       id: '/_authenticated/timetable'
       path: '/timetable'
@@ -1466,6 +1486,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedStudentsRoute: typeof AuthenticatedStudentsRoute
   AuthenticatedSubscriptionRoute: typeof AuthenticatedSubscriptionRoute
   AuthenticatedSubscriptionsRoute: typeof AuthenticatedSubscriptionsRoute
+  AuthenticatedSystemUsersRoute: typeof AuthenticatedSystemUsersRoute
   AuthenticatedTimetableRoute: typeof AuthenticatedTimetableRoute
 }
 
@@ -1515,6 +1536,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedStudentsRoute: AuthenticatedStudentsRoute,
   AuthenticatedSubscriptionRoute: AuthenticatedSubscriptionRoute,
   AuthenticatedSubscriptionsRoute: AuthenticatedSubscriptionsRoute,
+  AuthenticatedSystemUsersRoute: AuthenticatedSystemUsersRoute,
   AuthenticatedTimetableRoute: AuthenticatedTimetableRoute,
 }
 

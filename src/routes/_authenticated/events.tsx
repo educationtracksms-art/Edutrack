@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/events")({ beforeLoad: asy
 type Draft = { id?: string; title: string; event_type: string; start_date: string; end_date: string; description: string };
 const blank = (): Draft => ({ title: "", event_type: "event", start_date: format(new Date(), "yyyy-MM-dd"), end_date: "", description: "" });
 function EventsPage() {
-  const { data: me } = useCurrentUser(); const schoolId = me?.profile?.school_id; const qc = useQueryClient(); const [draft, setDraft] = useState<Draft>(blank()); const canManage = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher"]);
+  const { data: me } = useCurrentUser(); const schoolId = me?.profile?.school_id; const qc = useQueryClient(); const [draft, setDraft] = useState<Draft>(blank()); const canManage = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "dos"]);
   const { data: events = [] } = useQuery({ queryKey: ["school-events", schoolId], enabled: !!schoolId, queryFn: async () => { const { data, error } = await supabase.from("school_events").select("*").order("start_date"); if (error) throw error; return data ?? []; } });
   const save = useMutation({ mutationFn: async (value: Draft) => {
     const title = value.title.trim();

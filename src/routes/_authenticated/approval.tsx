@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_authenticated/approval")({
       .maybeSingle();
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const roleNames = (roles ?? []).map((item) => item.role);
-    if (!roleNames.includes("dos")) throw redirect({ to: "/dashboard" });
+    if (!roleNames.some((role) => ["dos", "head_teacher", "deputy_head_teacher"].includes(role))) throw redirect({ to: "/dashboard" });
     if (!profile?.school_id) throw redirect({ to: "/dashboard" });
   },
   head: () => ({
@@ -56,7 +56,7 @@ function ApprovalsPage() {
   const [approvedGroupBy, setApprovedGroupBy] = useState<"class" | "subject">("class");
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const isDos = hasAny(me?.roles, ["dos"]);
+  const isDos = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
   const updateStatus = useServerFn(updateAssessmentStatus);
 
   const { data: allRows, isLoading } = useQuery({

@@ -146,6 +146,13 @@ const NAV: NavItem[] = [
     section: "Administration",
   },
   {
+    to: "/system-users",
+    label: "System users",
+    icon: UsersRound,
+    roles: ["super_admin"],
+    section: "Administration",
+  },
+  {
     to: "/subscription",
     label: "Subscription",
     icon: Coins,
@@ -371,7 +378,7 @@ const NAV: NavItem[] = [
     to: "/approval",
     label: "Marks approvals",
     icon: BadgeCheck,
-    roles: ["dos"],
+    roles: ["dos", "head_teacher", "deputy_head_teacher"],
     module: "academics",
     section: "Teaching & results",
   },
@@ -379,7 +386,7 @@ const NAV: NavItem[] = [
     to: "/approved",
     label: "Approved results",
     icon: FileCheck,
-    roles: ["dos"],
+    roles: ["dos", "head_teacher", "deputy_head_teacher"],
     module: "academics",
     section: "Teaching & results",
   },
@@ -422,6 +429,13 @@ const NAV: NavItem[] = [
     section: "Setup",
   },
   {
+    to: "/users/departments",
+    label: "Departments",
+    icon: UsersRound,
+    roles: ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos"],
+    section: "Setup",
+  },
+  {
     to: "/account-settings",
     label: "My settings",
     icon: CircleUser,
@@ -441,7 +455,7 @@ const NAV: NavItem[] = [
     to: "/audit-logs",
     label: "Audit Logs",
     icon: ScrollText,
-    roles: ["school_admin", "head_teacher"],
+    roles: ["school_admin", "head_teacher", "deputy_head_teacher", "dos"],
     section: "Administration",
   },
 ];
@@ -483,7 +497,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   // Subscription status (Tier 4): 5 min stale (reduced from 60s for efficiency).
-  // A school-scoped, non-admin user whose subscription has expired sees only the blocking screen.
+  // A school-scoped, non-admin user whose subscription is not active sees only the blocking screen.
   const isSuperAdmin = !!me?.roles?.includes("super_admin");
   const isSchoolScopedUser = !!me?.profile?.school_id && !isSuperAdmin;
   const { data: subscriptionState } = useQuery({
@@ -491,6 +505,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     enabled: isSchoolScopedUser,
     queryFn: () => getSchoolSubscriptionStatus(),
   });
+  const isLockedSchoolAdmin =
+    isSchoolScopedUser &&
+    !!me?.roles?.includes("school_admin") &&
+    !!subscriptionState &&
+    subscriptionState.status !== "active";
+
+  React.useEffect(() => {
+    if (isLockedSchoolAdmin && !pathname.startsWith("/subscription")) {
+      navigate({ to: "/subscription", replace: true });
+    }
+  }, [isLockedSchoolAdmin, navigate, pathname]);
   const [labelsVisible, setLabelsVisible] = React.useState(readSidebarPreference);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
@@ -597,6 +622,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [isMobile, pathname]);
 
   const items = NAV.filter((item) => hasAny(me?.roles, item.roles))
+    .filter((item) => item.to !== "/users" || !isSuperAdmin)
+    .filter((item) => !isLockedSchoolAdmin || item.to === "/subscription")
     .filter((item) => (item.module ? (moduleMap?.get(item.module) ?? true) : true))
     .sort(
       (a, b) =>
@@ -637,13 +664,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     navigate({ to: "/auth", replace: true });
   }
 
-  // Non-admin school users whose subscription has expired get the full-screen,
+  // Non-admin school users whose subscription is not active get the full-screen,
   // non-dismissible blocking message instead of any dashboard content.
   const isSchoolAdmin = !!me?.roles?.includes("school_admin");
   if (
     isSchoolScopedUser &&
     !isSchoolAdmin &&
-    subscriptionState?.status === "expired"
+    subscriptionState && subscriptionState.status !== "active"
   ) {
     const schoolName = me?.school?.name ?? "your school";
     const userName = (me?.profile as { full_name?: string } | null)?.full_name ?? me?.email ?? "there";

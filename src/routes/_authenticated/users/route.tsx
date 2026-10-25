@@ -1,15 +1,16 @@
 import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router";
 
 import { currentUserQueryOptions } from "@/hooks/useCurrentUser";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export const Route = createFileRoute("/_authenticated/users")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     // Reuse the cached session query so this guard costs no extra network call.
     const currentUser = await context.queryClient.fetchQuery(currentUserQueryOptions());
     if (!currentUser) throw redirect({ to: "/auth" });
-    const allowed = currentUser.roles.some(
-      (role) => role === "super_admin" || role === "school_admin",
-    );
+    const isDepartmentsPage = location.pathname.startsWith("/users/departments");
+    const allowed = currentUser.roles.includes("super_admin") || currentUser.roles.includes("school_admin") ||
+      (isDepartmentsPage && currentUser.roles.some((role) => ["head_teacher", "deputy_head_teacher", "dos"].includes(role)));
     if (!allowed) throw redirect({ to: "/dashboard" });
   },
   head: () => ({
@@ -30,6 +31,8 @@ const SECTIONS: { to: string; label: string; exact?: boolean }[] = [
 ];
 
 function UsersLayout() {
+  const { data: currentUser } = useCurrentUser();
+  const canManageAccounts = !!currentUser?.roles.some((role) => ["super_admin", "school_admin"].includes(role));
   return (
     <div className="min-w-0">
       <nav aria-label="Staff & roles sections" className="mb-3 sm:mb-4">
@@ -48,7 +51,7 @@ function UsersLayout() {
         aria-label="Staff & roles pages"
         className="no-print mb-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 shadow-[var(--shadow-card)] sm:mb-5"
       >
-        {SECTIONS.map((section) => (
+        {SECTIONS.filter((section) => canManageAccounts || section.to !== "/users").map((section) => (
           <Link
             key={section.to}
             to={section.to}

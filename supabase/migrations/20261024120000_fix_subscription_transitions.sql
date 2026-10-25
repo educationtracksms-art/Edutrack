@@ -172,3 +172,36 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.confirm_school_subscription_payment(uuid, text, numeric, text) TO authenticated;
+
+-- Allow a Super Admin to activate a pending request without replacing its row
+-- or requiring a payment ledger entry.
+CREATE OR REPLACE FUNCTION public.activate_pending_school_subscription(
+  p_subscription_id uuid
+)
+RETURNS public.school_subscriptions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  result public.school_subscriptions;
+BEGIN
+  IF NOT public.is_super_admin() THEN
+    RAISE EXCEPTION 'Only the Super Admin can activate subscriptions';
+  END IF;
+
+  UPDATE public.school_subscriptions
+  SET status = 'active', updated_at = now()
+  WHERE id = p_subscription_id
+    AND status = 'pending'
+  RETURNING * INTO result;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Pending subscription not found';
+  END IF;
+
+  RETURN result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.activate_pending_school_subscription(uuid) TO authenticated;

@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated")({
         console.error("Could not check school subscription status", error);
       }
 
-      if (status === "expired") {
+      if (status && status !== "active") {
         const isSchoolAdmin = currentUser.roles.includes("school_admin");
         const onSubscriptionPage = location.pathname.startsWith("/subscription");
 

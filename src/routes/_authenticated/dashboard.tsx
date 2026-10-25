@@ -847,9 +847,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const queryClient = useQueryClient();
   const isSuper = false;
   const schoolId = me?.profile?.school_id ?? null;
-  const isDos = hasAny(me?.roles, ["dos"]);
+  const isDos = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
   const isHod = hasAny(me?.roles, ["hod"]);
-  const canSeeActivity = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher"]);
+  const canSeeActivity = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "dos"]);
   const canApprove = hasAny(me?.roles, [
     "dos",
     "school_admin",

@@ -36,11 +36,20 @@ async function logAudit(
 }
 
 async function notifySchoolBilling(supabase: any, schoolId: string, title: string, body: string) {
+  const { data: schoolAdmins } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("school_id", schoolId)
+    .in("role", ["school_admin", "dos", "head_teacher", "deputy_head_teacher"]);
+  const adminIds = [...new Set((schoolAdmins ?? []).map((admin: { user_id: string }) => admin.user_id))];
+  if (adminIds.length === 0) return;
+
   const { data: recipients } = await supabase
     .from("profiles")
     .select("id")
     .eq("school_id", schoolId)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .in("id", adminIds);
   if (!recipients?.length) return;
   await supabase.from("notifications").insert(
     recipients.map((recipient: { id: string }) => ({
@@ -48,6 +57,7 @@ async function notifySchoolBilling(supabase: any, schoolId: string, title: strin
       user_id: recipient.id,
       title,
       body,
+      type: "subscription",
     })),
   );
 }
@@ -589,7 +599,8 @@ export const listStaffUsers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     const isSuper = roles.includes("super_admin");
-    if (!isSuper && !roles.includes("school_admin")) {
+    const canManageDepartments = roles.some((role) => ["head_teacher", "deputy_head_teacher", "dos"].includes(role));
+    if (!isSuper && !roles.includes("school_admin") && !canManageDepartments) {
       throw new Error("Not allowed to view users");
     }
 
@@ -914,7 +925,7 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       throw new Error("Select at least one unique assessment");
     }
     const roles = await rolesOf(context.supabase, context.userId);
-    const canReviewAny = roles.some((r) => ["dos", "super_admin"].includes(r));
+    const canReviewAny = roles.some((r) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r));
     const isClassTeacher = roles.includes("class_teacher");
     if (!canReviewAny && !isClassTeacher) throw new Error("Not allowed to review assessments");
 
@@ -957,8 +968,8 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       }
     }
 
-    if (data.action === "approve" && !roles.includes("dos") && !roles.includes("super_admin")) {
-      throw new Error("Only the Director of Studies can approve submitted marks");
+    if (data.action === "approve" && !roles.some((role) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(role))) {
+      throw new Error("Only school academic leadership can approve submitted marks");
     }
 
     if (data.classId || data.streamId) {
@@ -1083,8 +1094,8 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["dos", "super_admin"].includes(r))) {
-      throw new Error("Only the Director of Studies can change assessment status");
+    if (!roles.some((r) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r))) {
+      throw new Error("Only school academic leadership can change assessment status");
     }
 
     const schoolId = await schoolOf(context.supabase, context.userId);
@@ -1189,8 +1200,8 @@ export const updateAssessmentPeriod = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.includes("dos") && !roles.includes("super_admin"))
-      throw new Error("Only the Director of Studies can manage assessment periods");
+    if (!roles.some((role) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(role)))
+      throw new Error("Only school academic leadership can manage assessment periods");
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId || !["beginning_of_term", "mid_term", "end_of_term"].includes(data.examType))
       throw new Error("Invalid assessment period");
@@ -1314,6 +1325,39 @@ export const manageSchoolSubscription = createServerFn({ method: "POST" })
         starts_at: data.startsAt,
         ends_at: data.endsAt || null,
       },
+    );
+    return subscription;
+  });
+
+export const activatePendingSchoolSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { subscriptionId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.includes("super_admin")) {
+      throw new Error("Only the Super Admin can activate subscriptions");
+    }
+
+    const { data: subscription, error } = await (context.supabase as any).rpc(
+      "activate_pending_school_subscription",
+      { p_subscription_id: data.subscriptionId },
+    );
+    if (error) throw new Error(error.message);
+    if (!subscription?.id) throw new Error("Subscription could not be activated");
+
+    await notifySchoolBilling(
+      context.supabase,
+      subscription.school_id,
+      "Subscription activated",
+      "Your pending school subscription is now active.",
+    );
+    await logAudit(
+      context.supabase,
+      context.userId,
+      subscription.school_id,
+      "SUBSCRIPTION_ACTIVATED",
+      "school_subscriptions",
+      { subscription_id: subscription.id, status: "active" },
     );
     return subscription;
   });
@@ -3816,7 +3860,7 @@ export const reviewPurchaseRequest = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos"].includes(r))) {
       throw new Error("Not allowed to review purchase requests");
     }
     const schoolId = await schoolOf(context.supabase, context.userId);
@@ -3867,7 +3911,7 @@ export const createDepartment = createServerFn({ method: "POST" })
   .validator((data: { name: string; description?: string | null }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos"].includes(r))) {
       throw new Error("Not allowed to create departments");
     }
     const schoolId = await schoolOf(context.supabase, context.userId);
@@ -3890,7 +3934,7 @@ export const assignDepartmentHod = createServerFn({ method: "POST" })
   .validator((data: { departmentId: string; hodUserId: string | null }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher"].includes(r))) {
+    if (!roles.some((r) => ["super_admin", "school_admin", "head_teacher", "deputy_head_teacher", "dos"].includes(r))) {
       throw new Error("Not allowed to assign department heads");
     }
     const schoolId = await schoolOf(context.supabase, context.userId);

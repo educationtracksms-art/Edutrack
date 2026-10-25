@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
+  activatePendingSchoolSubscription,
   createSchoolWithAdmin,
   createSubscriptionPlan,
   manageSchoolSubscription,
@@ -37,7 +38,8 @@ import {
 } from "@/components/ui/dialog";
 
 type SubscriptionStatus =
-  "trial" | "active" | "past_due" | "expired" | "cancelled" | "not_configured";
+  "trial" | "active" | "past_due" | "expired" | "cancelled" | "pending" | "confirmed" | "not_configured";
+type ManageableSubscriptionStatus = "trial" | "active" | "past_due" | "expired" | "cancelled";
 type Plan = {
   id: string;
   name: string;
@@ -94,7 +96,7 @@ function effectiveStatus(subscription: Subscription | undefined): SubscriptionSt
 
 function statusTone(status: SubscriptionStatus): "success" | "warning" | "muted" | "danger" {
   if (status === "active") return "success";
-  if (status === "trial" || status === "past_due") return "warning";
+  if (status === "trial" || status === "past_due" || status === "pending") return "warning";
   if (status === "expired" || status === "cancelled") return "danger";
   return "muted";
 }
@@ -120,6 +122,7 @@ export function SchoolsPage({
   const createSchool = useServerFn(createSchoolWithAdmin);
   const changeStatus = useServerFn(setSchoolStatus);
   const changeSubscription = useServerFn(manageSchoolSubscription);
+  const activatePendingSubscription = useServerFn(activatePendingSchoolSubscription);
   const recordPayment = useServerFn(recordSchoolPayment);
   const changePaymentStatus = useServerFn(updateSchoolPaymentStatus);
   const createPlan = useServerFn(createSubscriptionPlan);
@@ -132,6 +135,7 @@ export function SchoolsPage({
   const [schoolSearch, setSchoolSearch] = useState("");
   const [schoolStatusFilter, setSchoolStatusFilter] = useState<"all" | School["status"]>("all");
   const [billingSaving, setBillingSaving] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
   const [copyingCredentials, setCopyingCredentials] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
@@ -146,11 +150,13 @@ export function SchoolsPage({
   });
   const [billing, setBilling] = useState({
     planId: "",
-    status: "active" as Exclude<SubscriptionStatus, "not_configured">,
+    status: "active" as ManageableSubscriptionStatus,
     startsAt: today(),
     endsAt: "",
     autoRenew: false,
     notes: "",
+  });
+  const [paymentForm, setPaymentForm] = useState({
     amount: "",
     paymentDate: today(),
     method: "mobile_money",
@@ -246,15 +252,21 @@ export function SchoolsPage({
     setBilling((value) => ({
       ...value,
       planId: current?.plan_id ?? plans.find((plan) => plan.is_active)?.id ?? "",
-      status: current?.status ?? "active",
+      status: current && ["trial", "active", "past_due", "expired", "cancelled"].includes(current.status)
+        ? current.status as ManageableSubscriptionStatus
+        : "active",
       startsAt: current?.starts_at ?? today(),
       endsAt: current?.ends_at ?? "",
       autoRenew: current?.auto_renew ?? false,
       notes: current?.notes ?? "",
+    }));
+    setPaymentForm({
       amount: "",
       paymentDate: today(),
+      method: "mobile_money",
+      paymentStatus: "confirmed",
       reference: "",
-    }));
+    });
   }, [billingSchoolId, currentBySchool, plans]);
 
   const createMutation = useMutation({
@@ -373,6 +385,16 @@ export function SchoolsPage({
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
+  const activateSubscriptionMutation = useMutation({
+    mutationFn: (subscriptionId: string) =>
+      activatePendingSubscription({ data: { subscriptionId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["school-subscriptions"] });
+      toast.success("Subscription activated");
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+
   if (!me || !isSuperAdmin) {
     return (
       <Panel>
@@ -396,14 +418,9 @@ export function SchoolsPage({
     if (billing.endsAt && billing.endsAt < billing.startsAt) {
       return toast.error("Subscription end date must be on or after the start date");
     }
-    const amount = billing.amount ? Number(billing.amount) : 0;
-    if (billing.amount && (!Number.isFinite(amount) || amount <= 0)) {
-      return toast.error("Payment amount must be greater than zero");
-    }
-    let subscriptionSaved = false;
     setBillingSaving(true);
     try {
-      const subscription = await changeSubscription({
+      await changeSubscription({
         data: {
           schoolId: billingSchoolId,
           planId: billing.planId,
@@ -414,36 +431,54 @@ export function SchoolsPage({
           notes: billing.notes.trim() || undefined,
         },
       });
-      subscriptionSaved = true;
-      if (amount > 0) {
-        await recordPayment({
-          data: {
-            schoolId: billingSchoolId,
-            subscriptionId: subscription.id,
-            amount,
-            currency: "UGX",
-            paymentDate: billing.paymentDate || billing.startsAt,
-            method: billing.method,
-            status: billing.paymentStatus,
-            reference: billing.reference.trim() || undefined,
-          },
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: ["school-subscriptions"] });
-      queryClient.invalidateQueries({ queryKey: ["school-payments", billingSchoolId] });
+      await queryClient.invalidateQueries({ queryKey: ["school-subscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["schools"] });
-      toast.success(amount > 0 ? "Subscription and payment saved" : "Subscription saved");
-      setBillingSchoolId(null);
+      toast.success("Subscription saved. Payments can be recorded separately.");
     } catch (error) {
-      if (subscriptionSaved) {
-        queryClient.invalidateQueries({ queryKey: ["school-subscriptions"] });
-        queryClient.invalidateQueries({ queryKey: ["schools"] });
-        toast.error(`Subscription saved, but the payment was not recorded: ${friendlyAdminError(error as Error)}`);
-      } else {
-        toast.error(friendlyAdminError(error as Error));
-      }
+      toast.error(friendlyAdminError(error as Error));
     } finally {
       setBillingSaving(false);
+    }
+  }
+
+  async function savePayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!billingSchoolId) return toast.error("Select a school before recording payment");
+    if (!selectedSubscription) {
+      return toast.error("Save a subscription first, then record its payment separately");
+    }
+    const amount = Number(paymentForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return toast.error("Payment amount must be greater than zero");
+    }
+
+    setPaymentSaving(true);
+    try {
+      await recordPayment({
+        data: {
+          schoolId: billingSchoolId,
+          subscriptionId: selectedSubscription.id,
+          amount,
+          currency: "UGX",
+          paymentDate: paymentForm.paymentDate || today(),
+          method: paymentForm.method,
+          status: paymentForm.paymentStatus,
+          reference: paymentForm.reference.trim() || undefined,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["school-payments", billingSchoolId] });
+      setPaymentForm({
+        amount: "",
+        paymentDate: today(),
+        method: "mobile_money",
+        paymentStatus: "confirmed",
+        reference: "",
+      });
+      toast.success("Payment recorded");
+    } catch (error) {
+      toast.error(friendlyAdminError(error as Error));
+    } finally {
+      setPaymentSaving(false);
     }
   }
 
@@ -747,6 +782,15 @@ export function SchoolsPage({
                 Ends {selectedSubscription.ends_at}
               </span>
             )}
+            {selectedSubscription?.status === "pending" && (
+              <Btn
+                variant="accent"
+                disabled={activateSubscriptionMutation.isPending}
+                onClick={() => activateSubscriptionMutation.mutate(selectedSubscription.id)}
+              >
+                {activateSubscriptionMutation.isPending ? "Activating…" : "Activate subscription"}
+              </Btn>
+            )}
           </div>
           <div className="grid gap-6 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
             <form className="space-y-4" onSubmit={saveBilling}>
@@ -834,39 +878,51 @@ export function SchoolsPage({
                 />
               </Field>
               </div>
-              <div className="space-y-3 rounded-xl border border-border p-4">
+              <Btn type="submit" variant="accent" disabled={billingSaving}>
+                {billingSaving ? "Saving…" : "Save subscription"}
+              </Btn>
+            </form>
+            <div>
+              <form className="mb-5 space-y-3 rounded-xl border border-border p-4" onSubmit={savePayment}>
                 <div>
-                  <h3 className="text-sm font-semibold">Record payment <span className="font-normal text-muted-foreground">(optional)</span></h3>
-                  <p className="mt-1 text-xs text-muted-foreground">Leave the amount blank if you are only changing the subscription.</p>
+                  <h3 className="text-sm font-semibold">Record a payment</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Payments are recorded separately and linked to the current subscription.
+                  </p>
                 </div>
+                {!selectedSubscription && (
+                  <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                    Save a subscription first to enable payment recording.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Amount (UGX)">
                     <input
+                      required
                       type="number"
-                      min="0"
+                      min="0.01"
                       step="0.01"
                       className={inputClass}
-                      value={billing.amount}
-                      onChange={(event) => setBilling({ ...billing, amount: event.target.value })}
+                      value={paymentForm.amount}
+                      onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })}
                     />
                   </Field>
                   <Field label="Payment date">
                     <input
+                      required
                       type="date"
                       className={inputClass}
-                      value={billing.paymentDate}
-                      onChange={(event) =>
-                        setBilling({ ...billing, paymentDate: event.target.value })
-                      }
+                      value={paymentForm.paymentDate}
+                      onChange={(event) => setPaymentForm({ ...paymentForm, paymentDate: event.target.value })}
                     />
                   </Field>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <Field label="Method">
                     <select
                       className={inputClass}
-                      value={billing.method}
-                      onChange={(event) => setBilling({ ...billing, method: event.target.value })}
+                      value={paymentForm.method}
+                      onChange={(event) => setPaymentForm({ ...paymentForm, method: event.target.value })}
                     >
                       <option value="mobile_money">Mobile money</option>
                       <option value="bank">Bank</option>
@@ -878,10 +934,8 @@ export function SchoolsPage({
                   <Field label="Payment status">
                     <select
                       className={inputClass}
-                      value={billing.paymentStatus}
-                      onChange={(event) =>
-                        setBilling({ ...billing, paymentStatus: event.target.value })
-                      }
+                      value={paymentForm.paymentStatus}
+                      onChange={(event) => setPaymentForm({ ...paymentForm, paymentStatus: event.target.value })}
                     >
                       <option value="confirmed">Confirmed</option>
                       <option value="pending">Pending</option>
@@ -893,16 +947,14 @@ export function SchoolsPage({
                 <Field label="Reference">
                   <input
                     className={inputClass}
-                    value={billing.reference}
-                    onChange={(event) => setBilling({ ...billing, reference: event.target.value })}
+                    value={paymentForm.reference}
+                    onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })}
                   />
                 </Field>
-              </div>
-              <Btn type="submit" variant="accent" disabled={billingSaving}>
-                {billingSaving ? "Saving…" : `Save subscription${billing.amount ? " and payment" : ""}`}
-              </Btn>
-            </form>
-            <div>
+                <Btn type="submit" variant="accent" disabled={paymentSaving || !selectedSubscription}>
+                  {paymentSaving ? "Recording…" : "Record payment"}
+                </Btn>
+              </form>
               <p className="mb-3 text-sm font-semibold">Recent payments</p>
               {payments.length ? (
                 <div className="space-y-2">

@@ -24,7 +24,7 @@ function CalendarPage() {
   const updatePeriod = useServerFn(updateAssessmentPeriod);
   const periodsQuery = useQuery({
     queryKey: ["assessment-periods", schoolId],
-    enabled: !!schoolId && hasAny(me?.roles, ["dos"]),
+    enabled: !!schoolId && hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]),
     queryFn: async () => {
       const { data: periods } = await (supabase as any)
         .from("assessment_periods")
@@ -237,7 +237,7 @@ function CalendarPage() {
         title="Years & terms"
         description="Set the academic calendar, control assessment periods and keep the next term date current."
       />
-      {hasAny(me?.roles, ["dos"]) && (
+      {hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]) && (
         <Panel title="Assessment periods" className="mb-4">
           <p className="mb-3 text-sm text-muted-foreground">Activate a period for reports and open or lock mark entry.</p>
           <div className="space-y-2">
