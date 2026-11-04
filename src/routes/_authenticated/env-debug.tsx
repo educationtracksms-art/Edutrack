@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { createServerFn, useServerFn } from "@tanstack/react-start";
 
 import { PageHeader, Panel } from "@/components/ui-kit";
@@ -48,9 +49,19 @@ const getEnvDebugInfo = createServerFn({ method: "GET" })
 
 function EnvDebug() {
   const { data: me, isLoading: isUserLoading } = useCurrentUser();
-  const debugInfo = useServerFn(getEnvDebugInfo);
+  const loadDebugInfo = useServerFn(getEnvDebugInfo);
+  const {
+    data: debugInfo,
+    error: debugError,
+    isLoading: isDebugLoading,
+  } = useQuery({
+    queryKey: ["runtime-env-debug"],
+    enabled: !!me && hasAny(me.roles, ["super_admin"]),
+    queryFn: () => loadDebugInfo(),
+    retry: false,
+  });
 
-  if (isUserLoading || debugInfo.state === "loading") {
+  if (isUserLoading || isDebugLoading) {
     return <p className="text-sm text-muted-foreground">Loading debug info…</p>;
   }
 
@@ -62,10 +73,10 @@ function EnvDebug() {
     );
   }
 
-  if (debugInfo.error) {
+  if (debugError) {
     return (
       <p className="text-sm text-destructive">
-        Error loading debug info: {debugInfo.error.message}
+        Error loading debug info: {debugError.message}
       </p>
     );
   }
@@ -80,21 +91,21 @@ function EnvDebug() {
       <Panel title="Supabase environment debug info">
         <div className="space-y-2 text-sm">
           <div>
-            <strong>Dotenv path:</strong> {debugInfo.data?.dotenvPath ?? "None"}
+            <strong>Dotenv path:</strong> {debugInfo?.dotenvPath ?? "None"}
           </div>
           <div>
-            <strong>Has dotenv:</strong> {String(debugInfo.data?.hasDotenv ?? false)}
+            <strong>Has dotenv:</strong> {String(debugInfo?.hasDotenv ?? false)}
           </div>
           <div>
-            <strong>Has SUPABASE_URL:</strong> {String(debugInfo.data?.hasDotenvUrl ?? false)}
+            <strong>Has SUPABASE_URL:</strong> {String(debugInfo?.hasDotenvUrl ?? false)}
           </div>
           <div>
             <strong>Has SUPABASE_PUBLISHABLE_KEY:</strong>{" "}
-            {String(debugInfo.data?.hasDotenvPublishableKey ?? false)}
+              {String(debugInfo?.hasDotenvPublishableKey ?? false)}
           </div>
           <div>
             <strong>Has SUPABASE_SERVICE_ROLE_KEY:</strong>{" "}
-            {String(debugInfo.data?.hasDotenvServiceRoleKey ?? false)}
+              {String(debugInfo?.hasDotenvServiceRoleKey ?? false)}
           </div>
         </div>
       </Panel>

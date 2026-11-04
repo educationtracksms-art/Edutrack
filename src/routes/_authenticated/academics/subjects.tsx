@@ -24,7 +24,16 @@ function SubjectsPage() {
     position: "",
     points: "1",
   });
-  const [aLevelSubjectForm, setALevelSubjectForm] = useState({
+  const [aLevelSubjectForm, setALevelSubjectForm] = useState<{
+    name: string;
+    code: string;
+    department_id: string;
+    category: string;
+    position: string;
+    points: string;
+    is_subsidiary: boolean;
+    papers: string[];
+  }>({
     name: "",
     code: "",
     department_id: "",
@@ -345,21 +354,43 @@ function SubjectsPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Academic setup"
         title="Subjects"
-        description="Ordinary and Advanced Level subjects with departments, codes, points and papers."
+        description="Manage O-Level and A-Level subjects, departments and papers."
       />
-        <Panel title="Subjects">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[
+          { label: "O-Level", value: data?.subjects.filter((item) => item.education_level !== "advanced").length ?? 0, styles: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" },
+          { label: "A-Level", value: data?.subjects.filter((item) => item.education_level === "advanced").length ?? 0, styles: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" },
+          { label: "Departments", value: data?.departments.length ?? 0, styles: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300" },
+        ].map((stat) => (
+          <div key={stat.label} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}>
+            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">{stat.label}</span>
+            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">{stat.value}</span>
+          </div>
+        ))}
+      </div>
+      <section aria-labelledby="subject-forms-heading">
+        <div className="mb-3">
+          <h2 id="subject-forms-heading" className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Forms · Add or edit</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Use the matching form for each subject level.</p>
+        </div>
+        <div>
+          <div className="grid items-start gap-4 xl:grid-cols-2">
           <form
-            className="mb-3 space-y-2"
+            className="mb-4 grid gap-3 rounded-xl border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900 dark:bg-sky-950/20 sm:grid-cols-2 lg:grid-cols-3"
             onSubmit={(e) => {
               e.preventDefault();
               if (editingOLevelSubjectId) updateSubject.mutate();
               else addSubject.mutate();
             }}
           >
+            <div className="sm:col-span-2 lg:col-span-3">
+              <h3 className="text-sm font-semibold text-foreground">{editingOLevelSubjectId ? "Update O-Level subject" : "Create an O-Level subject"}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Set the subject name, department and assessment details.</p>
+            </div>
             <Field label="O-Level subject name">
               <input
                 required
@@ -383,7 +414,7 @@ function SubjectsPage() {
                 ))}
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="contents">
               <Field label="Code">
                 <input
                   className={inputClass}
@@ -420,7 +451,7 @@ function SubjectsPage() {
                 onChange={(e) => setSubjectForm({ ...subjectForm, category: e.target.value })}
               />
             </Field>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
               <Btn
                 type="submit"
                 variant="accent"
@@ -436,15 +467,15 @@ function SubjectsPage() {
             </div>
           </form>
           <form
-            className="mb-4 space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 dark:border-indigo-900 dark:bg-indigo-950/20"
+            className="mb-5 grid gap-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4 dark:border-violet-900 dark:bg-violet-950/20 sm:grid-cols-2 lg:grid-cols-3"
             onSubmit={(event) => {
               event.preventDefault();
               if (editingALevelSubjectId) updateALevelSubject.mutate();
               else addALevelSubject.mutate();
             }}
           >
-            <div>
-              <h3 className="font-semibold">A-Level subjects</h3>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <h3 className="text-sm font-semibold">{editingALevelSubjectId ? "Update A-Level subject" : "Create an A-Level subject"}</h3>
               <p className="text-xs text-muted-foreground">
                 Create A-Level subjects with optional paper breakdowns.
               </p>
@@ -470,7 +501,7 @@ function SubjectsPage() {
                 ))}
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="contents">
               <Field label="Code">
                 <input className={inputClass} value={aLevelSubjectForm.code} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, code: event.target.value })} />
               </Field>
@@ -478,7 +509,7 @@ function SubjectsPage() {
                 <input type="number" min={1} className={inputClass} value={aLevelSubjectForm.position} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, position: event.target.value })} />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="contents">
               <Field label="Points">
                 <input required type="number" min={1} max={5} className={inputClass} value={aLevelSubjectForm.points} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, points: event.target.value })} />
               </Field>
@@ -486,11 +517,11 @@ function SubjectsPage() {
                 <input placeholder="Core / Elective" className={inputClass} value={aLevelSubjectForm.category} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, category: event.target.value })} />
               </Field>
             </div>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-3">
               <input type="checkbox" checked={aLevelSubjectForm.is_subsidiary} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, is_subsidiary: event.target.checked })} />
               Subsidiary subject (50+ = 1 point, below 50 = 0)
             </label>
-            <div className="rounded-lg border border-indigo-200 bg-background/70 p-3 dark:border-indigo-800">
+            <div className="rounded-lg border border-violet-200 bg-background/70 p-3 dark:border-violet-800 sm:col-span-2 lg:col-span-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
                   <h4 className="text-sm font-semibold">Subject papers (optional)</h4>
@@ -532,13 +563,23 @@ function SubjectsPage() {
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
               <Btn type="submit" variant="accent" disabled={addALevelSubject.isPending || updateALevelSubject.isPending}>
                 {editingALevelSubjectId ? "Save A-Level changes" : "Add A-Level subject"}
               </Btn>
               {editingALevelSubjectId && <Btn type="button" variant="ghost" onClick={resetALevelSubjectForm}>Cancel</Btn>}
             </div>
           </form>
+          </div>
+        </div>
+        <Panel title="Output · Saved subjects">
+          <div className="mb-3 flex items-center justify-between border-t border-border pt-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">All subjects</h3>
+              <p className="mt-1 text-xs text-muted-foreground">All O-Level and A-Level subjects for this school.</p>
+            </div>
+            <span className="text-xs text-muted-foreground">{data?.subjects.length ?? 0} total</span>
+          </div>
           <div className="overflow-hidden rounded-xl border border-border">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
@@ -560,7 +601,7 @@ function SubjectsPage() {
                       <td className="px-4 py-3 font-medium text-foreground">
                         <div className="flex items-center gap-2">
                           <span>{item.name}</span>
-                          {item.is_subsidiary && <Pill tone="info">SUB</Pill>}
+                          {item.is_subsidiary && <Pill tone="muted">SUB</Pill>}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
@@ -670,6 +711,7 @@ function SubjectsPage() {
             </div>
           </div>}
         </Panel>
+      </section>
     </div>
   );
 }

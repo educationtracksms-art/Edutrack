@@ -58,6 +58,10 @@ export async function buildReportCards(
       .select("id, subject_id, name, position")
       .eq("school_id", schoolId)
       .order("position"),
+    (supabase as any)
+      .from("teacher_allocations")
+      .select("subject_id, paper_id, class_id, stream_id")
+      .eq("school_id", schoolId),
     supabase
       .from("student_subjects")
       .select("student_id, subject_id")
@@ -97,6 +101,7 @@ export async function buildReportCards(
     { data: streams },
     { data: subjects },
     { data: subjectPapers },
+    { data: teacherAllocations },
     { data: studentSubjects },
     { data: scales },
     { data: identifierScales },
@@ -172,10 +177,9 @@ export async function buildReportCards(
       .eq("status", "approved"),
     (supabase as any)
       .from("assessment_periods")
-      .select("exam_type")
+      .select("exam_type, is_active")
       .eq("school_id", schoolId)
-      .eq("term_id", termFilterId)
-      .eq("is_active", true),
+      .eq("term_id", termFilterId),
   ]);
   const resultError = resultResults.find((result) => result.error);
   if (resultError?.error) {
@@ -202,10 +206,13 @@ export async function buildReportCards(
   // schools that have approved marks but no assessment_periods rows yet,
   // retain those approved marks so report generation does not produce a blank
   // card; once periods are configured, the activation rule is enforced.
-  const configuredActiveTypes = new Set((activePeriods ?? []).map((period: any) => period.exam_type));
-  const activeTypes = configuredActiveTypes.size
+  const periodConfigurationExists = (activePeriods ?? []).length > 0;
+  const configuredActiveTypes = new Set<string>(
+    (activePeriods ?? []).filter((period: any) => period.is_active).map((period: any) => period.exam_type),
+  );
+  const activeTypes = periodConfigurationExists
     ? configuredActiveTypes
-    : new Set((assessments ?? []).map((assessment: any) => assessment.exam_type));
+    : new Set<string>((assessments ?? []).map((assessment: any) => assessment.exam_type));
   const approvedAssessments = (assessments ?? []).filter(
     (assessment: any) =>
       assessment.status === "approved" && activeTypes.has(assessment.exam_type),
@@ -272,6 +279,14 @@ export async function buildReportCards(
         .filter((assignment: any) => assignment.student_id === student.id)
         .map((assignment: any) => assignment.subject_id),
     );
+    for (const allocation of teacherAllocations ?? []) {
+      if (
+        (!allocation.class_id || allocation.class_id === student.class_id) &&
+        (!allocation.stream_id || allocation.stream_id === student.stream_id)
+      ) {
+        assignedSubjectIds.add(allocation.subject_id);
+      }
+    }
     const subjectIdsWithMarks = new Set([
       ...marks.map((mark: any) => mark.subject_id),
       ...studentFormativeMarks.map((mark: any) => mark.subject_id),
@@ -306,7 +321,7 @@ export async function buildReportCards(
           return gradeFor(score, "advanced");
         };
         const paperRows = papers.length ? papers : [null];
-        const renderedPaperRows = paperRows
+        const renderedPaperRows: SubjectRow[] = paperRows
           .map((paper: any) => {
             const subjectMarks = marks.filter(
               (m: any) =>
@@ -326,10 +341,14 @@ export async function buildReportCards(
               mid_term: subjectMarks.find((m: any) => m.exam_type === "mid_term")?.summative,
               end_of_term: subjectMarks.find((m: any) => m.exam_type === "end_of_term")?.summative,
             };
-            const periodValue = (period: keyof typeof summativeByPeriod) =>
-              activeTypes.has(period) && summativeByPeriod[period] != null
+            const periodValue = (period: keyof typeof summativeByPeriod) => {
+              if (!activeTypes.has(period)) return "";
+              const assessment = subjectMarks.find((m: any) => m.exam_type === period);
+              if (assessment?.is_missing) return "MISSING MARK";
+              return summativeByPeriod[period] != null
                 ? fmt(Number(summativeByPeriod[period]))
-                : "";
+                : "MISSING MARK";
+            };
             // Formative is one whole-term mark per paper. Legacy subject-level
             // records remain a fallback so historic report cards still render.
             const formativeRecord = studentFormativeMarks.find(
@@ -345,7 +364,7 @@ export async function buildReportCards(
             const standaloneFormative = formativeRecord?.mark;
             const legacyFormative = subjectMarks
               .map((m: any) => m.formative)
-              .find((value: unknown) => value != null);
+              .find((value: unknown) => value != null && Number(value) > 0);
             const formativeMark =
               standaloneFormative != null
                 ? Number(standaloneFormative)
@@ -354,8 +373,17 @@ export async function buildReportCards(
                   : undefined;
             const hasExplicitMissingMark =
               Boolean(formativeRecord?.is_missing) || subjectMarks.some((item: any) => item.is_missing);
+            const hasMissingActivePeriod = Array.from(activeTypes).some(
+              (period) => {
+                const assessment = subjectMarks.find((item: any) => item.exam_type === period);
+                return !assessment || assessment.summative == null || Boolean(assessment.is_missing);
+              },
+            );
+            const hasAnyRelevantRecord = subjectMarks.length > 0 || formativeRecord != null;
             const isMissingMark =
               hasExplicitMissingMark ||
+              ((isAssignedSubject || hasAnyRelevantRecord) && hasMissingActivePeriod) ||
+              (isAssignedSubject && activeTypes.size > 0 && averageSummative == null) ||
               ((Boolean(mark) || formativeMark !== undefined) &&
                 (formativeMark === undefined || averageSummative == null)) ||
               (isAssignedSubject && !mark && formativeMark === undefined);
@@ -369,11 +397,17 @@ export async function buildReportCards(
                 subjectId: subject.id,
                 paperId: paper?.id ?? null,
                 isPaper: false,
-                formative: formativeMark === undefined ? "MISSING MARK" : fmt(formativeMark),
-                summative: averageSummative == null ? "MISSING MARK" : fmt(averageSummative),
-                bot: hasExplicitMissingMark ? "MISSING MARK" : periodValue("beginning_of_term"),
-                mot: hasExplicitMissingMark ? "MISSING MARK" : periodValue("mid_term"),
-                eot: hasExplicitMissingMark ? "MISSING MARK" : periodValue("end_of_term"),
+                formative:
+                  formativeRecord?.is_missing || formativeMark === undefined
+                    ? "MISSING MARK"
+                    : fmt(formativeMark),
+                summative:
+                  averageSummative == null || hasMissingActivePeriod
+                    ? "MISSING MARK"
+                    : fmt(averageSummative),
+                bot: periodValue("beginning_of_term"),
+                mot: periodValue("mid_term"),
+                eot: periodValue("end_of_term"),
                 total: "MISSING MARK",
                 grade: "",
                 gradeDetail: "",
@@ -434,7 +468,7 @@ export async function buildReportCards(
               eot: periodValue("end_of_term"),
               total: fmt(total),
               grade: g?.grade ?? "",
-              gradeDetail: educationLevel === "advanced" ? "" : g.descriptor,
+              gradeDetail: educationLevel === "advanced" ? "" : g?.descriptor ?? "",
               subjectPoints:
                 educationLevel === "advanced"
                   ? String(

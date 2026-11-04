@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
@@ -215,7 +215,7 @@ function StudentsPage() {
       if (photoUrl !== undefined) payload.photo_url = photoUrl;
       const { error } = await supabase
         .from("students")
-        .update(payload)
+        .update(payload as never)
         .eq("id", editingStudentId)
         .eq("school_id", me.profile.school_id);
       if (error) throw new Error(error.message);
@@ -420,6 +420,7 @@ function StudentsPage() {
           skipped.push(`Row ${rowNumber + 1}: class "${valueFor("class_name")}" was not found`);
           continue;
         }
+        if (!classMatch) continue;
         const classStreams = (streams ?? []).filter((stream) => stream.class_id === classMatch?.id);
         if (classStreams.length > 0 && !streamValue) {
           skipped.push(`Row ${rowNumber + 1}: add the stream for class "${valueFor("class_name")}"`);
@@ -476,7 +477,7 @@ function StudentsPage() {
         description="Registered learners stay pending until an administrator verifies the admission."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Btn variant="outline" onClick={downloadStudentList} disabled={!visibleStudents.length}>
+            <Btn variant="ghost" onClick={downloadStudentList} disabled={!visibleStudents.length}>
               Download Excel
             </Btn>
             {canRegisterOrEditStudents && (
@@ -677,7 +678,7 @@ function StudentsPage() {
             </thead>
             <tbody>
               {visibleStudents.map((student) => (
-                <tr key={student.id} className="border-t border-border">
+                <tr key={student.id} className="border-t border-border hover:bg-muted/20">
                   <td className="py-2.5">
                     {student.photo_url ? (
                       <img
@@ -691,7 +692,16 @@ function StudentsPage() {
                       </div>
                     )}
                   </td>
-                  <td className="py-2.5 font-medium">{student.full_name}</td>
+                  <td className="py-2.5 font-medium">
+                    <Link
+                      to="/students/$id"
+                      params={{ id: student.id }}
+                      className="text-primary underline-offset-4 hover:underline"
+                      aria-label={`View statistics for ${student.full_name}`}
+                    >
+                      {student.full_name}
+                    </Link>
+                  </td>
                   <td>{student.lin ?? "—"}</td>
                   <td>
                     {className(student.class_id)}

@@ -41,6 +41,7 @@ type AssessmentRow = {
   summative: number | null;
   is_missing?: boolean;
   teacher_initials?: string | null;
+  created_at?: string;
   status: "draft" | "submitted" | "approved" | "rejected";
   locked: boolean;
   grade_descriptor: string | null;
@@ -142,7 +143,14 @@ export function AssessmentsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const isAssignedTeacher = hasAny(me?.roles, ["subject_teacher", "class_teacher", "hod", "dos"]);
+  const isAssignedTeacher = hasAny(me?.roles, [
+    "subject_teacher",
+    "class_teacher",
+    "hod",
+    "dos",
+    "head_teacher",
+    "deputy_head_teacher",
+  ]);
   const isTeacher = isAssignedTeacher;
   const canViewAllAssessments = hasAny(me?.roles, [
     "dos",
@@ -711,7 +719,14 @@ export function AssessmentsPage() {
 
   const teacherSubjects = useMemo(() => {
     if (!data) return [];
-    const restrictToAllocation = hasAny(me?.roles, ["subject_teacher", "class_teacher", "hod", "dos"]);
+    const restrictToAllocation = hasAny(me?.roles, [
+      "subject_teacher",
+      "class_teacher",
+      "hod",
+      "dos",
+      "head_teacher",
+      "deputy_head_teacher",
+    ]);
     if (!restrictToAllocation) return data.subjects;
     if (!selectedAllocation) return [];
     return data.subjects.filter(
@@ -853,6 +868,9 @@ export function AssessmentsPage() {
             comment.class_teacher_comment ?? current[comment.student_id]?.classTeacherComment ?? "",
           headTeacherComment:
             comment.head_teacher_comment ?? current[comment.student_id]?.headTeacherComment ?? "",
+          games: coCurricularByStudent.get(comment.student_id)?.games ?? current[comment.student_id]?.games ?? "",
+          clubs: coCurricularByStudent.get(comment.student_id)?.clubs ?? current[comment.student_id]?.clubs ?? "",
+          projects: coCurricularByStudent.get(comment.student_id)?.projects ?? current[comment.student_id]?.projects ?? "",
         };
       }
       return next;
@@ -1013,19 +1031,13 @@ export function AssessmentsPage() {
       if (!group.formativeMark) {
         throw new Error("Save the learner's formative mark before submitting this record");
       }
-      if (!group.formativeMark.locked && ["draft", "rejected"].includes(group.formativeMark.status)) {
-        const { error } = await (supabase as any)
-          .from("formative_marks")
-          .update({
-            status: "submitted",
-            submitted_by: me?.userId ?? null,
-            submitted_at: new Date().toISOString(),
-          })
-          .eq("id", group.formativeMark.id)
-          .eq("status", group.formativeMark.status);
-        if (error) throw new Error(error.message);
-      }
-      await submitEntries({ data: { assessmentIds, teacherInitials: data?.teacherInitials ?? null } });
+      await submitEntries({
+        data: {
+          assessmentIds,
+          formativeMarkId: group.formativeMark.id,
+          teacherInitials: data?.teacherInitials ?? null,
+        },
+      });
     },
     onSuccess: () => {
       toast.success("Formative and summative marks submitted for approval");
@@ -1285,6 +1297,7 @@ export function AssessmentsPage() {
       if (selectedSubjectRequiresPaper && !selectedPaperId) {
         throw new Error("Select the A-Level paper being assessed");
       }
+      if (!data) throw new Error("Assessment data is still loading. Try again shortly");
       const existing = data.formativeMarks.find(
         (mark) =>
           mark.student_id === entryForm.studentId &&
@@ -1356,9 +1369,9 @@ export function AssessmentsPage() {
       const summativeEntries: Array<[string, string]> = entryForm.isMissing
         ? (data?.openAssessmentPeriods ?? []).map((examType) => [examType, "0"] as [string, string])
         : [
-            ["beginning_of_term", entryForm.summativeBot],
-            ["mid_term", entryForm.summativeMot],
-            ["end_of_term", entryForm.summativeEot],
+            ["beginning_of_term", entryForm.summativeBot] as [string, string],
+            ["mid_term", entryForm.summativeMot] as [string, string],
+            ["end_of_term", entryForm.summativeEot] as [string, string],
           ].filter(([examType, value]) =>
             (data?.openAssessmentPeriods ?? []).includes(examType) && value.trim(),
           );
@@ -1370,6 +1383,7 @@ export function AssessmentsPage() {
         );
       }
 
+      if (!data) throw new Error("Assessment data is still loading. Try again shortly");
       const existingFormative = data.formativeMarks.find(
         (mark) =>
           mark.student_id === entryForm.studentId &&
@@ -1565,38 +1579,66 @@ export function AssessmentsPage() {
     });
   }, [data?.students, dosSubmittedRows, reviewClassId, reviewStreamId]);
 
-  const teacherBulkSubmitIds = useMemo(() => {
-    if (!isTeacher || !selectedAllocation || !data) return [];
-    return tableData.assessments
-      .filter((assessment) => assessment.term_id === (entryForm.termId || data.currentTermId))
-      .filter((assessment) => assessment.subject_id === selectedAllocation.subject_id)
-      .filter((assessment) => (assessment.paper_id ?? null) === (selectedAllocation.paper_id ?? null))
-      .filter((assessment) => assessment.status === "draft" || assessment.status === "rejected")
-      .filter((assessment) => {
-        const student = data.students.find((item) => item.id === assessment.student_id);
-        if (!student) return false;
-        if (selectedAllocation.class_id && student.class_id !== selectedAllocation.class_id)
-          return false;
-        if (selectedAllocation.stream_id && student.stream_id !== selectedAllocation.stream_id)
-          return false;
-        return true;
-      })
-      .map((assessment) => assessment.id);
-  }, [data, entryForm.termId, isTeacher, selectedAllocation]);
+  const teacherBulkSubmitGroups = useMemo(() => {
+    if (!isTeacher || !selectedAllocation || !data || !tableData) return [];
+    const openPeriods = new Set(data.openAssessmentPeriods);
+    const groups = new Map<string, AssessmentRow[]>();
+    for (const assessment of tableData.assessments) {
+      if (assessment.term_id !== (entryForm.termId || data.currentTermId)) continue;
+      if (assessment.subject_id !== selectedAllocation.subject_id) continue;
+      if ((assessment.paper_id ?? null) !== (selectedAllocation.paper_id ?? null)) continue;
+      if (!openPeriods.has(assessment.exam_type ?? "end_of_term")) continue;
+      if (!(assessment.status === "draft" || assessment.status === "rejected") || assessment.locked) continue;
+      const student = data.students.find((item) => item.id === assessment.student_id);
+      if (!student) continue;
+      if (selectedAllocation.class_id && student.class_id !== selectedAllocation.class_id) continue;
+      if (selectedAllocation.stream_id && student.stream_id !== selectedAllocation.stream_id) continue;
+      const key = `${assessment.student_id}:${assessment.subject_id}:${assessment.term_id}:${assessment.paper_id ?? "subject"}`;
+      const records = groups.get(key) ?? [];
+      records.push(assessment);
+      groups.set(key, records);
+    }
+    return Array.from(groups.values()).map((assessments) => {
+      const first = assessments[0];
+      const formativeMark = tableData.formativeMarks.find(
+        (mark) =>
+          mark.student_id === first.student_id &&
+          mark.subject_id === first.subject_id &&
+          mark.term_id === first.term_id &&
+          (mark.paper_id ?? null) === (first.paper_id ?? null),
+      ) ?? null;
+      return {
+        assessmentIds: assessments.map((assessment) => assessment.id),
+        formativeMark,
+        studentName: data.students.find((student) => student.id === first.student_id)?.full_name ?? "Unknown learner",
+      };
+    });
+  }, [data, entryForm.termId, isTeacher, selectedAllocation, tableData]);
 
   const bulkSubmitMutation = useMutation({
     mutationFn: async () => {
-      if (!teacherBulkSubmitIds.length) {
-        throw new Error("No draft assessments found for the selected allocation");
+      if (!teacherBulkSubmitGroups.length) {
+        throw new Error("No editable assessments are in an open period for this allocation");
+      }
+      const missingFormative = teacherBulkSubmitGroups.filter((group) => !group.formativeMark);
+      if (missingFormative.length) {
+        throw new Error(
+          `Save a formative mark for every learner before submitting: ${missingFormative.map((group) => group.studentName).join(", ")}`,
+        );
       }
       await submitEntries({
         data: {
-          assessmentIds: teacherBulkSubmitIds,
+          groups: teacherBulkSubmitGroups.map((group) => ({
+            assessmentIds: group.assessmentIds,
+            formativeMarkId: group.formativeMark!.id,
+          })),
+          teacherInitials: data?.teacherInitials ?? null,
         },
       });
     },
     onSuccess: () => {
-      toast.success("Selected allocation submitted for approval");
+      toast.success("Allocation marks submitted for approval");
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
       queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -1710,11 +1752,11 @@ export function AssessmentsPage() {
                     <Btn
                       type="button"
                       variant="accent"
-                      disabled={bulkSubmitMutation.isPending || teacherBulkSubmitIds.length === 0}
+                      disabled={bulkSubmitMutation.isPending || teacherBulkSubmitGroups.length === 0}
                       onClick={() => {
                         if (
                           window.confirm(
-                            `Submit all ${teacherBulkSubmitIds.length} assessment(s) for this allocation?`,
+                            `Submit ${teacherBulkSubmitGroups.length} learner group(s) for this allocation? Each group includes its formative mark and open summative marks.`,
                           )
                         ) {
                           bulkSubmitMutation.mutate();
@@ -1723,7 +1765,7 @@ export function AssessmentsPage() {
                     >
                       {bulkSubmitMutation.isPending
                         ? "Submitting..."
-                        : `Submit allocation (${teacherBulkSubmitIds.length})`}
+                        : `Submit allocation (${teacherBulkSubmitGroups.length} groups)`}
                     </Btn>
                   ) : null}
                 </div>
@@ -2580,8 +2622,8 @@ export function AssessmentsPage() {
                   group,
                 ) => {
                   const row = group.row;
-                  const student = tableData.students.find((item) => item.id === row.student_id);
-                  const studentClass = tableData.classes.find((item) => item.id === student?.class_id);
+                  const student = tableData?.students.find((item) => item.id === row.student_id);
+                  const studentClass = tableData?.classes.find((item) => item.id === student?.class_id);
                   const stream = data?.streams.find((item) => item.id === student?.stream_id);
                   const formative = group.formative;
                   const canDeleteGroup =

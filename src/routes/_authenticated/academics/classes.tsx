@@ -218,7 +218,7 @@ function ClassesPage() {
 
   const classLabel = (item: AcademicClass) => {
     const parts = [item.name, levelLabel(item.education_level)];
-    if (item.level !== null && item.level !== undefined && item.level !== "") {
+    if (item.level !== null && item.level !== undefined) {
       parts.push(`Order ${item.level}`);
     }
     return parts.join(" · ");
@@ -242,15 +242,38 @@ function ClassesPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Academic setup"
         title="Classes & streams"
-        description="Create classes and their streams, and assign a class teacher and stream teachers."
+        description="Organise learners into classes, then add streams and assign teachers."
       />
-        <Panel title="Classes">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[
+          { label: "Classes", value: data?.classes.length ?? 0, styles: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" },
+          { label: "Streams", value: data?.streams.length ?? 0, styles: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" },
+          { label: "Teachers", value: data?.teachers.length ?? 0, styles: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" },
+        ].map((stat) => (
+          <div key={stat.label} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}>
+            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">{stat.label}</span>
+            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">{stat.value}</span>
+          </div>
+        ))}
+      </div>
+      <section aria-labelledby="class-inputs-heading">
+        <div className="mb-3">
+          <h2 id="class-inputs-heading" className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Inputs · Add or edit</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Enter class and stream details in separate forms.</p>
+        </div>
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <Panel title="Classes" className="h-full">
+          <div className="mb-5 rounded-xl border border-primary/15 bg-primary-soft/40 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
+              {editingClassId ? "Update class details" : "Create a class"}
+            </h3>
+            <p className="-mt-2 mb-4 text-xs text-muted-foreground">Set the level and assign a class teacher.</p>
           <form
-            className="mb-3 space-y-2"
+            className="grid gap-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
               if (editingClassId) updateClass.mutate();
@@ -306,7 +329,7 @@ function ClassesPage() {
                 ))}
               </select>
             </Field>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 sm:col-span-2">
               <Btn
                 type="submit"
                 variant="accent"
@@ -321,19 +344,24 @@ function ClassesPage() {
               )}
             </div>
           </form>
-          <ul className="space-y-1 text-sm">
+          </div>
+          <div className="mb-3 flex items-center justify-between border-t border-border pt-4">
+            <h3 className="text-sm font-semibold text-foreground">Saved classes · Output</h3>
+            <span className="text-xs text-muted-foreground">{data?.classes.length ?? 0} total</span>
+          </div>
+          {(data?.classes.length ?? 0) === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">No classes yet. Create the first class above.</p>
+          ) : <ul className="space-y-2 text-sm">
             {(data?.classes ?? []).map((item) => (
               <li
                 key={item.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-background px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                <span>
-                  <span className="font-medium">{classLabel(item)}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    Class teacher: {classTeacherName(item.class_teacher_id)}
-                  </span>
-                </span>
-                <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">{item.name}</p>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{levelLabel(item.education_level)}{item.level ? ` · Order ${item.level}` : ""} · {classTeacherName(item.class_teacher_id)}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
                   <Pill tone="muted">
                     {data?.streams.filter((s) => s.class_id === item.id).length ?? 0} streams
                   </Pill>
@@ -357,12 +385,17 @@ function ClassesPage() {
                 </div>
               </li>
             ))}
-          </ul>
+          </ul>}
         </Panel>
 
-        <Panel title="Streams">
+        <Panel title="Streams" className="h-full">
+          <div className="mb-5 rounded-xl border border-accent/20 bg-accent/5 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
+              {editingStreamId ? "Update stream details" : "Create a stream"}
+            </h3>
+            <p className="-mt-2 mb-4 text-xs text-muted-foreground">Choose a class and assign a stream teacher.</p>
           <form
-            className="mb-3 space-y-2"
+            className="grid gap-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
               if (editingStreamId) updateStream.mutate();
@@ -409,7 +442,7 @@ function ClassesPage() {
                 ))}
               </select>
             </Field>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 sm:col-span-2">
               <Btn
                 type="submit"
                 variant="accent"
@@ -424,16 +457,23 @@ function ClassesPage() {
               )}
             </div>
           </form>
-          <ul className="space-y-1 text-sm">
+          </div>
+          <div className="mb-3 flex items-center justify-between border-t border-border pt-4">
+            <h3 className="text-sm font-semibold text-foreground">Saved streams · Output</h3>
+            <span className="text-xs text-muted-foreground">{data?.streams.length ?? 0} total</span>
+          </div>
+          {(data?.streams.length ?? 0) === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">No streams yet. Create a stream above.</p>
+          ) : <ul className="space-y-2 text-sm">
             {(data?.streams ?? []).map((item) => (
               <li
                 key={item.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-background px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <span>
                   {className(item.class_id)} Â· <span className="font-medium">{item.name}</span>
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1.5">
                   <Btn variant="ghost" onClick={() => startEditingStream(item)}>
                     Edit
                   </Btn>
@@ -450,8 +490,10 @@ function ClassesPage() {
                 </div>
               </li>
             ))}
-          </ul>
+          </ul>}
         </Panel>
+      </div>
+      </section>
     </div>
   );
 }

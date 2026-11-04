@@ -34,7 +34,7 @@ function AcademicsOverview() {
       to: "/academics/classes" as const,
       icon: School,
       title: "Classes & streams",
-      description: "Create classes and streams, then assign class and stream teachers.",
+      description: "Set up classes, streams and class teachers.",
       stat: `${data?.classes.length ?? 0} classes`,
       detail: `${data?.streams.length ?? 0} streams`,
     },
@@ -42,7 +42,7 @@ function AcademicsOverview() {
       to: "/academics/subjects" as const,
       icon: BookOpen,
       title: "Subjects",
-      description: "O-Level and A-Level subjects with departments, codes and papers.",
+      description: "Manage subjects, departments and papers.",
       stat: `${data?.subjects.length ?? 0} subjects`,
       detail: `${data?.departments.length ?? 0} departments`,
     },
@@ -50,7 +50,7 @@ function AcademicsOverview() {
       to: "/academics/calendar" as const,
       icon: CalendarRange,
       title: "Years & terms",
-      description: "Academic years, terms and the current term date settings.",
+      description: "Set academic years, terms and key dates.",
       stat: `${data?.academicYears.length ?? 0} years`,
       detail: `${data?.terms.length ?? 0} terms`,
     },
@@ -58,7 +58,7 @@ function AcademicsOverview() {
       to: "/academics/grading" as const,
       icon: ListChecks,
       title: "Grading",
-      description: "O-Level and A-Level grading criteria and identifier descriptors.",
+      description: "Configure grade bands and identifiers.",
       stat: `${data?.gradingScales.length ?? 0} grade bands`,
       detail: `${data?.identifierScales.length ?? 0} identifier bands`,
     },
@@ -66,7 +66,7 @@ function AcademicsOverview() {
       to: "/academics/allocations" as const,
       icon: Users,
       title: "Allocations",
-      description: "Allocate teachers to subjects, papers, classes and streams.",
+      description: "Assign teachers to subjects and classes.",
       stat: `${data?.allocations.length ?? 0} allocations`,
       detail: `${data?.teachers.length ?? 0} teachers`,
     },
@@ -77,18 +77,36 @@ function AcademicsOverview() {
       <PageHeader
         eyebrow="Setup"
         title="Academic setup"
-        description="Everything that defines how your school runs day to day. Start with classes, then subjects, then the calendar, grading and teacher allocations."
+        description="Manage classes, subjects, the calendar, grading and teacher assignments."
       />
 
+      <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
+        {[
+          { label: "Classes", value: data?.classes.length ?? 0, styles: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" },
+          { label: "Subjects", value: data?.subjects.length ?? 0, styles: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" },
+          { label: "Allocations", value: data?.allocations.length ?? 0, styles: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" },
+        ].map((stat) => (
+          <div key={stat.label} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}>
+            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">{stat.label}</span>
+            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">{stat.value}</span>
+          </div>
+        ))}
+      </div>
+
+      <section aria-labelledby="academic-areas-heading">
+      <div className="mb-3">
+        <h2 id="academic-areas-heading" className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Setup areas</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Choose an area to view or update its details.</p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => (
           <Link
             key={card.to}
             to={card.to}
-            className="group flex flex-col rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-colors duration-150 hover:border-primary/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="group flex min-h-44 flex-col rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <span className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary transition-transform duration-150 group-hover:scale-105">
                 <card.icon className="h-4.5 w-4.5" aria-hidden="true" />
               </span>
               <span className="text-sm font-semibold text-foreground">{card.title}</span>
@@ -108,6 +126,7 @@ function AcademicsOverview() {
           </Link>
         ))}
       </div>
+      </section>
     </div>
   );
 }

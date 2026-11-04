@@ -5,9 +5,11 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { clearCachedUser } from "@/hooks/useCurrentUser";
-
-/** Idle time after which an authenticated session is ended. */
-export const SESSION_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+import {
+  clearSessionState,
+  recordSessionActivity,
+  SESSION_INACTIVITY_TIMEOUT_MS,
+} from "@/lib/session";
 
 const ACTIVITY_EVENTS = [
   "mousemove",
@@ -20,11 +22,16 @@ const ACTIVITY_EVENTS = [
 ] as const;
 
 /**
- * Ends the Supabase session after 30 minutes without user activity.
+ * Guards the authenticated session for as long as the shell is mounted.
  *
- * Mounted inside the authenticated shell so it only runs for signed-in users.
- * Any interaction resets the timer; expiry signs out, clears cached user data,
- * and redirects to the sign-in page.
+ * - Sliding 30-minute inactivity expiry: any interaction resets the timer, so
+ *   the session never expires while the system is in use. When the window
+ *   elapses the user is signed out and returned to the sign-in page.
+ * - Session-presence guard: a user sitting on an authenticated route without a
+ *   real Supabase session (expired, cleared in another tab, or wiped) is signed
+ *   out too — you cannot stay "logged in" without a session.
+ *
+ * Mounted inside AppShell, so it only runs for signed-in users.
  */
 export function useSessionTimeout() {
   const navigate = useNavigate();
@@ -43,22 +50,19 @@ export function useSessionTimeout() {
       }
     };
 
-    const expireSession = async () => {
+    const endSession = async (reason: "inactivity" | "no-session") => {
       if (signingOutRef.current) return;
       signingOutRef.current = true;
       clearTimer();
 
-      try {
-        await queryClient.cancelQueries();
-        queryClient.clear();
-        clearCachedUser();
-        await supabase.auth.signOut();
-      } catch {
-        // Best-effort cleanup; always send the user back to sign in.
-      } finally {
-        toast.info("You were signed out after 30 minutes of inactivity.");
-        navigate({ to: "/auth", replace: true });
-      }
+      await clearSessionState({ queryClient });
+
+      toast.info(
+        reason === "inactivity"
+          ? "You were signed out after 30 minutes of inactivity."
+          : "Your session is no longer valid. Please sign in again.",
+      );
+      navigate({ to: "/auth", replace: true });
     };
 
     const resetTimer = () => {
@@ -67,28 +71,56 @@ export function useSessionTimeout() {
       // timers on every pixel of movement.
       if (now - lastResetRef.current < 1000) return;
       lastResetRef.current = now;
+      recordSessionActivity();
       clearTimer();
-      timerRef.current = window.setTimeout(expireSession, SESSION_INACTIVITY_TIMEOUT_MS);
+      timerRef.current = window.setTimeout(
+        () => void endSession("inactivity"),
+        SESSION_INACTIVITY_TIMEOUT_MS,
+      );
     };
 
-    resetTimer();
+    // Confirms a real Supabase session exists. Kicks out users who are "logged
+    // in" only in UI state (cached profile, previous tab) but have no session.
+    const ensureSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!data?.session) {
+          void endSession("no-session");
+        }
+      } catch {
+        // Network blip: do not kick the user out. The next interaction or
+        // route change re-checks presence.
+      }
+    };
 
     const handleActivity = () => resetTimer();
     const handleVisibilityChange = () => {
-      if (!document.hidden) resetTimer();
+      if (!document.hidden) {
+        // User returned to the tab: refresh activity and make sure the session
+        // still exists (it may have expired or been cleared elsewhere).
+        resetTimer();
+        void ensureSession();
+      }
     };
 
+    // Initialise the sliding timer and validate the session exists.
+    resetTimer();
+    void ensureSession();
+
     ACTIVITY_EVENTS.forEach((event) => {
-      window.addEventListener(event, handleActivity, { passive: true, capture: true });
+      window.addEventListener(event, handleActivity, {
+        passive: true,
+        capture: true,
+      });
     });
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       clearTimer();
       ACTIVITY_EVENTS.forEach((event) => {
         window.removeEventListener(event, handleActivity, { capture: true });
       });
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [navigate, queryClient]);
 }

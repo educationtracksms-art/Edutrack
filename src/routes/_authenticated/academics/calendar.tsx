@@ -231,14 +231,27 @@ function CalendarPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Academic setup"
         title="Years & terms"
-        description="Set the academic calendar, control assessment periods and keep the next term date current."
+        description="Manage academic years, terms, assessment periods and key dates."
       />
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[
+          { label: "Academic years", value: data?.academicYears.length ?? 0, styles: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" },
+          { label: "Terms", value: data?.terms.length ?? 0, styles: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" },
+          { label: "Periods", value: periodsQuery.data?.length ?? 0, styles: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" },
+        ].map((stat) => (
+          <div key={stat.label} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}>
+            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">{stat.label}</span>
+            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">{stat.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
       {hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]) && (
-        <Panel title="Assessment periods" className="mb-4">
+        <Panel title="Assessment periods" className="h-full">
           <p className="mb-3 text-sm text-muted-foreground">Activate a period for reports and open or lock mark entry.</p>
           <div className="space-y-2">
             {(periodsQuery.data ?? []).map((period: any) => {
@@ -246,19 +259,22 @@ function CalendarPage() {
               const label = period.exam_type.replaceAll("_", " ");
               return <div key={`${period.term_id}-${period.exam_type}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3"><span className="capitalize font-medium">{term} · {label}</span><div className="flex gap-2"><button className={`rounded-md border px-3 py-1 text-sm font-medium ${period.is_active ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`} onClick={() => periodMutation.mutate({ termId: period.term_id, examType: period.exam_type, isActive: !period.is_active, isLocked: false })}>{period.is_active ? "Deactivate" : "Activate"}</button>{period.is_active && <button className={`rounded-md border px-3 py-1 text-sm font-medium ${period.is_locked ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100" : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"}`} onClick={() => periodMutation.mutate({ termId: period.term_id, examType: period.exam_type, isActive: true, isLocked: !period.is_locked })}>{period.is_locked ? "Open entry" : "Lock entry"}</button>}</div></div>;
             })}
+            {(periodsQuery.data ?? []).length === 0 && (
+              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">No assessment periods are configured yet.</p>
+            )}
           </div>
         </Panel>
       )}
 
-      <Panel title="Next term date" className="mb-4">
+      <Panel title="Next term date" className="h-full">
         <form
-          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900 dark:bg-amber-950/20 sm:flex sm:items-end sm:gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             saveNextTermDate.mutate();
           }}
         >
-          <Field label="Next term begins on">
+          <Field label="Next term begins on" className="min-w-0 flex-1">
             <input
               type="date"
               className={inputClass}
@@ -281,15 +297,22 @@ function CalendarPage() {
           </p>
         )}
       </Panel>
-        <Panel title="Academic years">
+      </div>
+      <section aria-labelledby="calendar-setup-heading">
+        <div className="mb-3">
+          <h2 id="calendar-setup-heading" className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Calendar setup</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Create the year first, then add its terms.</p>
+        </div>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <Panel title="Academic years" className="h-full">
           <form
-            className="mb-3 space-y-2"
+            className="mb-5 rounded-xl border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900 dark:bg-sky-950/20 sm:flex sm:items-end sm:gap-3"
             onSubmit={(e) => {
               e.preventDefault();
               addYear.mutate();
             }}
           >
-            <Field label="Year name">
+            <Field label="Year name" className="min-w-0 flex-1">
               <input
                 required
                 className={inputClass}
@@ -301,11 +324,15 @@ function CalendarPage() {
               Create year
             </Btn>
           </form>
-          <ul className="space-y-1 text-sm">
+          <div className="mb-3 flex items-center justify-between border-t border-border pt-4">
+            <h3 className="text-sm font-semibold text-foreground">Saved years · Output</h3>
+            <span className="text-xs text-muted-foreground">{data?.academicYears.length ?? 0} total</span>
+          </div>
+          <ul className="space-y-2 text-sm">
             {(data?.academicYears ?? []).map((item) => (
               <li
                 key={item.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-background px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <span className="flex items-center gap-2">
                   <span>{item.name}</span>
@@ -321,14 +348,14 @@ function CalendarPage() {
               </li>
             ))}
             {(data?.academicYears ?? []).length === 0 && (
-              <p className="text-sm text-muted-foreground">No academic years yet.</p>
+              <li className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">No academic years yet.</li>
             )}
           </ul>
         </Panel>
 
-        <Panel title="Terms">
+        <Panel title="Terms" className="h-full">
           <form
-            className="mb-3 space-y-2"
+            className="mb-5 grid gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20 sm:grid-cols-2 xl:grid-cols-4"
             onSubmit={(e) => {
               e.preventDefault();
               addTerm.mutate();
@@ -362,7 +389,7 @@ function CalendarPage() {
                 <option value="Term 3">Term 3</option>
               </select>
             </Field>
-            <div className="grid gap-2 md:grid-cols-2">
+            <div className="grid gap-2 md:grid-cols-2 xl:col-span-2">
               <Field label="Start date">
                 <input
                   required
@@ -382,15 +409,21 @@ function CalendarPage() {
                 />
               </Field>
             </div>
-            <Btn type="submit" variant="accent" disabled={addTerm.isPending}>
-              Create term
-            </Btn>
+            <div className="sm:col-span-2 xl:col-span-4">
+              <Btn type="submit" variant="accent" disabled={addTerm.isPending}>
+                Create term
+              </Btn>
+            </div>
           </form>
-          <ul className="space-y-1 text-sm">
+          <div className="mb-3 flex items-center justify-between border-t border-border pt-4">
+            <h3 className="text-sm font-semibold text-foreground">Saved terms · Output</h3>
+            <span className="text-xs text-muted-foreground">{data?.terms.length ?? 0} total</span>
+          </div>
+          <ul className="space-y-2 text-sm">
             {(data?.terms ?? []).map((item) => (
               <li
                 key={item.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-background px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <span className="flex items-center gap-2">
                   <span>{item.name}</span>
@@ -406,10 +439,12 @@ function CalendarPage() {
               </li>
             ))}
             {(data?.terms ?? []).length === 0 && (
-              <p className="text-sm text-muted-foreground">No terms yet.</p>
+              <li className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">No terms yet.</li>
             )}
           </ul>
         </Panel>
+      </div>
+      </section>
     </div>
   );
 }

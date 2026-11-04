@@ -1,6 +1,8 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
-import { currentUserQueryOptions } from "@/hooks/useCurrentUser";
+import { currentUserQueryOptions, type CurrentUser } from "@/hooks/useCurrentUser";
+import { supabase } from "@/integrations/supabase/client";
+import { clearSessionState, isSessionExpired } from "@/lib/session";
 import { getSchoolSubscriptionStatus } from "@/lib/subscription.functions";
 import { setAccessNotice } from "@/lib/access-notice";
 
@@ -8,9 +10,25 @@ export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   pendingComponent: NavigationPending,
   beforeLoad: async ({ location, context }) => {
+    // A user on an authenticated route must have a real Supabase session. A user
+    // who is "logged in" only in UI state (cached profile, another tab) but has
+    // no session (expired, cleared elsewhere, wiped) is signed out here.
+    const { data: authSession } = await supabase.auth.getSession();
+    if (!authSession?.session) {
+      await clearSessionState({ queryClient: context.queryClient });
+      throw redirect({ to: "/auth" });
+    }
+
+    // Belt-and-suspenders: the shell timer normally expires idle sessions, but
+    // check here too for tabs left idle past the 30-minute window.
+    if (isSessionExpired()) {
+      await clearSessionState({ queryClient: context.queryClient });
+      throw redirect({ to: "/auth" });
+    }
+
     // Resolve the same cached user query used by AppShell so authentication and
     // profile loading happen once per session instead of twice on first load.
-    const cachedUser = context.queryClient.getQueryData(["current-user"]);
+    const cachedUser = context.queryClient.getQueryData<CurrentUser | null>(["current-user"]);
     const currentUser = cachedUser ?? await context.queryClient.fetchQuery(currentUserQueryOptions());
     if (!currentUser) throw redirect({ to: "/auth" });
     if (currentUser.mustChangePassword && location.pathname !== "/change-password") {

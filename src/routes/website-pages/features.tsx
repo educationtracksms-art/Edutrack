@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-type Feature = {
+export type Feature = {
   slug: string;
   title: string;
   summary: string;

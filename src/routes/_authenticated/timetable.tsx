@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_authenticated/timetable")({
     if (!userId) throw redirect({ to: "/auth" });
   },
   head: () => ({
-    meta: [{ title: "Timetable Â· EduTrack" }],
+    meta: [{ title: "Timetable · EduTrack" }],
   }),
   component: TimetablePage,
 });
@@ -30,6 +30,7 @@ type PeriodRow = {
   end_time: string | null;
   is_break: boolean;
   is_lunch: boolean;
+  is_active?: boolean;
 };
 
 type TimetableSettingsRow = {
@@ -146,7 +147,7 @@ function TimetablePage() {
         allocations: allocations.data ?? [],
         years: years.data ?? [],
         settings: settings.data ?? null,
-        periods: periods.data ?? [],
+        periods: (periods.data ?? []) as unknown as PeriodRow[],
       };
     },
   });
@@ -399,10 +400,10 @@ function TimetablePage() {
   useEffect(() => {
     if (!data) return;
     setSettingsDraft({
-      break_start: data.settings?.break_start ?? null,
-      break_end: data.settings?.break_end ?? null,
-      lunch_start: data.settings?.lunch_start ?? null,
-      lunch_end: data.settings?.lunch_end ?? null,
+      break_start: (data.settings as TimetableSettingsRow | null)?.break_start ?? null,
+      break_end: (data.settings as TimetableSettingsRow | null)?.break_end ?? null,
+      lunch_start: (data.settings as TimetableSettingsRow | null)?.lunch_start ?? null,
+      lunch_end: (data.settings as TimetableSettingsRow | null)?.lunch_end ?? null,
     });
     setPeriodDrafts(
       [...periodRows]
@@ -481,17 +482,61 @@ function TimetablePage() {
       if (form.end_time <= form.start_time) {
         throw new Error("Lesson end time must be after the start time");
       }
-      const conflictingLesson = (data?.entries ?? []).find((entry) => {
+      const periodSlot = (data?.periods ?? []).find(
+        (p: any) => p.period_order === Number(form.period)
+      );
+      if (periodSlot) {
+        if (
+          form.start_time &&
+          periodSlot.start_time &&
+          form.start_time < periodSlot.start_time
+        ) {
+          throw new Error(
+            `Lesson start time must not be before the period start time (${periodSlot.start_time})`
+          );
+        }
+        if (
+          form.end_time &&
+          periodSlot.end_time &&
+          form.end_time > periodSlot.end_time
+        ) {
+          throw new Error(
+            `Lesson end time must not be after the period end time (${periodSlot.end_time})`
+          );
+        }
+      }
+      const breakLunchOverlap = (data?.periods ?? []).some(
+        (p: any) =>
+          (p.is_break || p.is_lunch) &&
+          p.period_order === Number(form.period)
+      );
+      if (breakLunchOverlap) {
+        throw new Error("Cannot schedule a lesson during a break or lunch period.");
+      }
+      const conflictingTeacher = (data?.entries ?? []).find((entry) => {
         if (form.id && entry.id === form.id) return false;
         return (
           entry.day_of_week === Number(form.day_of_week) &&
           entry.period === Number(form.period) &&
-          entry.teacher_id === form.teacher_id &&
-          entry.stream_id !== form.stream_id
+          entry.teacher_id === form.teacher_id
         );
       });
-      if (conflictingLesson) {
-        throw new Error("This teacher is already assigned to another stream in that period.");
+      if (conflictingTeacher) {
+        throw new Error("This teacher is already scheduled for another lesson in that period.");
+      }
+      const conflictingClass = (data?.entries ?? []).find((entry) => {
+        if (form.id && entry.id === form.id) return false;
+        return (
+          entry.day_of_week === Number(form.day_of_week) &&
+          entry.period === Number(form.period) &&
+          entry.class_id === form.class_id &&
+          entry.stream_id === (form.stream_id || null)
+        );
+      });
+      if (conflictingClass) {
+        throw new Error(
+          "This class/stream already has a lesson scheduled in that period."
+        );
       }
 
       const payload = {
@@ -609,7 +654,7 @@ function TimetablePage() {
       if (!schoolId || !currentTerm || !currentYear) {
         throw new Error("Create an academic year and term first");
       }
-      const slots = periodRows.filter((row) => !row.is_break && !row.is_lunch);
+      const slots = periodRows.filter((row): row is PeriodRow & { start_time: string; end_time: string } => !row.is_break && !row.is_lunch && row.start_time !== null && row.end_time !== null);
       if (!slots.length) throw new Error("Add active lesson periods before generating a timetable");
       if (!(data?.allocations ?? []).length)
         throw new Error("Create teacher allocations before generating a timetable");
@@ -620,7 +665,19 @@ function TimetablePage() {
           `stream:${entry.day_of_week}:${entry.period}:${entry.stream_id ?? ""}`,
         ]),
       );
-      const generated: Array<Record<string, unknown>> = [];
+      const generated: Array<{
+        school_id: string;
+        academic_year_id: string;
+        term_id: string;
+        class_id: string;
+        stream_id: string | null;
+        subject_id: string;
+        teacher_id: string;
+        day_of_week: number;
+        period: number;
+        start_time: string;
+        end_time: string;
+      }> = [];
       let skipped = 0;
 
       for (const allocation of data?.allocations ?? []) {
@@ -636,7 +693,9 @@ function TimetablePage() {
         const targets = streams.length
           ? streams
           : allocation.stream_id
-            ? [{ id: allocation.stream_id }]
+            ? (data?.streams ?? []).some((s) => s.id === allocation.stream_id)
+              ? [{ id: allocation.stream_id }]
+              : []
             : [{ id: null }];
         for (const stream of targets) {
           const existingCount = (data?.entries ?? []).filter(
@@ -1087,9 +1146,9 @@ function TimetablePage() {
                                         </span>
                                         <span className="text-[10px] leading-tight text-muted-foreground">
                                           {column.classLabel} {column.streamLabel}
-                                          {" · "}
+                                          {" ï¿½ "}
                                           {teacherInitials(byId, entry.teacher_id)}
-                                          {entry.classroom ? ` · ${entry.classroom}` : ""}
+                                          {entry.classroom ? ` ï¿½ ${entry.classroom}` : ""}
                                         </span>
                                       </button>
                                     ) : (
@@ -1481,7 +1540,7 @@ function TimetablePage() {
                   {teacherInitials(byId, selectedEntry.teacher_id)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {DAYS[selectedEntry.day_of_week - 1]} Â· P{selectedEntry.period} Â·{" "}
+                  {DAYS[selectedEntry.day_of_week - 1]}  ï¿½ P{selectedEntry.period} ï¿½ {" "}
                   {selectedEntry.start_time} - {selectedEntry.end_time}
                 </p>
                 <div className="flex gap-2">
@@ -1576,18 +1635,21 @@ function findNextSlot({
 }
 
 function countConflicts(entries: any[]) {
-  const seen = new Set<string>();
+  const seenTeacher = new Set<string>();
+  const seenClass = new Set<string>();
+  const seenStream = new Set<string>();
   let conflicts = 0;
   for (const entry of entries) {
-    const key = JSON.stringify({
-      day: entry.day_of_week,
-      period: entry.period,
-      teacher: entry.teacher_id,
-      class: entry.class_id,
-      stream: entry.stream_id ?? "",
-    });
-    if (seen.has(key)) conflicts += 1;
-    seen.add(key);
+    const teacherKey = `${entry.day_of_week}:${entry.period}:${entry.teacher_id}`;
+    const classKey = `${entry.day_of_week}:${entry.period}:${entry.class_id}`;
+    const streamKey = `${entry.day_of_week}:${entry.period}:${entry.stream_id ?? ""}`;
+    if (seenTeacher.has(teacherKey)) conflicts += 1;
+    seenTeacher.add(teacherKey);
+    if (seenClass.has(classKey)) conflicts += 1;
+    seenClass.add(classKey);
+    if (seenStream.has(streamKey)) conflicts += 1;
+    seenStream.add(streamKey);
   }
   return conflicts;
 }
+

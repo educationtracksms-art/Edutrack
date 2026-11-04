@@ -622,7 +622,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [isMobile, pathname]);
 
   const items = NAV.filter((item) => hasAny(me?.roles, item.roles))
-    .filter((item) => item.to !== "/users" || !isSuperAdmin)
     .filter((item) => !isLockedSchoolAdmin || item.to === "/subscription")
     .filter((item) => (item.module ? (moduleMap?.get(item.module) ?? true) : true))
     .sort(

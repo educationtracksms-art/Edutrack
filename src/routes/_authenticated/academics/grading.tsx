@@ -22,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/academics/grading")({
 
 function GradingPage() {
   const { schoolId, allowed, data, refresh } = useAcademicsPage();
+  const [activeOutput, setActiveOutput] = useState<"o_level" | "a_level" | "identifiers">("o_level");
   const saveGradingScaleFn = useServerFn(upsertGradingScale);
   const deleteGradingScaleFn = useServerFn(deleteGradingScale);
   const saveIdentifierScaleFn = useServerFn(upsertIdentifierScale);
@@ -183,15 +184,33 @@ function GradingPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Academic setup"
         title="Grading"
-        description="Grade bands for O-Level and A-Level results, plus identifier descriptors for report cards."
+        description="Set score bands for O-Level and A-Level grades, and descriptors for report cards."
       />
-      <Panel title="O-level grading criteria" className="mt-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[
+          { label: "O-Level bands", value: data?.gradingScales.filter((item) => item.education_level !== "advanced").length ?? 0, styles: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" },
+          { label: "A-Level bands", value: data?.gradingScales.filter((item) => item.education_level === "advanced").length ?? 0, styles: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" },
+          { label: "Identifiers", value: data?.identifierScales.length ?? 0, styles: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300" },
+        ].map((stat) => (
+          <div key={stat.label} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}>
+            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">{stat.label}</span>
+            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">{stat.value}</span>
+          </div>
+        ))}
+      </div>
+      <section aria-labelledby="grading-forms-heading" className="space-y-4">
+        <div>
+          <h2 id="grading-forms-heading" className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Forms · Add or edit</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Configure O-Level grades, A-Level grades and report-card identifiers.</p>
+        </div>
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+      <Panel title="O-Level grading criteria" className="order-1 h-full">
         <form
-          className="mb-4 grid gap-3 lg:grid-cols-4"
+          className="grid gap-3 rounded-xl border border-sky-200 bg-sky-50/50 p-3 dark:border-sky-900 dark:bg-sky-950/20 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             saveOLevelGradingScale.mutate();
@@ -232,7 +251,7 @@ function GradingPage() {
               placeholder="100"
             />
           </Field>
-          <div className="lg:col-span-2">
+          <div className="sm:col-span-2">
             <Field label="Grade descriptor">
               <input
                 required
@@ -248,7 +267,7 @@ function GradingPage() {
               />
             </Field>
           </div>
-          <div className="flex items-end gap-2 lg:col-span-4">
+          <div className="flex items-end gap-2 sm:col-span-2">
             <Btn type="submit" variant="accent" disabled={saveOLevelGradingScale.isPending}>
               {oLevelGradingForm.id ? "Save changes" : "Add O-level grade"}
             </Btn>
@@ -270,68 +289,11 @@ function GradingPage() {
             )}
           </div>
         </form>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">Grade</th>
-                <th className="pb-2">Score range</th>
-                <th className="pb-2">Grade descriptor</th>
-                <th className="pb-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {(
-                (data?.gradingScales ?? []).filter((item) => item.education_level !== "advanced") ??
-                []
-              ).map((item) => (
-                <tr key={item.id} className="border-t border-border align-top">
-                  <td className="py-2 font-medium">{item.grade}</td>
-                  <td>
-                    {item.min_score} - {item.max_score}
-                  </td>
-                  <td>{item.grade_descriptor}</td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Btn
-                        variant="ghost"
-                        onClick={() =>
-                          setOLevelGradingForm({
-                            id: item.id,
-                            grade: item.grade,
-                            min_score: String(item.min_score),
-                            max_score: String(item.max_score),
-                            grade_descriptor: item.grade_descriptor,
-                          })
-                        }
-                      >
-                        Edit
-                      </Btn>
-                      <Btn variant="ghost" onClick={() => removeScale.mutate(item.id)}>
-                        Delete
-                      </Btn>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(
-                (data?.gradingScales ?? []).filter((item) => item.education_level !== "advanced") ??
-                []
-              ).length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                    No O-level grading criteria set yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </Panel>
 
-      <Panel title="A-level grading criteria" className="mt-4">
+      <Panel title="A-Level grading criteria" className="order-3 h-full">
         <form
-          className="mb-4 grid gap-3 lg:grid-cols-4"
+          className="grid gap-3 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900 dark:bg-violet-950/20 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             saveALevelGradingScale.mutate();
@@ -384,7 +346,7 @@ function GradingPage() {
               placeholder="4"
             />
           </Field>
-          <div className="flex items-end gap-2 lg:col-span-4">
+          <div className="flex items-end gap-2 sm:col-span-2">
             <Btn type="submit" variant="accent" disabled={saveALevelGradingScale.isPending}>
               {aLevelGradingForm.id ? "Save changes" : "Add A-level grade"}
             </Btn>
@@ -406,68 +368,11 @@ function GradingPage() {
             )}
           </div>
         </form>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">Grade</th>
-                <th className="pb-2">Score range</th>
-                <th className="pb-2">Points</th>
-                <th className="pb-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {(
-                (data?.gradingScales ?? []).filter((item) => item.education_level === "advanced") ??
-                []
-              ).map((item) => (
-                <tr key={item.id} className="border-t border-border align-top">
-                  <td className="py-2 font-medium">{item.grade}</td>
-                  <td>
-                    {item.min_score} - {item.max_score}
-                  </td>
-                  <td>{item.points ?? "—"}</td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Btn
-                        variant="ghost"
-                        onClick={() =>
-                          setALevelGradingForm({
-                            id: item.id,
-                            grade: item.grade,
-                            min_score: String(item.min_score),
-                            max_score: String(item.max_score),
-                            points: String(item.points ?? ""),
-                          })
-                        }
-                      >
-                        Edit
-                      </Btn>
-                      <Btn variant="ghost" onClick={() => removeScale.mutate(item.id)}>
-                        Delete
-                      </Btn>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(
-                (data?.gradingScales ?? []).filter((item) => item.education_level === "advanced") ??
-                []
-              ).length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                    No A-level grading criteria set yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </Panel>
 
-      <Panel title="Identifier descriptor" className="mt-4">
+      <Panel title="O-Level identifiers" className="order-2 h-full">
         <form
-          className="mb-4 grid gap-3 lg:grid-cols-4"
+          className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             saveIdentifierScale.mutate();
@@ -503,7 +408,7 @@ function GradingPage() {
               placeholder="3.0"
             />
           </Field>
-          <div className="lg:col-span-2">
+          <div className="sm:col-span-2">
             <Field label="Descriptor">
               <input
                 required
@@ -516,7 +421,7 @@ function GradingPage() {
               />
             </Field>
           </div>
-          <div className="flex items-end gap-2 lg:col-span-4">
+          <div className="flex items-end gap-2 sm:col-span-2">
             <Btn type="submit" variant="accent" disabled={saveIdentifierScale.isPending}>
               {identifierForm.id ? "Save changes" : "Add identifier"}
             </Btn>
@@ -538,52 +443,113 @@ function GradingPage() {
             )}
           </div>
         </form>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+      </Panel>
+      </div>
+      </section>
+
+      <Panel title="Saved grading outputs">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Grading scales and identifiers</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Choose a category to view, edit or remove its entries.</p>
+          </div>
+          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            {(data?.gradingScales.length ?? 0) + (data?.identifierScales.length ?? 0)} entries
+          </span>
+        </div>
+        <div role="tablist" aria-label="Grading output category" className="mb-4 flex w-full gap-1 overflow-x-auto rounded-xl border border-border bg-muted/50 p-1 sm:w-fit">
+          {[
+            { id: "o_level" as const, label: "O-Level", count: data?.gradingScales.filter((item) => item.education_level !== "advanced").length ?? 0, colors: "border-sky-400 bg-sky-50 text-sky-800 dark:border-sky-500 dark:bg-sky-950/50 dark:text-sky-200" },
+            { id: "identifiers" as const, label: "Identifiers", count: data?.identifierScales.length ?? 0, colors: "border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-500 dark:bg-amber-950/50 dark:text-amber-200" },
+            { id: "a_level" as const, label: "A-Level", count: data?.gradingScales.filter((item) => item.education_level === "advanced").length ?? 0, colors: "border-violet-400 bg-violet-50 text-violet-800 dark:border-violet-500 dark:bg-violet-950/50 dark:text-violet-200" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`grading-tab-${tab.id}`}
+              aria-controls="grading-output-panel"
+              aria-selected={activeOutput === tab.id}
+              onClick={() => setActiveOutput(tab.id)}
+              className={`flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-all sm:flex-none ${tab.colors} ${activeOutput === tab.id ? "ring-2 ring-current ring-offset-1 ring-offset-background shadow-sm" : "opacity-80 hover:opacity-100"}`}
+            >
+              {tab.label}
+              <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs tabular-nums">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+        <div
+          id="grading-output-panel"
+          role="tabpanel"
+          aria-labelledby={`grading-tab-${activeOutput}`}
+          className="overflow-x-auto rounded-xl border border-border"
+        >
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="pb-2">Identifier</th>
-                <th className="pb-2">Score range</th>
-                <th className="pb-2">Descriptor</th>
-                <th className="pb-2" />
+                <th className="px-3 py-3 font-semibold">Type</th>
+                <th className="px-3 py-3 font-semibold">Grade / identifier</th>
+                <th className="px-3 py-3 font-semibold">Score range</th>
+                <th className="px-3 py-3 text-center font-semibold">Points</th>
+                <th className="px-3 py-3 font-semibold">Descriptor</th>
+                <th className="px-3 py-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {(data?.identifierScales ?? []).map((item) => (
-                <tr key={item.id} className="border-t border-border">
-                  <td className="py-2 font-medium">{item.identifier}</td>
-                  <td>
-                    {item.min_score} - {item.max_score}
-                  </td>
-                  <td>{item.descriptor}</td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Btn
-                        variant="ghost"
-                        onClick={() =>
-                          setIdentifierForm({
-                            id: item.id,
-                            identifier: String(item.identifier),
-                            min_score: String(item.min_score),
-                            max_score: String(item.max_score),
-                            descriptor: item.descriptor,
-                          })
-                        }
-                      >
-                        Edit
-                      </Btn>
-                      <Btn variant="ghost" onClick={() => removeIdentifierScale.mutate(item.id)}>
-                        Delete
-                      </Btn>
+            <tbody className="divide-y divide-border">
+              {activeOutput === "o_level" && (data?.gradingScales ?? [])
+                .filter((item) => item.education_level !== "advanced")
+                .map((item) => (
+                  <tr key={`o-${item.id}`} className="align-top transition-colors hover:bg-muted/30">
+                    <td className="px-3 py-3"><Pill tone="muted">O-Level</Pill></td>
+                    <td className="px-3 py-3 font-semibold text-foreground">{item.grade}</td>
+                    <td className="px-3 py-3 tabular-nums">{item.min_score}–{item.max_score}</td>
+                    <td className="px-3 py-3 text-center text-muted-foreground">—</td>
+                    <td className="max-w-md px-3 py-3 text-muted-foreground">{item.grade_descriptor}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-1">
+                        <Btn variant="ghost" onClick={() => setOLevelGradingForm({ id: item.id, grade: item.grade, min_score: String(item.min_score), max_score: String(item.max_score), grade_descriptor: item.grade_descriptor })}>Edit</Btn>
+                        <Btn variant="ghost" onClick={() => removeScale.mutate(item.id)}>Delete</Btn>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              {activeOutput === "identifiers" && (data?.identifierScales ?? []).map((item) => (
+                <tr key={`identifier-${item.id}`} className="align-top transition-colors hover:bg-muted/30">
+                  <td className="px-3 py-3"><Pill tone="muted">O-Level identifier</Pill></td>
+                  <td className="px-3 py-3 font-semibold text-foreground">{item.identifier}</td>
+                  <td className="px-3 py-3 tabular-nums">{item.min_score}–{item.max_score}</td>
+                  <td className="px-3 py-3 text-center text-muted-foreground">—</td>
+                  <td className="px-3 py-3 text-muted-foreground">{item.descriptor}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end gap-1">
+                      <Btn variant="ghost" onClick={() => setIdentifierForm({ id: item.id, identifier: String(item.identifier), min_score: String(item.min_score), max_score: String(item.max_score), descriptor: item.descriptor })}>Edit</Btn>
+                      <Btn variant="ghost" onClick={() => removeIdentifierScale.mutate(item.id)}>Delete</Btn>
                     </div>
                   </td>
                 </tr>
               ))}
-              {(data?.identifierScales ?? []).length === 0 && (
+              {activeOutput === "a_level" && (data?.gradingScales ?? [])
+                .filter((item) => item.education_level === "advanced")
+                .map((item) => (
+                  <tr key={`a-${item.id}`} className="align-top transition-colors hover:bg-muted/30">
+                    <td className="px-3 py-3"><Pill tone="muted">A-Level</Pill></td>
+                    <td className="px-3 py-3 font-semibold text-foreground">{item.grade}</td>
+                    <td className="px-3 py-3 tabular-nums">{item.min_score}–{item.max_score}</td>
+                    <td className="px-3 py-3 text-center font-medium">{item.points ?? "—"}</td>
+                    <td className="px-3 py-3 text-muted-foreground">—</td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-1">
+                        <Btn variant="ghost" onClick={() => setALevelGradingForm({ id: item.id, grade: item.grade, min_score: String(item.min_score), max_score: String(item.max_score), points: String(item.points ?? "") })}>Edit</Btn>
+                        <Btn variant="ghost" onClick={() => removeScale.mutate(item.id)}>Delete</Btn>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              {((activeOutput === "o_level" && !(data?.gradingScales ?? []).some((item) => item.education_level !== "advanced")) ||
+                (activeOutput === "a_level" && !(data?.gradingScales ?? []).some((item) => item.education_level === "advanced")) ||
+                (activeOutput === "identifiers" && !(data?.identifierScales ?? []).length)) && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                    No identifier descriptor rows yet.
-                  </td>
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No {activeOutput === "o_level" ? "O-Level grades" : activeOutput === "a_level" ? "A-Level grades" : "identifiers"} added yet.</td>
                 </tr>
               )}
             </tbody>

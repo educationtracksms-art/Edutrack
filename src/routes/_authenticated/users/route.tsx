@@ -9,8 +9,13 @@ export const Route = createFileRoute("/_authenticated/users")({
     const currentUser = await context.queryClient.fetchQuery(currentUserQueryOptions());
     if (!currentUser) throw redirect({ to: "/auth" });
     const isDepartmentsPage = location.pathname.startsWith("/users/departments");
-    const allowed = currentUser.roles.includes("super_admin") || currentUser.roles.includes("school_admin") ||
-      (isDepartmentsPage && currentUser.roles.some((role) => ["head_teacher", "deputy_head_teacher", "dos"].includes(role)));
+    const canManageAccounts = currentUser.roles.some((role) =>
+      ["super_admin", "school_admin"].includes(role),
+    );
+    const canManageDepartments = currentUser.roles.some((role) =>
+      ["head_teacher", "deputy_head_teacher", "dos"].includes(role),
+    );
+    const allowed = canManageAccounts || (isDepartmentsPage && canManageDepartments);
     if (!allowed) throw redirect({ to: "/dashboard" });
   },
   head: () => ({

@@ -62,19 +62,20 @@ async function notifySchoolBilling(supabase: any, schoolId: string, title: strin
   );
 }
 
-/** Notify every DOS user in the school that marks have been submitted. */
-async function notifyDosOfSubmission(supabase: any, schoolId: string, count: number, byUserId: string) {
-  const [{ data: dosUsers, error: roleError }, { data: submitterName }] = await Promise.all([
+/** Notify school academic leadership that marks have been submitted. */
+async function notifyAcademicLeadersOfSubmission(supabase: any, schoolId: string, count: number, byUserId: string) {
+  const [{ data: leaders, error: roleError }, { data: submitterName }] = await Promise.all([
     supabase
       .from("user_roles")
       .select("user_id")
       .eq("school_id", schoolId)
-      .eq("role", "dos"),
+      .in("role", ["dos", "head_teacher", "deputy_head_teacher"]),
     supabase.from("profiles").select("full_name").eq("id", byUserId).maybeSingle(),
   ]);
   if (roleError) return;
-  const recipientIds = (dosUsers ?? []).map((row: { user_id: string }) => row.user_id);
-  // Don't notify the DOS themselves if they also submitted.
+  const leaderRows = (leaders ?? []) as Array<{ user_id: string }>;
+  const recipientIds = Array.from(new Set<string>(leaderRows.map((row) => row.user_id)));
+  // Don't notify a leader who also submitted.
   const title = "Marks submitted for your approval";
   const body = `${submitterName?.full_name ?? "A teacher"} submitted ${count} mark${count === 1 ? "" : "s"} for your review.`;
   const rows = recipientIds
@@ -450,7 +451,7 @@ async function ensureFinanceAccounts(supabase: any, schoolId: string) {
     .from("chart_of_accounts")
     .select("id, code")
     .eq("school_id", schoolId);
-  const byCode = new Map(
+  const byCode = new Map<string, string>(
     (accounts ?? []).map((row: any) => [row.code as string, row.id as string]),
   );
   return byCode;
@@ -1115,6 +1116,19 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       throw new Error("Only submitted assessments can be approved");
     }
     if (
+      existingAssessment.status === "approved" &&
+      data.status !== "approved" &&
+      data.status !== "rejected"
+    ) {
+      throw new Error("Approved assessments must be returned for correction before resubmission");
+    }
+    if (data.status === "rejected" && !["submitted", "approved"].includes(existingAssessment.status)) {
+      throw new Error("Only submitted assessments can be returned for correction");
+    }
+    if (data.status === "draft" && !["draft", "rejected", "submitted"].includes(existingAssessment.status)) {
+      throw new Error("This assessment cannot be moved back to draft");
+    }
+    if (
       data.status === "submitted" &&
       !["draft", "rejected"].includes(existingAssessment.status)
     ) {
@@ -1182,12 +1196,95 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       );
     }
     if (data.status === "submitted") {
-      await notifyDosOfSubmission(
+      await notifyAcademicLeadersOfSubmission(
         context.supabase,
         schoolId,
         1,
         context.userId,
       );
+    }
+
+    return { ok: true };
+  });
+
+export const updateFormativeMarkStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      markId: string;
+      status: "draft" | "submitted" | "approved" | "rejected";
+      reason?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data, context }) => {
+    const roles = await rolesOf(context.supabase, context.userId);
+    if (!roles.some((role) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(role))) {
+      throw new Error("Only school academic leadership can change formative mark status");
+    }
+
+    const schoolId = await schoolOf(context.supabase, context.userId);
+    if (!schoolId) throw new Error("Your account is not linked to a school");
+
+    const { data: existingMark, error: existingError } = await context.supabase
+      .from("formative_marks")
+      .select("id, school_id, status, submitted_by")
+      .eq("id", data.markId)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (!existingMark || existingMark.school_id !== schoolId) {
+      throw new Error("Formative mark not found in your school");
+    }
+
+    if (data.status === "approved" && existingMark.status !== "submitted") {
+      throw new Error("Only submitted formative marks can be approved");
+    }
+    if (existingMark.status === "approved" && data.status !== "approved" && data.status !== "rejected") {
+      throw new Error("Approved formative marks must be returned for correction before resubmission");
+    }
+    if (data.status === "rejected" && !["submitted", "approved"].includes(existingMark.status)) {
+      throw new Error("Only submitted formative marks can be returned for correction");
+    }
+    if (data.status === "draft" && !["draft", "rejected", "submitted"].includes(existingMark.status)) {
+      throw new Error("This formative mark cannot be moved back to draft");
+    }
+    if (data.status === "submitted" && !["draft", "rejected"].includes(existingMark.status)) {
+      throw new Error("Only draft or rejected formative marks can be submitted");
+    }
+    if (existingMark.status === "approved" && data.status === "draft") {
+      throw new Error("Approved formative marks must be returned for correction before editing");
+    }
+
+    const patch: Record<string, unknown> = {
+      status: data.status,
+      locked: data.status === "approved",
+      approved_by: data.status === "approved" ? context.userId : null,
+      approved_at: data.status === "approved" ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    };
+    if (data.status === "submitted") {
+      patch.submitted_by = existingMark.submitted_by ?? context.userId;
+      patch.submitted_at = new Date().toISOString();
+    }
+
+    const { data: updatedRows, error } = await (context.supabase as any)
+      .from("formative_marks")
+      .update(patch)
+      .eq("id", data.markId)
+      .eq("school_id", schoolId)
+      .eq("status", existingMark.status)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (!updatedRows?.length) throw new Error("The formative mark changed before it was updated");
+
+    await logAudit(context.supabase, context.userId, schoolId, "FORMATIVE_MARK_STATUS_CHANGED", "formative_marks", {
+      formative_mark_id: data.markId,
+      status: data.status,
+    });
+    if (data.status === "approved" && existingMark.submitted_by) {
+      await notifyTeacherOfApproval(context.supabase, schoolId, existingMark.submitted_by, 1);
+    }
+    if (data.status === "submitted") {
+      await notifyAcademicLeadersOfSubmission(context.supabase, schoolId, 1, context.userId);
     }
 
     return { ok: true };
@@ -2315,7 +2412,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
         assessment_id: data.assessmentId,
       }),
-      notifyDosOfSubmission(context.supabase, schoolId, 1, context.userId),
+      notifyAcademicLeadersOfSubmission(context.supabase, schoolId, 1, context.userId),
     ]);
 
     return { ok: true };
@@ -2496,7 +2593,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
         subject_id: validated.subject.id,
         term_id: validated.term.id,
       }),
-      notifyDosOfSubmission(context.supabase, schoolId, 1, context.userId),
+      notifyAcademicLeadersOfSubmission(context.supabase, schoolId, 1, context.userId),
     ]);
 
     return { ok: true };
@@ -2504,7 +2601,12 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
 
 export const submitAssessmentEntries = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { assessmentIds: string[]; teacherInitials?: string | null }) => data)
+  .validator((data: {
+    assessmentIds?: string[];
+    groups?: Array<{ assessmentIds: string[]; formativeMarkId: string }>;
+    formativeMarkId?: string;
+    teacherInitials?: string | null;
+  }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
     if (
@@ -2524,8 +2626,18 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
       throw new Error("Not allowed to submit assessments");
     }
 
-    if (!data.assessmentIds.length) {
+    if (data.groups && data.assessmentIds?.length) {
+      throw new Error("Choose either individual assessments or grouped assessments to submit");
+    }
+    if (data.groups?.some((group) => !group.formativeMarkId || !group.assessmentIds.length)) {
+      throw new Error("Every assessment group must include a formative mark and summative marks");
+    }
+    const assessmentIds = data.groups?.flatMap((group) => group.assessmentIds) ?? data.assessmentIds ?? [];
+    if (!assessmentIds.length) {
       throw new Error("No assessments were selected");
+    }
+    if (new Set(assessmentIds).size !== assessmentIds.length) {
+      throw new Error("An assessment can only be submitted once in a batch");
     }
 
     const schoolId = await schoolOf(context.supabase, context.userId);
@@ -2536,9 +2648,9 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
       .select(
         "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials",
       )
-      .in("id", data.assessmentIds);
+      .in("id", assessmentIds);
     if (fetchError) throw new Error(fetchError.message);
-    if (!assessments || assessments.length !== data.assessmentIds.length) {
+    if (!assessments || assessments.length !== assessmentIds.length) {
       throw new Error("One or more assessments were not found in your school");
     }
     if (assessments.some((item) => item.school_id !== schoolId)) {
@@ -2607,9 +2719,23 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
         grade_descriptor: gradeMatch.descriptor,
       };
     });
-    const { data: submittedCount, error: batchError } = await (
-      context.supabase as any
-    ).rpc("submit_assessment_batch", { p_entries: entries });
+    const entriesById = new Map(entries.map((entry) => [entry.assessment_id, entry]));
+    const rpcName = data.groups
+      ? "submit_assessment_groups"
+      : data.formativeMarkId
+        ? "submit_assessment_group"
+        : "submit_assessment_batch";
+    const rpcArgs = data.groups
+      ? {
+          p_groups: data.groups.map((group) => ({
+            formative_mark_id: group.formativeMarkId,
+            entries: group.assessmentIds.map((id) => entriesById.get(id)),
+          })),
+        }
+      : data.formativeMarkId
+        ? { p_entries: entries, p_formative_mark_id: data.formativeMarkId }
+        : { p_entries: entries };
+    const { data: submittedCount, error: batchError } = await (context.supabase as any).rpc(rpcName, rpcArgs);
     if (batchError) throw new Error(batchError.message);
     if (Number(submittedCount) !== entries.length) {
       throw new Error("The selected assessments could not be submitted");
@@ -2622,9 +2748,9 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
         schoolId,
         "ASSESSMENTS_SUBMITTED",
         "assessments",
-        { assessment_ids: data.assessmentIds },
+        { assessment_ids: assessmentIds },
       ),
-      notifyDosOfSubmission(context.supabase, schoolId, entries.length, context.userId),
+      notifyAcademicLeadersOfSubmission(context.supabase, schoolId, entries.length, context.userId),
     ]);
 
     return { ok: true };
@@ -3656,7 +3782,7 @@ export const updateBudgetStatus = createServerFn({ method: "POST" })
       patch.approved_by = context.userId;
     }
 
-    const { error } = await context.supabase.from("budgets").update(patch).eq("id", data.budgetId);
+    const { error } = await context.supabase.from("budgets").update(patch as never).eq("id", data.budgetId);
     if (error) throw new Error(error.message);
 
     await logAudit(context.supabase, context.userId, schoolId, "BUDGET_STATUS_CHANGED", "budgets", {
@@ -3887,7 +4013,7 @@ export const reviewPurchaseRequest = createServerFn({ method: "POST" })
 
     const { error } = await context.supabase
       .from("purchase_requests")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.requestId);
     if (error) throw new Error(error.message);
 
@@ -3992,7 +4118,7 @@ export const updatePurchaseRequest = createServerFn({ method: "POST" })
     if (data.remarks !== undefined) patch.remarks = data.remarks;
     const { error } = await context.supabase
       .from("purchase_requests")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.requestId)
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);
@@ -4093,7 +4219,7 @@ export const updatePurchaseOrder = createServerFn({ method: "POST" })
     if (data.remarks !== undefined) patch.remarks = data.remarks;
     const { error } = await context.supabase
       .from("purchase_orders")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.orderId)
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);
@@ -4249,7 +4375,7 @@ export const updateSupplierInvoice = createServerFn({ method: "POST" })
     if (data.dueDate !== undefined) patch.due_date = data.dueDate;
     const { error } = await context.supabase
       .from("approved_invoices")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.invoiceId)
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);
@@ -4287,7 +4413,7 @@ export const updatePaymentVoucher = createServerFn({ method: "POST" })
     if (data.remarks !== undefined) patch.remarks = data.remarks;
     const { error } = await context.supabase
       .from("payment_vouchers")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.voucherId)
       .eq("school_id", schoolId);
     if (error) throw new Error(error.message);

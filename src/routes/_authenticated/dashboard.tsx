@@ -44,7 +44,102 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
-const EMPTY_DASHBOARD = {
+const DashboardCharts = lazy(() => import("@/components/dashboard/DashboardCharts"));
+
+function DashboardChartFallback({ height = 280 }: { height?: number }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2" aria-busy="true" aria-live="polite">
+      {[0, 1, 2, 3].map((chart) => (
+        <div
+          key={chart}
+          className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
+          style={{ minHeight: height }}
+        >
+          <div className="h-4 w-36 animate-pulse rounded bg-muted" />
+          <div className="mt-6 flex h-[190px] items-end gap-3 border-b border-l border-border px-4 pb-3">
+            {[42, 68, 52, 84, 60].map((bar, index) => (
+              <div
+                key={index}
+                className="flex-1 animate-pulse rounded-t bg-primary/15"
+                style={{ height: `${bar}%` }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+      <span className="sr-only">Loading charts</span>
+    </div>
+  );
+}
+
+function DashboardDataError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-destructive/30 bg-card p-6 text-center shadow-sm">
+      <h2 className="text-base font-semibold">Dashboard charts could not load</h2>
+      <p className="mx-auto mt-2 max-w-2xl text-sm text-muted-foreground">{message}</p>
+      <button
+        type="button"
+        className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        onClick={onRetry}
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
+
+type DashboardStudentRow = {
+  id: string;
+  full_name: string;
+  status: string;
+  gender: string | null;
+  school_id: string;
+  class_id: string | null;
+  stream_id: string | null;
+};
+
+type DashboardData = {
+  schools: Array<{ id: string; name: string; status: string }>;
+  students: DashboardStudentRow[];
+  assessments: Array<{
+    id: string;
+    student_id: string;
+    subject_id: string;
+    term_id: string;
+    formative: number | null;
+    summative: number | null;
+    grade_descriptor: string | null;
+    status: "draft" | "submitted" | "approved" | "rejected";
+    school_id: string;
+  }>;
+  subjects: Array<{ id: string; name: string }>;
+  profiles: Array<{ id: string; full_name: string | null; school_id: string | null }>;
+  activity: Array<{ action: string; user_name: string | null; created_at: string }>;
+  classes: Array<{ id: string; name: string; class_teacher_id: string | null }>;
+  streams: Array<{ id: string; name: string; class_id: string | null; stream_teacher_id: string | null }>;
+  terms: Array<{ id: string; name: string; is_current: boolean; start_date?: string | null }>;
+  teacherAllocations: Array<{ subject_id: string; class_id: string | null; stream_id: string | null }>;
+  departments: Array<{ id: string; name: string }>;
+  purchaseRequests: Array<{
+    id: string;
+    request_number: string;
+    department_name: string | null;
+    item_description: string;
+    requested_amount: number;
+    approved_amount: number | null;
+    approval_status: string;
+    status: string;
+    created_at: string;
+  }>;
+};
+
+const EMPTY_DASHBOARD: DashboardData = {
   schools: [],
   students: [],
   assessments: [],
@@ -59,25 +154,6 @@ const EMPTY_DASHBOARD = {
   purchaseRequests: [],
 };
 
-const DashboardCharts = lazy(() => import("@/components/dashboard/DashboardCharts"));
-
-function DashboardChartFallback({ height = 280 }: { height?: number }) {
-  return (
-    <div
-      className="flex items-center justify-center text-sm text-muted-foreground"
-      style={{ height }}
-    />
-  );
-}
-
-type DashboardStudentRow = {
-  id: string;
-  full_name: string;
-  status: string;
-  class_id: string | null;
-  stream_id: string | null;
-};
-
 function useDashboardData(
   schoolId: string | null | undefined,
   isSuper: boolean,
@@ -85,9 +161,10 @@ function useDashboardData(
   teacherId?: string | null,
   isHod = false,
   departmentId?: string | null,
+  chartsOnly = false,
 ) {
-  return useQuery({
-    queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId, isHod, departmentId],
+  return useQuery<DashboardData>({
+    queryKey: ["dashboard", schoolId, isSuper, isTeacher, teacherId, isHod, departmentId, chartsOnly],
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
@@ -114,7 +191,7 @@ function useDashboardData(
             supabase
               .from("assessments")
               .select(
-                "id, student_id, subject_id, term_id, formative, summative, status, school_id",
+                "id, student_id, subject_id, term_id, formative, summative, grade_descriptor, status, school_id",
               )
               .order("created_at", { ascending: false })
               .limit(3000),
@@ -125,7 +202,7 @@ function useDashboardData(
           schoolQuery(
             supabase
               .from("terms")
-              .select("id, name, is_current")
+              .select("id, name, is_current, start_date")
               .order("start_date", { ascending: false })
               .limit(20),
           ),
@@ -135,13 +212,13 @@ function useDashboardData(
                 .select("subject_id, class_id, stream_id")
                 .eq("teacher_id", teacherId)
             : Promise.resolve({ data: [] as any[] }),
-          isTeacher
+          isTeacher || chartsOnly
             ? Promise.resolve({ data: [] as any[] })
             : schoolQuery(supabase.from("departments").select("id, name").limit(200)),
-          isTeacher
+          isTeacher || chartsOnly
             ? Promise.resolve({ data: [] as any[] })
             : schoolQuery(supabase.from("schools").select("id, name, status").limit(50)),
-          isTeacher
+          isTeacher || chartsOnly
             ? Promise.resolve({ data: [] as any[] })
             : schoolQuery(
                 supabase
@@ -150,7 +227,7 @@ function useDashboardData(
                   .order("full_name", { ascending: true })
                   .limit(2000),
               ),
-          isTeacher
+          isTeacher || chartsOnly
             ? Promise.resolve({ data: [] as any[] })
             : schoolQuery(
                 supabase
@@ -161,8 +238,14 @@ function useDashboardData(
               ),
         ]);
 
+      const requiredResults = [students, assessments, subjects, classes, streams, terms];
+      const failedResult = requiredResults.find((result) => result.error);
+      if (failedResult?.error) {
+        throw new Error(`Unable to load school dashboard data: ${failedResult.error.message}`);
+      }
+
       let purchaseRequestsResult: { data: any[] } = { data: [] as any[] };
-      if (!isTeacher && !isHod) {
+      if (!isTeacher && !isHod && !chartsOnly) {
         purchaseRequestsResult = await schoolQuery(
           supabase
             .from("purchase_requests")
@@ -170,7 +253,7 @@ function useDashboardData(
             .order("created_at", { ascending: false })
             .limit(200),
         );
-      } else if (!isTeacher && isHod) {
+      } else if (!isTeacher && isHod && !chartsOnly) {
         let requestsQuery = schoolQuery(
           supabase
             .from("purchase_requests")
@@ -179,7 +262,7 @@ function useDashboardData(
             .limit(200),
         );
         const departmentName = (departmentsResult.data ?? []).find(
-          (department) => department.id === departmentId,
+          (department: { id: string; name: string }) => department.id === departmentId,
         )?.name;
         requestsQuery = requestsQuery.eq("department_name", departmentName ?? "__unassigned__");
         purchaseRequestsResult = await requestsQuery;
@@ -208,43 +291,21 @@ function Dashboard() {
   const isSuper = hasAny(me?.roles, ["super_admin"]);
 
   if (isUserLoading || dashboardLoading) {
-    return (
-      <DashboardLoadingState
-        label="Loading dashboard"
-        description="Preparing your account and school data."
-      />
-    );
+    return <DashboardChartFallback />;
   }
 
   if (isSuper) return <PlatformDashboard />;
+  const isSchoolLeader = hasAny(me?.roles, [
+    "school_admin",
+    "head_teacher",
+    "deputy_head_teacher",
+    "dos",
+  ]);
   return (
-    <SchoolDashboard me={me} isTeacher={hasAny(me?.roles, ["subject_teacher", "class_teacher"])} />
-  );
-}
-
-function DashboardLoadingState({ label, description }: { label: string; description: string }) {
-  return (
-    <div className="space-y-4" aria-busy="true" aria-live="polite">
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-7">
-        <div className="h-5 w-32 animate-pulse rounded-full bg-muted" />
-        <div className="mt-3 h-8 w-64 max-w-full animate-pulse rounded-xl bg-muted" />
-        <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded-lg bg-muted/70" />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-6"
-          >
-            <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
-            <div className="mt-3 h-8 w-20 animate-pulse rounded-lg bg-muted" />
-          </div>
-        ))}
-      </div>
-      <span className="sr-only">
-        {label}: {description}
-      </span>
-    </div>
+    <SchoolDashboard
+      me={me}
+      isTeacher={!isSchoolLeader && hasAny(me?.roles, ["subject_teacher", "class_teacher"])}
+    />
   );
 }
 
@@ -258,151 +319,48 @@ function EmptyDashboardState({ title, description }: { title: string; descriptio
 }
 
 function PlatformDashboard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["platform-stats"],
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     retry: 1,
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase.rpc("platform_school_stats");
-        if (error) throw new Error(error.message);
-        return data ?? [];
-      } catch (error) {
-        console.error("Platform dashboard failed to load", error);
-        return [];
-      }
+      const { data, error } = await supabase.rpc("platform_school_stats");
+      if (error) throw new Error(error.message);
+      return data ?? [];
     },
   });
 
-  if (isLoading || !data)
+  if (isLoading)
     return (
-      <DashboardLoadingState
-        label="Loading platform metrics"
-        description="Fetching the latest school overview."
-      />
+      <DashboardChartFallback height={280} />
     );
 
-  const totalUsers = data.reduce((sum, row) => sum + Number(row.user_count), 0);
-  const totalStudents = data.reduce((sum, row) => sum + Number(row.student_count), 0);
-  const activeSchools = data.filter((row) => row.status === "active").length;
+  if (error || !data) {
+    return (
+      <DashboardDataError
+        message={error instanceof Error ? error.message : "Platform analytics are unavailable."}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
   const chart = data.map((row) => ({
     name: row.code,
+    status: row.status,
     users: Number(row.user_count),
     students: Number(row.student_count),
+    logins: Number(row.logins_30d),
   }));
 
   return (
-    <div>
-      <PageHeader
-        title="Platform overview"
-        description="Tenant, subscription and usage metrics only - academic records stay inside each school."
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Schools"
-          value={data.length}
-          hint={`${data.length - activeSchools} suspended`}
-        />
-        <Stat label="Active schools" value={activeSchools} />
-        <Stat label="Staff accounts" value={totalUsers} />
-        <Stat label="Enrolled learners" value={totalStudents} />
-      </div>
-
-      {data.length === 0 && (
-        <div className="mt-4">
-          <EmptyDashboardState
-            title="No platform data yet"
-            description="Schools, staff accounts, and learners will appear here once records are added."
-          />
-        </div>
-      )}
-
-      <Panel title="Usage by school" className="mt-4">
-        <Suspense fallback={<DashboardChartFallback />}>
-          <DashboardCharts kind="platform" data={chart} />
-        </Suspense>
-      </Panel>
-
-      <Panel title="Tenants" className="mt-4">
-        <ResponsiveTable
-          desktop={
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="pb-2">School</th>
-                  <th className="pb-2">Code</th>
-                  <th className="pb-2">Plan</th>
-                  <th className="pb-2">Status</th>
-                  <th className="pb-2">Staff</th>
-                  <th className="pb-2">Learners</th>
-                  <th className="pb-2">Logins (30d)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((row) => (
-                  <tr key={row.school_id} className="border-t border-border">
-                    <td className="py-2 font-medium">{row.school_name}</td>
-                    <td>{row.code}</td>
-                    <td className="capitalize">{row.subscription_plan}</td>
-                    <td className="capitalize">{row.status}</td>
-                    <td>{Number(row.user_count)}</td>
-                    <td>{Number(row.student_count)}</td>
-                    <td>{Number(row.logins_30d)}</td>
-                  </tr>
-                ))}
-                {data.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-6 text-center text-muted-foreground">
-                      No schools yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          }
-          mobile={
-            <>
-              {data.map((row) => (
-                <div
-                  key={row.school_id}
-                  className="rounded-2xl border border-border bg-card p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{row.school_name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Code: {row.code}</p>
-                    </div>
-                    <Pill tone={row.status === "active" ? "success" : "muted"}>{row.status}</Pill>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-xl bg-muted/50 p-3">
-                      <p className="text-xs text-muted-foreground">Plan</p>
-                      <p className="mt-1 font-medium capitalize">{row.subscription_plan}</p>
-                    </div>
-                    <div className="rounded-xl bg-muted/50 p-3">
-                      <p className="text-xs text-muted-foreground">Staff</p>
-                      <p className="mt-1 font-medium">{Number(row.user_count)}</p>
-                    </div>
-                    <div className="rounded-xl bg-muted/50 p-3">
-                      <p className="text-xs text-muted-foreground">Learners</p>
-                      <p className="mt-1 font-medium">{Number(row.student_count)}</p>
-                    </div>
-                    <div className="rounded-xl bg-muted/50 p-3">
-                      <p className="text-xs text-muted-foreground">Logins</p>
-                      <p className="mt-1 font-medium">{Number(row.logins_30d)}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </>
-          }
-        />
-      </Panel>
-    </div>
+    <Suspense fallback={<DashboardChartFallback />}>
+      <DashboardCharts kind="platform" data={chart} />
+    </Suspense>
   );
+
+
 }
 
 function TeacherDashboard({ data, me }: { data: any; me: any }) {
@@ -411,16 +369,16 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
     class_id: string | null;
     stream_id: string | null;
   }>;
-  const subjectById = new Map(
-    (data.subjects ?? []).map((subject: any) => [subject.id, subject.name as string]),
+  const subjectById = new Map<string, string>(
+    (data.subjects ?? []).map((subject: any): [string, string] => [subject.id, subject.name]),
   );
-  const classById = new Map(
-    (data.classes ?? []).map((item: any) => [item.id, item.name as string]),
+  const classById = new Map<string, string>(
+    (data.classes ?? []).map((item: any): [string, string] => [item.id, item.name]),
   );
-  const streamById = new Map(
-    (data.streams ?? []).map((item: any) => [
+  const streamById = new Map<string, { name: string; class_id: string | null }>(
+    (data.streams ?? []).map((item: any): [string, { name: string; class_id: string | null }] => [
       item.id,
-      { name: item.name as string, class_id: item.class_id as string | null },
+      { name: item.name, class_id: item.class_id },
     ]),
   );
   const assignedClassIds = new Set(
@@ -513,6 +471,29 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   const average = totals.length
     ? totals.reduce((sum: number, value: number) => sum + value, 0) / totals.length
     : 0;
+  const teacherGradeBuckets = [
+    { name: "80+", value: totals.filter((score: number) => score >= 80).length },
+    { name: "70-79", value: totals.filter((score: number) => score >= 70 && score < 80).length },
+    { name: "60-69", value: totals.filter((score: number) => score >= 60 && score < 70).length },
+    { name: "45-59", value: totals.filter((score: number) => score >= 45 && score < 60).length },
+    { name: "Below 45", value: totals.filter((score: number) => score < 45).length },
+  ].filter((bucket) => bucket.value > 0);
+  const teacherStatus = ["approved", "submitted", "rejected", "draft"].map((status) => ({
+    name: status.charAt(0).toUpperCase() + status.slice(1),
+    value: scopeAssessments.filter((assessment: any) => assessment.status === status).length,
+  })).filter((item) => item.value > 0);
+  const teacherSubjectPerformance = scopeSubjects.map((subject: any) => {
+    const subjectScores = scopeAssessments
+      .filter((assessment: any) => assessment.subject_id === subject.id)
+      .map((assessment: any) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+    return { name: subject.name, average: subjectScores.length ? subjectScores.reduce((sum: number, score: number) => sum + score, 0) / subjectScores.length : 0 };
+  }).filter((item: any) => item.average > 0);
+  const teacherGenderCounts = new Map<string, number>();
+  for (const student of scopeStudents) {
+    const label = student.gender?.trim() || "Not recorded";
+    teacherGenderCounts.set(label, (teacherGenderCounts.get(label) ?? 0) + 1);
+  }
+  const teacherGenderSplit = [...teacherGenderCounts].map(([name, value]) => ({ name, value }));
 
   return (
     <div>
@@ -527,6 +508,18 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
         <Stat label="Pending marks" value={pendingMarks.length} />
         <Stat label="Average achievement" value={`${average.toFixed(1)}%`} />
       </div>
+
+      <Suspense fallback={<DashboardChartFallback height={280} />}>
+        <DashboardCharts
+          kind="school"
+          subjectPerformance={teacherSubjectPerformance}
+          gradeBuckets={teacherGradeBuckets}
+          trend={[]}
+          genderSplit={teacherGenderSplit}
+          statusBreakdown={teacherStatus}
+          classDistribution={[]}
+        />
+      </Suspense>
 
       <Panel title="Your assignments" className="mt-4">
         {assignedLabels.length === 0 ? (
@@ -644,7 +637,7 @@ function CommentEditorPanel({
         await supabase
           .from("report_comment_rules")
           .select("id, descriptor, points, comment")
-          .eq("school_id", schoolId)
+          .eq("school_id", schoolId!)
           .eq("comment_role", commentRole)
           .order("points", { ascending: true, nullsFirst: false })
           .order("descriptor", { ascending: true })
@@ -848,6 +841,15 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const isSuper = false;
   const schoolId = me?.profile?.school_id ?? null;
   const isDos = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
+  const isHeadTeacher = hasAny(me?.roles, ["head_teacher"]);
+  const isDeputyHead = hasAny(me?.roles, ["deputy_head_teacher"]);
+  const isDirectorOfStudies = hasAny(me?.roles, ["dos"]);
+  const isChartsOnlyRole = hasAny(me?.roles, [
+    "school_admin",
+    "head_teacher",
+    "deputy_head_teacher",
+    "dos",
+  ]);
   const isHod = hasAny(me?.roles, ["hod"]);
   const canSeeActivity = hasAny(me?.roles, ["school_admin", "head_teacher", "deputy_head_teacher", "dos"]);
   const canApprove = hasAny(me?.roles, [
@@ -909,43 +911,47 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   });
   const approveStudent = useServerFn(verifyStudent);
   const reviewMarks = useServerFn(reviewAssessments);
-  const updateStatus = useServerFn(updateAssessmentStatus);
+  const updateAssessmentStatusFn = useServerFn(updateAssessmentStatus);
   const [reviewClassId, setReviewClassId] = useState("");
   const [reviewStreamId, setReviewStreamId] = useState("");
   const [dashboardTab, setDashboardTab] = useState<"overview" | "requests">("overview");
-  const { data, isLoading } = useDashboardData(
+  const { data, isLoading, error, refetch } = useDashboardData(
     schoolId,
     isSuper,
     isTeacher,
     me?.userId,
     isHod,
     me?.profile?.department_id,
+    isChartsOnlyRole,
   );
   const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const timetableEnabled = moduleMap?.get("timetable") ?? true;
-  const classById = new Map(
-    (data?.classes ?? []).map((item: any) => [item.id, item.name as string]),
+  const attendanceEnabled = moduleMap?.get("attendance") ?? true;
+  const classById = new Map<string, string>(
+    (data?.classes ?? []).map((item) => [item.id, item.name]),
   );
-  const streamById = new Map(
-    (data?.streams ?? []).map((item: any) => [
+  const streamById = new Map<string, { name: string; class_id: string | null }>(
+    (data?.streams ?? []).map((item) => [
       item.id,
-      { name: item.name as string, class_id: item.class_id as string | null },
+      { name: item.name, class_id: item.class_id },
     ]),
   );
   // Reuse indexed lookups below. The dashboard can contain thousands of
   // assessments, so repeated Array.find calls become noticeable on every
   // filter or status change.
-  const studentById = new Map(
-    (data?.students ?? []).map((item: any) => [item.id, item]),
+  const studentById = new Map<string, DashboardStudentRow>(
+    (data?.students ?? []).map((item) => [item.id, item]),
   );
-  const subjectById = new Map(
-    (data?.subjects ?? []).map((item: any) => [item.id, item]),
+  const subjectById = new Map<string, { id: string; name: string }>(
+    (data?.subjects ?? []).map((item) => [item.id, item]),
   );
-  const termById = new Map((data?.terms ?? []).map((item: any) => [item.id, item]));
+  const termById = new Map<string, { id: string; name: string; is_current: boolean }>(
+    (data?.terms ?? []).map((item) => [item.id, item]),
+  );
   const { data: timetableSummary } = useQuery({
     queryKey: ["dashboard-timetable", schoolId],
-    enabled: !!schoolId && isDos && timetableEnabled && !!data,
+    enabled: !!schoolId && isDos && !isChartsOnlyRole && timetableEnabled && !!data,
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
@@ -969,11 +975,53 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
       };
     },
   });
+  const currentTerm = data?.terms.find((term) => term.is_current) ?? null;
+  const { data: leadershipAttendance } = useQuery({
+    queryKey: ["leadership-attendance", schoolId, currentTerm?.id],
+    enabled: !!schoolId && isChartsOnlyRole && attendanceEnabled && !!currentTerm?.id,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    queryFn: async () => {
+      const [summaries, records] = await Promise.all([
+        supabase
+          .from("attendance_summaries")
+          .select("student_id, days_present, days_absent, total_days")
+          .eq("school_id", schoolId!)
+          .eq("term_id", currentTerm!.id)
+          .limit(3000),
+        supabase
+          .from("attendance_records")
+          .select("student_id, status, attendance_date")
+          .eq("school_id", schoolId!)
+          .eq("term_id", currentTerm!.id)
+          .order("attendance_date", { ascending: true })
+          .limit(5000),
+      ]);
+      if (summaries.error) throw new Error(summaries.error.message);
+      if (records.error) throw new Error(records.error.message);
+      return { summaries: summaries.data ?? [], records: records.data ?? [] };
+    },
+  });
   const approveMutation = useMutation({
     mutationFn: (studentId: string) => approveStudent({ data: { studentId } }),
     onSuccess: () => {
       toast.success("Learner approved");
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error: Error) => toast.error(friendlyAdminError(error)),
+  });
+  const updateStatus = useMutation({
+    mutationFn: (data: {
+      assessmentId: string;
+      status: "draft" | "submitted" | "approved" | "rejected";
+      reason?: string | null;
+    }) => updateAssessmentStatusFn({ data }),
+    onSuccess: () => {
+      toast.success("Assessment status updated");
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -1001,13 +1049,19 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
-  if (isLoading || !data)
+  if (isLoading)
     return (
-      <DashboardLoadingState
-        label="Loading analytics"
-        description="Fetching learners, assessments, and approvals."
+      <DashboardChartFallback height={280} />
+    );
+
+  if (error || !data) {
+    return (
+      <DashboardDataError
+        message={error instanceof Error ? error.message : "School analytics are unavailable."}
+        onRetry={() => void refetch()}
       />
     );
+  }
 
   if (isTeacher) {
     return <TeacherDashboard data={data} me={me} />;
@@ -1034,6 +1088,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const average = totals.length ? totals.reduce((x, y) => x + y, 0) / totals.length : 0;
 
   const subjectPerformance = data.subjects
+    .filter((subject) => subjectStats.has(subject.id))
     .map((subject) => {
       const stats = subjectStats.get(subject.id);
       const average = stats ? stats.total / stats.count : 0;
@@ -1041,8 +1096,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         name: subject.name.length > 12 ? `${subject.name.slice(0, 12)}...` : subject.name,
         average: Math.round(average * 10) / 10,
       };
-    })
-    .filter((s) => s.average > 0);
+    });
 
   const gradeCounts = [0, 0, 0, 0, 0];
   for (const total of totals) {
@@ -1056,10 +1110,12 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     .map((name, index) => ({ name, value: gradeCounts[index] }))
     .filter((bucket) => bucket.value > 0);
 
-  const genderSplit = [
-    { name: "Female", value: data.students.filter((s) => s.gender === "Female").length },
-    { name: "Male", value: data.students.filter((s) => s.gender === "Male").length },
-  ].filter((g) => g.value > 0);
+  const genderCounts = new Map<string, number>();
+  for (const student of data.students) {
+    const label = student.gender?.trim() || "Not recorded";
+    genderCounts.set(label, (genderCounts.get(label) ?? 0) + 1);
+  }
+  const genderSplit = [...genderCounts].map(([name, value]) => ({ name, value }));
 
   const completion = data.assessments.length
     ? Math.round((approved / data.assessments.length) * 100)
@@ -1086,10 +1142,110 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   });
   const visibleAssessments = reviewedAssessments;
 
-  const trend = ["Term I", "Term II", "Term III"].map((term, index) => ({
-    term,
-    average: Math.round(Math.max(0, average - (2 - index) * 3) * 10) / 10,
-  }));
+  const trend = [...data.terms]
+    .sort((left, right) => (left.start_date ?? "").localeCompare(right.start_date ?? ""))
+    .filter((term) => data.assessments.some((assessment) => assessment.term_id === term.id))
+    .slice(-8)
+    .map((term) => {
+      const termScores = data.assessments
+        .filter((assessment) => assessment.term_id === term.id)
+        .map((assessment) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+      return {
+        term: term.name,
+        average: termScores.length
+          ? Math.round((termScores.reduce((sum, score) => sum + score, 0) / termScores.length) * 10) / 10
+          : 0,
+      };
+    });
+  const classPerformance = data.classes.map((item) => {
+    const classStudentIds = new Set(data.students.filter((student) => student.class_id === item.id).map((student) => student.id));
+    const classScores = data.assessments
+      .filter((assessment) => classStudentIds.has(assessment.student_id))
+      .map((assessment) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+    return {
+      name: item.name,
+      average: classScores.length ? Math.round((classScores.reduce((sum, score) => sum + score, 0) / classScores.length) * 10) / 10 : 0,
+      assessmentCount: classScores.length,
+    };
+  }).filter((item) => item.assessmentCount > 0).map(({ name, average }) => ({ name, average }));
+  const studentStatus = [...new Set(data.students.map((student) => student.status))]
+    .map((status) => ({ name: status.charAt(0).toUpperCase() + status.slice(1), value: data.students.filter((student) => student.status === status).length }))
+    .filter((item) => item.value > 0);
+  const summaryByStudent = new Map(
+    (leadershipAttendance?.summaries ?? []).map((summary) => [summary.student_id, summary]),
+  );
+  const dailyByStudent = new Map<string, { present: number; absent: number }>();
+  const dailyByDate = new Map<string, { present: number; absent: number }>();
+  for (const record of leadershipAttendance?.records ?? []) {
+    const status = record.status === "absent" ? "absent" : "present";
+    const studentTotals = dailyByStudent.get(record.student_id) ?? { present: 0, absent: 0 };
+    studentTotals[status] += 1;
+    dailyByStudent.set(record.student_id, studentTotals);
+    const dateTotals = dailyByDate.get(record.attendance_date) ?? { present: 0, absent: 0 };
+    dateTotals[status] += 1;
+    dailyByDate.set(record.attendance_date, dateTotals);
+  }
+  const attendanceTotals = data.students.reduce(
+    (totals, student) => {
+      const summary = summaryByStudent.get(student.id);
+      const daily = dailyByStudent.get(student.id) ?? { present: 0, absent: 0 };
+      const present = Number(summary?.days_present ?? daily.present);
+      const absent = Number(summary?.days_absent ?? daily.absent);
+      return {
+        present: totals.present + present,
+        absent: totals.absent + absent,
+        total: totals.total + Number(summary?.total_days ?? present + absent),
+      };
+    },
+    { present: 0, absent: 0, total: 0 },
+  );
+  const attendanceRate = attendanceTotals.total
+    ? (attendanceTotals.present / attendanceTotals.total) * 100
+    : 0;
+  const attendanceByClass = data.classes
+    .map((schoolClass) => {
+      const classStudents = data.students.filter((student) => student.class_id === schoolClass.id);
+      const totals = classStudents.reduce(
+        (result, student) => {
+          const summary = summaryByStudent.get(student.id);
+          const daily = dailyByStudent.get(student.id) ?? { present: 0, absent: 0 };
+          const present = Number(summary?.days_present ?? daily.present);
+          const absent = Number(summary?.days_absent ?? daily.absent);
+          return {
+            present: result.present + present,
+            absent: result.absent + absent,
+            total: result.total + Number(summary?.total_days ?? present + absent),
+          };
+        },
+        { present: 0, absent: 0, total: 0 },
+      );
+      return {
+        name: schoolClass.name,
+        present: totals.total ? Math.round((totals.present / totals.total) * 1000) / 10 : 0,
+        absent: totals.total ? Math.round((totals.absent / totals.total) * 1000) / 10 : 0,
+        rate: totals.total ? Math.round((totals.present / totals.total) * 1000) / 10 : 0,
+      };
+    })
+    .filter((row) => row.rate > 0 || row.absent > 0);
+  const attendanceTrend = [...dailyByDate]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-14)
+    .map(([date, totals]) => {
+      const count = totals.present + totals.absent;
+      return {
+        date: new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        present: count ? Math.round((totals.present / count) * 1000) / 10 : 0,
+        absent: count ? Math.round((totals.absent / count) * 1000) / 10 : 0,
+      };
+    });
+  const learnersBelowAttendanceTarget = data.students.filter((student) => {
+    const summary = summaryByStudent.get(student.id);
+    const daily = dailyByStudent.get(student.id) ?? { present: 0, absent: 0 };
+    const present = Number(summary?.days_present ?? daily.present);
+    const absent = Number(summary?.days_absent ?? daily.absent);
+    const total = Number(summary?.total_days ?? present + absent);
+    return total > 0 && (present / total) * 100 < 80;
+  }).length;
   const resolveClassName = (classId: string | null | undefined) =>
     classId ? (classById.get(classId) ?? "Unknown") : "Unknown";
   const resolveStreamName = (streamId: string | null | undefined) =>
@@ -1105,18 +1261,47 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     { key: "fees", label: "Fees" },
   ] as const;
 
+  if (isChartsOnlyRole) {
+    return (
+      <Suspense fallback={<DashboardChartFallback height={280} />}>
+        <DashboardCharts
+          kind="school"
+          subjectPerformance={subjectPerformance}
+          gradeBuckets={gradeBuckets}
+          trend={trend}
+          genderSplit={genderSplit}
+          statusBreakdown={[
+            { name: "Approved", value: approved },
+            { name: "Submitted", value: submitted },
+            { name: "Rejected", value: rejected },
+            { name: "Draft", value: draft },
+          ].filter((bucket) => bucket.value > 0)}
+          studentStatus={studentStatus}
+          classPerformance={classPerformance}
+          classDistribution={data.classes
+            .map((cls: any) => ({
+              name: cls.name.length > 10 ? `${cls.name.slice(0, 10)}...` : cls.name,
+              students: data.students.filter((student: any) => student.class_id === cls.id).length,
+            }))}
+          attendanceByClass={isChartsOnlyRole && attendanceEnabled ? attendanceByClass : undefined}
+          attendanceTrend={isChartsOnlyRole && attendanceEnabled ? attendanceTrend : undefined}
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <div>
       <PageHeader
         eyebrow="Home"
-        title="School dashboard"
-        description="Performance, approvals and learner status for your school."
+        title={isDirectorOfStudies ? "Director of Studies dashboard" : isHeadTeacher ? "Head teacher dashboard" : isDeputyHead ? "Deputy head teacher dashboard" : "School dashboard"}
+        description={isDos ? "School-wide academic, attendance and learner progress at a glance." : "Performance, approvals and learner status for your school."}
         actions={
           <Link
-            to="/workflow"
+            to="/assessments"
             className="inline-flex min-h-10 items-center justify-center rounded-xl bg-accent px-3.5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-colors hover:brightness-95"
           >
-            Open school workflow
+            Open assessments
           </Link>
         }
       />
@@ -1149,8 +1334,11 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         <Stat
           label="Learners"
           value={data.students.length}
-          hint={`${data.students.filter((s) => s.status === "pending").length} awaiting verification`}
+          hint={`${data.students.filter((s) => s.status === "active").length} active · ${pendingStudents.length} awaiting verification`}
         />
+        <Stat label="Classes" value={data.classes.length} />
+        <Stat label="Streams" value={data.streams.length} />
+        <Stat label="Subjects" value={data.subjects.length} />
         <Stat label="Staff accounts" value={data.profiles.length} />
         <Stat label="Average achievement" value={`${average.toFixed(1)}%`} />
         <Stat
@@ -1160,6 +1348,16 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         />
         <Stat label="Approved assessments" value={approved} />
         <Stat label="Assessment completion" value={`${completion}%`} />
+        {isDos && attendanceEnabled && (
+          <Stat
+            label={`Attendance${currentTerm ? ` · ${currentTerm.name}` : ""}`}
+            value={currentTerm ? `${attendanceRate.toFixed(1)}%` : "No current term"}
+            hint={`${attendanceTotals.present} present days · ${attendanceTotals.absent} absent days`}
+          />
+        )}
+        {isDeputyHead && attendanceEnabled && (
+          <Stat label="Learners below 80% attendance" value={learnersBelowAttendanceTarget} hint="Current term follow-up" />
+        )}
       </div>
 
       <Panel title="Module controls" className="mt-4">
@@ -1483,7 +1681,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         />
       )}
 
-      <Suspense fallback={<DashboardChartFallback height={560} />}>
+      <Suspense fallback={<DashboardChartFallback height={280} />}>
         <DashboardCharts
           kind="school"
           subjectPerformance={subjectPerformance}
@@ -1496,12 +1694,16 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
             { name: "Rejected", value: rejected },
             { name: "Draft", value: draft },
           ].filter((b) => b.value > 0)}
+          studentStatus={studentStatus}
+          classPerformance={classPerformance}
           classDistribution={data.classes
             .map((cls: any) => ({
               name: cls.name.length > 10 ? `${cls.name.slice(0, 10)}...` : cls.name,
               students: data.students.filter((s: any) => s.class_id === cls.id).length,
             }))
             .filter((c: any) => c.students > 0)}
+          attendanceByClass={isDos && attendanceEnabled ? attendanceByClass : undefined}
+          attendanceTrend={isDos && attendanceEnabled ? attendanceTrend : undefined}
         />
       </Suspense>
 
@@ -1603,3 +1805,4 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     </div>
   );
 }
+

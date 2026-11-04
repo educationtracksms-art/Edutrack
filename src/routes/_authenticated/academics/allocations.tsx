@@ -87,16 +87,32 @@ function AllocationsPage() {
         stream_id: allocForm.stream_id || null,
         weekly_periods: weeklyPeriods,
       };
-      const query = editingAllocationId
-        ? supabase.from("teacher_allocations").update(payload).eq("id", editingAllocationId).eq("school_id", schoolId)
-        : supabase.from("teacher_allocations").insert(payload);
-      const { error } = await query;
-      if (error) throw new Error(error.message);
-      await supabase
+      if (editingAllocationId) {
+        const { data: updatedAllocation, error } = await supabase
+          .from("teacher_allocations")
+          .update(payload)
+          .eq("id", editingAllocationId)
+          .eq("school_id", schoolId)
+          .select("id")
+          .maybeSingle();
+        if (error) throw new Error(error.message);
+        if (!updatedAllocation) throw new Error("This allocation is no longer available to update");
+      } else {
+        const { data: createdAllocation, error } = await supabase
+          .from("teacher_allocations")
+          .insert(payload)
+          .select("id")
+          .maybeSingle();
+        if (error) throw new Error(error.message);
+        if (!createdAllocation) throw new Error("The teacher allocation was not created");
+      }
+      const { weekly_periods: _weeklyPeriods, ...historyPayload } = payload;
+      const { error: historyError } = await supabase
         .from("teacher_allocation_history")
-        .insert({ ...payload, action: editingAllocationId ? "updated" : "assigned", performed_by: me?.userId ?? null });
+        .insert({ ...historyPayload, action: editingAllocationId ? "updated" : "assigned", performed_by: me?.userId ?? null });
+      return historyError?.message ?? null;
     },
-    onSuccess: () => {
+    onSuccess: (historyError) => {
       setEditingAllocationId(null);
       setAllocForm({
         teacher_id: "",
@@ -107,17 +123,28 @@ function AllocationsPage() {
         weekly_periods: "1",
       });
       toast.success("Teacher allocated");
+      if (historyError) {
+        toast.error(`Allocation saved, but its history could not be recorded: ${historyError}`);
+      }
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
   });
   const removeAllocation = useMutation({
     mutationFn: async (id: string) => {
+      if (!schoolId) throw new Error("Your account is not linked to a school");
       const alloc = data?.allocations.find((a) => a.id === id);
-      const { error } = await supabase.from("teacher_allocations").delete().eq("id", id);
+      const { data: deletedAllocation, error } = await supabase
+        .from("teacher_allocations")
+        .delete()
+        .eq("id", id)
+        .eq("school_id", schoolId)
+        .select("id")
+        .maybeSingle();
       if (error) throw new Error(error.message);
+      if (!deletedAllocation) throw new Error("This allocation is no longer available to remove");
       if (alloc) {
-        await supabase.from("teacher_allocation_history").insert({
+        const { error: historyError } = await supabase.from("teacher_allocation_history").insert({
           school_id: alloc.school_id,
           teacher_id: alloc.teacher_id,
           subject_id: alloc.subject_id,
@@ -127,11 +154,16 @@ function AllocationsPage() {
           action: "removed",
           performed_by: me?.userId ?? null,
         });
+        return historyError?.message ?? null;
       }
+      return null;
     },
-    onSuccess: () => {
+    onSuccess: (historyError) => {
       setEditingAllocationId(null);
       toast.success("Allocation removed");
+      if (historyError) {
+        toast.error(`Allocation removed, but its history could not be recorded: ${historyError}`);
+      }
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -154,7 +186,7 @@ function AllocationsPage() {
 
   const classLabel = (item: AcademicClass) => {
     const parts = [item.name, levelLabel(item.education_level)];
-    if (item.level !== null && item.level !== undefined && item.level !== "") {
+    if (item.level !== null && item.level !== undefined) {
       parts.push(`Order ${item.level}`);
     }
     return parts.join(" · ");
@@ -172,8 +204,10 @@ function AllocationsPage() {
   );
   const allocationTeachers = (data?.teachers ?? []).filter(
     (teacher) =>
-      !selectedAllocationSubject?.department_id ||
+      Boolean(teacher.department_id) &&
+      (!selectedAllocationSubject?.department_id ||
       teacher.department_id === selectedAllocationSubject.department_id,
+      )
   );
   const allocationPapers = (data?.subjectPapers ?? [])
     .filter((paper) => paper.subject_id === allocForm.subject_id)
@@ -188,15 +222,27 @@ function AllocationsPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Academic setup"
         title="Teacher allocations"
-        description="Assign teachers to subjects, papers, classes and streams for the current term."
+        description="Connect teachers to subjects and classes, with paper, stream and weekly period details."
       />
-      <Panel title="Teacher allocations" className="mt-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[
+          { label: "Allocations", value: data?.allocations.length ?? 0, styles: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" },
+          { label: "Teachers", value: data?.teachers.length ?? 0, styles: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" },
+          { label: "Subjects", value: data?.subjects.length ?? 0, styles: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" },
+        ].map((stat) => (
+          <div key={stat.label} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}>
+            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">{stat.label}</span>
+            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">{stat.value}</span>
+          </div>
+        ))}
+      </div>
+      <Panel title="Allocation form">
         <form
-          className="mb-4 grid gap-3 md:grid-cols-7"
+          className="mb-5 grid gap-3 rounded-xl border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900 dark:bg-sky-950/20 sm:grid-cols-2 xl:grid-cols-4"
           onSubmit={(e) => {
             e.preventDefault();
             addAllocation.mutate();
@@ -222,7 +268,13 @@ function AllocationsPage() {
                 }));
               }}
             >
-              <option value="">Select</option>
+              <option value="">
+                {allocationTeachers.length > 0
+                  ? "Select teacher"
+                  : selectedAllocationSubject
+                    ? "No teachers in this department"
+                    : "No eligible teachers"}
+              </option>
               {allocationTeachers.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.full_name} · {departmentName(t.department_id)}
@@ -250,7 +302,11 @@ function AllocationsPage() {
                 }));
               }}
             >
-              <option value="">Select</option>
+              <option value="">
+                {allocationSubjects.length > 0
+                  ? "Select subject"
+                  : "No subjects in this department"}
+              </option>
               {allocationSubjects.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} · {departmentName(s.department_id)}
@@ -285,21 +341,24 @@ function AllocationsPage() {
               <option value="">Select class</option>
               {(data?.classes ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {classLabel(c)}
                 </option>
               ))}
             </select>
           </Field>
           <Field label="Stream">
             <select
+              disabled={!allocForm.class_id}
               required={Boolean(
                 (data?.streams ?? []).some((stream) => stream.class_id === allocForm.class_id),
               )}
               className={inputClass}
               value={allocForm.stream_id}
-              onChange={(e) => setAllocForm({ ...allocForm, stream_id: e.target.value })}
+              onChange={(e) => setAllocForm((current) => ({ ...current, stream_id: e.target.value }))}
             >
-              <option value="">Select stream</option>
+              <option value="">
+                {allocForm.class_id ? "Select stream" : "Select a class first"}
+              </option>
               {(data?.streams ?? [])
                 .filter((s) => !allocForm.class_id || s.class_id === allocForm.class_id)
                 .map((s) => (
@@ -319,7 +378,7 @@ function AllocationsPage() {
               onChange={(e) => setAllocForm({ ...allocForm, weekly_periods: e.target.value })}
             />
           </Field>
-          <div className="flex items-end">
+          <div className="flex flex-wrap items-end gap-2 sm:col-span-2 xl:col-span-4">
             <Btn type="submit" variant="accent" disabled={addAllocation.isPending}>
               {editingAllocationId ? "Save allocation" : "Allocate"}
             </Btn>
@@ -338,8 +397,16 @@ function AllocationsPage() {
           </div>
         </form>
 
+        <div className="mb-3 flex items-center justify-between border-t border-border pt-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Saved allocations · Output</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Current teacher, subject and class assignments.</p>
+          </div>
+          <span className="text-xs text-muted-foreground">{data?.allocations.length ?? 0} total</span>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-border">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="pb-2">Teacher</th>
@@ -383,7 +450,11 @@ function AllocationsPage() {
                     >
                       Edit
                     </Btn>
-                    <Btn variant="ghost" onClick={() => removeAllocation.mutate(a.id)}>
+                    <Btn
+                      variant="ghost"
+                      disabled={removeAllocation.isPending}
+                      onClick={() => removeAllocation.mutate(a.id)}
+                    >
                       Remove
                     </Btn>
                   </td>
@@ -398,6 +469,7 @@ function AllocationsPage() {
               )}
             </tbody>
           </table>
+        </div>
         </div>
       </Panel>
     </div>

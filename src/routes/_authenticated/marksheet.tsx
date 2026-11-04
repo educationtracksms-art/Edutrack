@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { BookOpen, Filter, LayoutGrid, Users } from "lucide-react";
+import { BookOpen, Download, Filter, Users } from "lucide-react";
 
 import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getMarksheetResults } from "@/lib/report.functions";
+import type { SubjectRow } from "@/lib/report-types";
 import { isModuleEnabled } from "@/lib/modules";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -17,29 +20,27 @@ type StudentRow = {
   class_id: string | null;
   stream_id: string | null;
 };
-type SubjectRow = { id: string; name: string };
-type AssessmentRow = {
-  student_id: string;
-  subject_id: string;
-  formative: number | null;
-  summative: number | null;
-  status: "approved";
+type MarksheetResult = {
+  studentId: string;
+  gradingLevel: "ordinary" | "advanced";
+  rows: SubjectRow[];
+  activeSummativePeriods: Array<"BOT" | "MOT" | "EOT">;
 };
-type GradingScaleRow = {
-  grade: string;
-  min_score: number;
-  max_score: number;
-  descriptor: string;
-  education_level: string | null;
-  points: number | null;
+type MarksheetRow = {
+  key: string;
+  student: StudentRow;
+  row: SubjectRow;
+  gradingLevel: "ordinary" | "advanced";
 };
 
 const ALLOWED_ROLES = [
+  "school_admin",
   "head_teacher",
   "deputy_head_teacher",
   "dos",
   "class_teacher",
   "subject_teacher",
+  "super_admin",
 ] as const;
 
 export const Route = createFileRoute("/_authenticated/marksheet")({
@@ -52,23 +53,20 @@ export const Route = createFileRoute("/_authenticated/marksheet")({
       supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
-
     const roleNames = (roles ?? []).map((item) => item.role);
     if (!roleNames.some((role) => ALLOWED_ROLES.includes(role as (typeof ALLOWED_ROLES)[number]))) {
       throw redirect({ to: "/dashboard" });
     }
-
     if (!(await isModuleEnabled(supabase, profile?.school_id ?? null, "academics"))) {
       throw redirect({ to: "/dashboard" });
     }
   },
   head: () => ({
     meta: [
-      { title: "Marksheet - EduTrack" },
+      { title: "Marksheet · EduTrack" },
       {
         name: "description",
-        content:
-          "View learner marks by subject with formative, summative, total and grade columns.",
+        content: "View approved learner results using the same assessment rules as report cards.",
       },
     ],
   }),
@@ -76,6 +74,7 @@ export const Route = createFileRoute("/_authenticated/marksheet")({
 });
 
 function MarksheetPage() {
+  const buildMarksheet = useServerFn(getMarksheetResults);
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
   const [classId, setClassId] = useState("");
@@ -84,434 +83,278 @@ function MarksheetPage() {
 
   const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
 
-  const { data: classes } = useQuery<ClassRow[]>({
+  const { data: classes = [] } = useQuery<ClassRow[]>({
     queryKey: ["marksheet-classes", schoolId],
-    queryFn: async () =>
-      (
-        await schoolQuery(
-          supabase.from("classes").select("id, name, education_level").order("name"),
-        )
-      ).data ?? [],
+    queryFn: async () => {
+      const { data, error } = await schoolQuery(
+        supabase.from("classes").select("id, name, education_level").order("name"),
+      );
+      if (error) throw new Error(`Unable to load classes: ${error.message}`);
+      return data ?? [];
+    },
   });
-
-  const { data: streams } = useQuery<StreamRow[]>({
+  const { data: streams = [] } = useQuery<StreamRow[]>({
     queryKey: ["marksheet-streams", schoolId],
-    queryFn: async () =>
-      (await schoolQuery(supabase.from("streams").select("id, name, class_id").order("name")))
-        .data ?? [],
+    queryFn: async () => {
+      const { data, error } = await schoolQuery(
+        supabase.from("streams").select("id, name, class_id").order("name"),
+      );
+      if (error) throw new Error(`Unable to load streams: ${error.message}`);
+      return data ?? [];
+    },
   });
-
-  const { data: terms } = useQuery<TermRow[]>({
+  const { data: terms = [] } = useQuery<TermRow[]>({
     queryKey: ["marksheet-terms", schoolId],
-    queryFn: async () =>
-      (
-        await schoolQuery(
-          supabase
-            .from("terms")
-            .select("id, name, is_current, academic_year_id")
-            .order("start_date", { ascending: false }),
-        )
-      ).data ?? [],
-  });
-
-  const { data: subjects } = useQuery<SubjectRow[]>({
-    queryKey: ["marksheet-subjects", schoolId],
-    queryFn: async () =>
-      (await schoolQuery(supabase.from("subjects").select("id, name").order("position"))).data ??
-      [],
-  });
-
-  const { data: students } = useQuery<StudentRow[]>({
-    queryKey: ["marksheet-students", schoolId],
-    queryFn: async () =>
-      (
-        await schoolQuery(
-          supabase
-            .from("students")
-            .select("id, full_name, class_id, stream_id")
-            .eq("status", "active")
-            .order("full_name"),
-        )
-      ).data ?? [],
-  });
-
-  const currentTermId = useMemo(
-    () => terms?.find((term) => term.is_current)?.id ?? terms?.[0]?.id ?? "",
-    [terms],
-  );
-  const selectedTermId = termId || currentTermId;
-
-  const { data: assessments } = useQuery<AssessmentRow[]>({
-    queryKey: ["marksheet-assessments", schoolId, selectedTermId],
-    enabled: !!selectedTermId,
-    queryFn: async () =>
-      (
-        await schoolQuery(
-          supabase
-            .from("assessments")
-            .select("student_id, subject_id, formative, summative, status")
-            .eq("term_id", selectedTermId)
-            .eq("status", "approved"),
-        )
-      ).data ?? [],
-  });
-  const { data: gradingScales } = useQuery<GradingScaleRow[]>({
-    queryKey: ["marksheet-grading-scales", schoolId],
-    enabled: !!schoolId,
     queryFn: async () => {
       const { data, error } = await schoolQuery(
         supabase
-          .from("grading_scales")
-          .select("grade, min_score, max_score, grade_descriptor, education_level, points")
-          .eq("school_id", schoolId)
-          .order("min_score", { ascending: false }),
+          .from("terms")
+          .select("id, name, is_current, academic_year_id")
+          .order("start_date", { ascending: false }),
       );
-      if (error) throw new Error(`Unable to load grading scales: ${error.message}`);
-      return ((data ?? []) as Array<
-        Omit<GradingScaleRow, "descriptor"> & { grade_descriptor: string }
-      >).map((scale) => ({
-        ...scale,
-        descriptor: scale.grade_descriptor,
-      }));
+      if (error) throw new Error(`Unable to load terms: ${error.message}`);
+      return data ?? [];
+    },
+  });
+  const { data: students = [] } = useQuery<StudentRow[]>({
+    queryKey: ["marksheet-students", schoolId],
+    queryFn: async () => {
+      const { data, error } = await schoolQuery(
+        supabase
+          .from("students")
+          .select("id, full_name, class_id, stream_id")
+          .eq("status", "active")
+          .order("full_name"),
+      );
+      if (error) throw new Error(`Unable to load learners: ${error.message}`);
+      return data ?? [];
     },
   });
 
+  const currentTermId = useMemo(
+    () => terms.find((term) => term.is_current)?.id ?? terms[0]?.id ?? "",
+    [terms],
+  );
+  const selectedTermId = termId || currentTermId;
   const visibleStudents = useMemo(
     () =>
-      (students ?? [])
-        .filter((student) => (classId ? student.class_id === classId : true))
-        .filter((student) => (streamId ? student.stream_id === streamId : true))
-        .sort((a, b) => a.full_name.localeCompare(b.full_name)),
-    [classId, streamId, students],
+      students
+        .filter((student) => !classId || student.class_id === classId)
+        .filter((student) => !streamId || student.stream_id === streamId)
+        .sort((a, b) => {
+          const classA = classes.find((item) => item.id === a.class_id)?.name ?? "";
+          const classB = classes.find((item) => item.id === b.class_id)?.name ?? "";
+          const streamA = streams.find((item) => item.id === a.stream_id)?.name ?? "";
+          const streamB = streams.find((item) => item.id === b.stream_id)?.name ?? "";
+          return classA.localeCompare(classB) || streamA.localeCompare(streamB) || a.full_name.localeCompare(b.full_name);
+        }),
+    [classId, classes, streamId, streams, students],
   );
-
+  const visibleStudentIds = useMemo(() => visibleStudents.map((student) => student.id), [visibleStudents]);
   const visibleStreams = useMemo(
-    () => (streams ?? []).filter((stream) => !classId || stream.class_id === classId),
+    () => streams.filter((stream) => !classId || stream.class_id === classId),
     [classId, streams],
   );
+  const selectedClassId = classId || streams.find((stream) => stream.id === streamId)?.class_id || "";
+  const selectedClass = classes.find((item) => item.id === selectedClassId);
+  const selectedStreamName = streams.find((item) => item.id === streamId)?.name ?? "";
+  const selectedTermName = terms.find((term) => term.id === selectedTermId)?.name ?? "";
 
-  const selectedClassLevel = useMemo<"ordinary" | "advanced">(() => {
-    const item = classes?.find((row) => row.id === classId);
-    return item?.education_level === "advanced" ? "advanced" : "ordinary";
-  }, [classId, classes]);
-  const classLabel = (item: ClassRow | undefined) => {
-    if (!item) return "";
-    return `${item.name}${item.education_level === "advanced" ? " (A-Level)" : " (O-Level)"}`;
-  };
-  const selectedClassLabel = useMemo(
-    () => classLabel(classes?.find((item) => item.id === classId)) ?? "",
-    [classId, classes],
+  const {
+    data: reportResults = [],
+    isLoading: resultsLoading,
+    error: resultsError,
+  } = useQuery<MarksheetResult[]>({
+    queryKey: ["marksheet-report-results", schoolId, selectedTermId, visibleStudentIds],
+    enabled: !!schoolId && !!selectedTermId && visibleStudentIds.length > 0,
+    queryFn: async () =>
+      buildMarksheet({ data: { studentIds: visibleStudentIds, termId: selectedTermId } }),
+    staleTime: 1000 * 60,
+  });
+
+  const resultByStudent = useMemo(
+    () => new Map(reportResults.map((result) => [result.studentId, result])),
+    [reportResults],
   );
-  const selectedStreamName = useMemo(
-    () => streams?.find((item) => item.id === streamId)?.name ?? "",
-    [streamId, streams],
+  const rows = useMemo<MarksheetRow[]>(
+    () =>
+      visibleStudents.flatMap((student) => {
+        const result = resultByStudent.get(student.id);
+        return (result?.rows ?? []).map((row, index) => ({
+          key: `${student.id}:${row.subjectId ?? row.subject}:${row.paperId ?? "subject"}:${index}`,
+          student,
+          row,
+          gradingLevel: result?.gradingLevel ?? "ordinary",
+        }));
+      }),
+    [resultByStudent, visibleStudents],
   );
+  const activePeriods = reportResults[0]?.activeSummativePeriods ?? [];
+  const subjectResultRows = rows.filter(
+    ({ row, gradingLevel }) => gradingLevel !== "advanced" || Boolean(row.isSubjectSummary),
+  );
+  const completeCount = subjectResultRows.filter(
+    ({ row }) => row.total.trim() !== "" && row.total !== "MISSING MARK",
+  ).length;
+  const missingCount = subjectResultRows.filter(({ row }) => row.total === "MISSING MARK").length;
+  const subjectCount = new Set(rows.map(({ row }) => row.subjectId ?? row.subject)).size;
   const title = useMemo(() => {
-    const parts = [];
-    if (selectedClassLabel) parts.push(selectedClassLabel);
-    if (selectedStreamName) parts.push(selectedStreamName);
-    const base = parts.length ? `${parts.join(" ")} Mark Sheet` : "Mark Sheet";
-    return base.replace(/\s+/g, " ").trim();
-  }, [selectedClassLabel, selectedStreamName]);
-
-  const assessmentLookup = useMemo(() => {
-    const map = new Map<string, AssessmentRow>();
-    for (const item of assessments ?? []) {
-      const key = `${item.student_id}:${item.subject_id}`;
-      const existing = map.get(key);
-      if (!existing) {
-        map.set(key, { ...item });
-        continue;
-      }
-
-      // A term can contain multiple assessment periods and A-Level papers.
-      // Keep every mark from the database instead of allowing the last row to
-      // replace the earlier rows for the same learner and subject.
-      existing.formative =
-        existing.formative === null && item.formative === null
-          ? null
-          : Number(existing.formative ?? 0) + Number(item.formative ?? 0);
-      existing.summative =
-        existing.summative === null && item.summative === null
-          ? null
-          : Number(existing.summative ?? 0) + Number(item.summative ?? 0);
-    }
-    return map;
-  }, [assessments]);
-
-  const gradeFor = (total: number, level: "ordinary" | "advanced") => {
-    const hit = (gradingScales ?? []).find(
-      (scale) =>
-        (scale.education_level ?? "ordinary") === level &&
-        total >= Number(scale.min_score) &&
-        total <= Number(scale.max_score),
-    );
-    return level === "advanced"
-      ? (hit?.points?.toString() ?? hit?.grade ?? "")
-      : (hit?.grade ?? "");
-  };
-
-  const scoreStats = useMemo(() => {
-    const subjectCount = subjects?.length ?? 0;
-    const learnerCount = visibleStudents.length;
-    const assessedCells = visibleStudents.reduce((count, student) => {
-      return (
-        count +
-        (subjects ?? []).filter((subject) => assessmentLookup.has(`${student.id}:${subject.id}`))
-          .length
-      );
-    }, 0);
-    return { subjectCount, learnerCount, assessedCells };
-  }, [assessmentLookup, subjects, visibleStudents]);
+    const scope = [
+      selectedClass ? `${selectedClass.name} (${selectedClass.education_level === "advanced" ? "A-Level" : "O-Level"})` : "",
+      selectedStreamName,
+    ].filter(Boolean);
+    return scope.length ? `${scope.join(" · ")} Marksheet` : "School Marksheet";
+  }, [selectedClass, selectedStreamName]);
 
   async function downloadExcel() {
-    if (!subjects?.length || (!classId && !streamId)) return;
-    // Keep the spreadsheet engine out of the initial marksheet route chunk.
+    if (!rows.length || (!classId && !streamId)) return;
     const { default: ExcelJS } = await import("exceljs");
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "EduTrack";
-    workbook.lastModifiedBy = "EduTrack";
-    workbook.created = new Date();
-    workbook.modified = new Date();
     workbook.subject = "Marksheet";
     workbook.title = title;
-    const titleText = title;
-    const scopeText =
-      selectedClassLabel && selectedStreamName
-        ? `${selectedClassLabel} / ${selectedStreamName}`
-        : selectedClassLabel || selectedStreamName;
-    const gradeHeader = selectedClassLevel === "advanced" ? "Points" : "Grade";
-    const infoText = [
-      `Term: ${terms?.find((term) => term.id === selectedTermId)?.name ?? "N/A"}`,
-      scopeText ? `Scope: ${scopeText}` : "",
-      `Learners: ${visibleStudents.length}`,
-      `Subjects: ${subjects.length}`,
-    ]
-      .filter(Boolean)
-      .join("  |  ");
-
-    const headerRow1: string[] = ["Learner"];
-    const headerRow2: string[] = ["Learner"];
-    for (const subject of subjects) {
-      headerRow1.push(subject.name, "", "", "");
-      headerRow2.push("Formative", "Summative", "Total", gradeHeader);
-    }
-
     const sheet = workbook.addWorksheet("Marksheet", {
-      views: [{ state: "frozen", xSplit: 1, ySplit: 4 }],
+      views: [{ state: "frozen", xSplit: 1, ySplit: 1 }],
       properties: { defaultRowHeight: 22 },
     });
-    const subjectCount = subjects.length;
-    const totalColumns = 1 + subjectCount * 4;
-    const headerFill = "FFE8EEF9";
-    const subjectFill = "FFDCE6F7";
-    const learnerFill = "FFF5F7FB";
-    const border = {
-      top: { style: "thin", color: { argb: "FFD9DEE8" } },
-      left: { style: "thin", color: { argb: "FFD9DEE8" } },
-      bottom: { style: "thin", color: { argb: "FFD9DEE8" } },
-      right: { style: "thin", color: { argb: "FFD9DEE8" } },
-    } as const;
-
-    const titleRow = sheet.addRow([titleText]);
-    const infoRow = sheet.addRow([infoText]);
-    sheet.addRow([]);
-    const subjectRow = sheet.addRow(headerRow1);
-    const detailRow = sheet.addRow(headerRow2);
-
-    titleRow.height = 24;
-    infoRow.height = 20;
-    subjectRow.height = 22;
-    detailRow.height = 20;
-
-    for (const student of visibleStudents) {
-      const values: (string | number | null)[] = [student.full_name];
-      for (const subject of subjects) {
-        const record = assessmentLookup.get(`${student.id}:${subject.id}`);
-        const formative = record?.formative ?? null;
-        const summative = record?.summative ?? null;
-        const total =
-          record?.formative != null || record?.summative != null
-            ? Number(record.formative ?? 0) + Number(record.summative ?? 0)
-            : null;
-        const grade = total == null ? null : gradeFor(Number(total));
-        values.push(formative, summative, total, grade);
-      }
-      sheet.addRow(values);
+    const headers = [
+      "Learner",
+      "Class",
+      "Stream",
+      "Subject",
+      "Paper",
+      "Formative",
+      ...activePeriods,
+      "Total",
+      "Average",
+      "Grade",
+      "Grade descriptor / points",
+      "Teacher",
+    ];
+    sheet.addRow(headers);
+    for (const entry of rows) {
+      const className = classes.find((item) => item.id === entry.student.class_id)?.name ?? "";
+      const streamName = streams.find((item) => item.id === entry.student.stream_id)?.name ?? "";
+      const score = entry.row;
+      sheet.addRow([
+        entry.student.full_name,
+        className,
+        streamName,
+        score.subject,
+        score.paperName ?? "",
+        score.formative,
+        ...activePeriods.map((period) =>
+          period === "BOT" ? score.bot : period === "MOT" ? score.mot : score.eot,
+        ),
+        score.total,
+        score.totalAverage ?? "",
+        score.grade,
+        entry.gradingLevel === "advanced" ? score.subjectPoints : score.gradeDetail,
+        score.teacher,
+      ]);
     }
-
-    sheet.mergeCells(1, 1, 1, totalColumns);
-    sheet.mergeCells(2, 1, 2, totalColumns);
-    for (let index = 0; index < subjects.length; index += 1) {
-      const start = 2 + index * 4;
-      sheet.mergeCells(4, start, 4, start + 3);
-    }
-
-    const applyBanding = (rowNumber: number, fill: string, fontSize: number, bold = false) => {
-      const row = sheet.getRow(rowNumber);
-      row.eachCell({ includeEmpty: true }, (cell) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
-        cell.font = { name: "Aptos", size: fontSize, bold, color: { argb: "FF1F2937" } };
-        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-        cell.border = border;
-      });
-    };
-
-    applyBanding(1, "FF123A63", 14, true);
-    sheet.getRow(1).eachCell((cell) => {
-      cell.font = { name: "Aptos", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
+    const header = sheet.getRow(1);
+    header.height = 28;
+    header.eachCell((cell) => {
+      cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF123A63" } };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     });
-
-    applyBanding(2, "FFEAF1FB", 10, false);
-    applyBanding(4, subjectFill, 11, true);
-    applyBanding(5, headerFill, 10, true);
-
-    const learnerHeader = sheet.getCell("A5");
-    learnerHeader.value = "Learner";
-    learnerHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: headerFill } };
-    learnerHeader.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FF1F2937" } };
-    learnerHeader.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-    learnerHeader.border = border;
-
-    for (let rowNumber = 6; rowNumber <= sheet.rowCount; rowNumber += 1) {
+    sheet.columns = headers.map((headerText, index) => ({
+      width: index === 0 ? 28 : headerText === "Subject" ? 24 : headerText === "Grade descriptor / points" ? 24 : 14,
+    }));
+    sheet.autoFilter = { from: "A1", to: sheet.getCell(sheet.rowCount, headers.length).address };
+    for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber += 1) {
       const row = sheet.getRow(rowNumber);
-      row.height = 22;
-      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        cell.border = border;
-        cell.alignment =
-          colNumber === 1
-            ? { vertical: "middle", horizontal: "left", wrapText: true }
-            : { vertical: "middle", horizontal: "center", wrapText: true };
-        if (colNumber === 1) {
-          cell.font = { name: "Aptos", size: 10.5, bold: true, color: { argb: "FF111827" } };
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: learnerFill } };
-        } else {
-          cell.font = { name: "Aptos", size: 10.5, color: { argb: "FF111827" } };
-        }
-      });
       if (rowNumber % 2 === 0) {
-        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-          if (colNumber !== 1) {
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
-          }
+        row.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F8FC" } };
         });
       }
-    }
-
-    const columns = [
-      { width: 34 },
-      ...subjects.flatMap(() => [{ width: 14 }, { width: 14 }, { width: 12 }, { width: 10 }]),
-    ];
-    sheet.columns = columns as { width: number }[];
-    sheet.autoFilter = { from: "A5", to: sheet.getCell(sheet.rowCount, totalColumns).address };
-
-    const schoolName = "EduTrack";
-    const termName = terms?.find((term) => term.id === selectedTermId)?.name ?? "N/A";
-    const safeTitle =
-      `${schoolName}_${title}_${termName}`.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
-      "marksheet";
-
-    await workbook.xlsx.writeBuffer().then((buffer) => {
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      row.eachCell((cell) => {
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        if (cell.value === "MISSING MARK") {
+          cell.font = { color: { argb: "FFB42318" }, bold: true };
+        }
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${safeTitle}.xlsx`;
-      link.click();
-      URL.revokeObjectURL(url);
-    });
+    }
+    const safeName = `${title}_${selectedTermName}`
+      .replace(/[^a-z0-9]+/gi, "_")
+      .replace(/^_+|_+$/g, "") || "marksheet";
+    const buffer = await workbook.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeName}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={title}
-        description="View learner scores by subject with formative, summative, total and grade columns."
+        description="Approved marks and missing results follow the same calculations and paper breakdown as report cards."
         actions={
           <button
             type="button"
             onClick={downloadExcel}
-            className="rounded-md bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-            disabled={!visibleStudents.length || !subjects?.length || (!classId && !streamId)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+            disabled={!rows.length || (!classId && !streamId)}
           >
-            {classId || streamId ? "Download Excel" : "Select class or stream to download"}
+            <Download className="h-4 w-4" />
+            {classId || streamId ? "Download Excel" : "Select a class or stream to download"}
           </button>
         }
       />
 
-      <Panel className="mb-6 space-y-4">
+      <Panel className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">Filters</p>
-            <p className="text-xs text-muted-foreground">
-              Narrow the sheet by term, class, and stream.
-            </p>
+            <p className="text-xs text-muted-foreground">Choose a term, class, and stream.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Pill tone="muted">{scoreStats.learnerCount} learners</Pill>
-            <Pill tone="muted">{scoreStats.subjectCount} subjects</Pill>
-            <Pill tone="muted">{scoreStats.assessedCells} scored cells</Pill>
+            <Pill tone="muted"><Users className="mr-1 inline h-3.5 w-3.5" />{visibleStudents.length} learners</Pill>
+            <Pill tone="muted"><BookOpen className="mr-1 inline h-3.5 w-3.5" />{subjectCount} subjects</Pill>
+            <Pill tone="success">{completeCount} complete results</Pill>
+            {missingCount > 0 && <Pill tone="danger">{missingCount} missing results</Pill>}
           </div>
         </div>
-
-        <div className="grid gap-3 lg:grid-cols-12">
-          <div className="lg:col-span-4">
-            <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Term
-            </label>
-            <select
-              className={inputClass}
-              value={selectedTermId}
-              onChange={(event) => setTermId(event.target.value)}
-            >
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Term
+            <select className={inputClass} value={selectedTermId} onChange={(event) => setTermId(event.target.value)}>
               <option value="">Select term</option>
-              {(terms ?? []).map((term) => (
-                <option key={term.id} value={term.id}>
-                  {term.name}
-                  {term.is_current ? " (Current)" : ""}
-                </option>
+              {terms.map((term) => (
+                <option key={term.id} value={term.id}>{term.name}{term.is_current ? " (Current)" : ""}</option>
               ))}
             </select>
-          </div>
-          <div className="lg:col-span-4">
-            <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Class
-            </label>
+          </label>
+          <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Class
             <select
               className={inputClass}
               value={classId}
-              onChange={(event) => {
-                setClassId(event.target.value);
-                setStreamId("");
-              }}
+              onChange={(event) => { setClassId(event.target.value); setStreamId(""); }}
             >
               <option value="">All classes</option>
-              {(classes ?? []).map((item) => (
+              {classes.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {classLabel(item)}
+                  {item.name} ({item.education_level === "advanced" ? "A-Level" : "O-Level"})
                 </option>
               ))}
             </select>
-          </div>
-          <div className="lg:col-span-4">
-            <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Stream
-            </label>
-            <select
-              className={inputClass}
-              value={streamId}
-              onChange={(event) => setStreamId(event.target.value)}
-            >
+          </label>
+          <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Stream
+            <select className={inputClass} value={streamId} onChange={(event) => setStreamId(event.target.value)}>
               <option value="">All streams</option>
-              {visibleStreams.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
+              {visibleStreams.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
-          </div>
+          </label>
         </div>
       </Panel>
 
@@ -519,111 +362,82 @@ function MarksheetPage() {
         <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-border pb-4">
           <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground">
             <Filter className="h-3.5 w-3.5" />
-            Marksheet overview
+            {selectedTermName || "Select term"}
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-            <LayoutGrid className="h-3.5 w-3.5" />
-            Wide subject matrix
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-            <Users className="h-3.5 w-3.5" />
-            Learners
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-            <BookOpen className="h-3.5 w-3.5" />
-            Subjects
-          </div>
+          <Pill tone="muted">Report card results</Pill>
+          <Pill tone="muted">Approved marks only</Pill>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-max border-separate border-spacing-0 text-sm">
-            <thead className="sticky top-0 z-20 bg-card">
-              <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="sticky left-0 z-30 w-56 border-b border-border bg-card px-3 py-3">
-                  Learner
-                </th>
-                {(subjects ?? []).map((subject) => (
-                  <th
-                    key={subject.id}
-                    colSpan={4}
-                    className="min-w-[18rem] border-b border-border px-3 py-3 text-center text-foreground"
-                  >
-                    {subject.name}
-                  </th>
-                ))}
-              </tr>
-              <tr className="bg-card text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                <th className="sticky left-0 z-30 w-56 border-b border-border bg-card px-3 py-2" />
-                {(subjects ?? []).map((subject) => (
-                  <th
-                    key={`${subject.id}-subheads`}
-                    colSpan={4}
-                    className="border-b border-border px-3 py-2"
-                  >
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      <span>Formative</span>
-                      <span>Summative</span>
-                      <span>Total</span>
-                      <span>{selectedClassLevel === "advanced" ? "Points" : "Grade"}</span>
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visibleStudents.map((student, index) => (
-                <tr key={student.id} className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                  <td className="sticky left-0 z-20 w-56 border-b border-border bg-inherit px-3 py-3 align-middle">
-                    <div className="font-medium leading-tight">{student.full_name}</div>
-                  </td>
-                  {(subjects ?? []).map((subject) => {
-                    const record = assessmentLookup.get(`${student.id}:${subject.id}`);
-                    const formative = record?.formative ?? "";
-                    const summative = record?.summative ?? "";
-                    const gradeTotal = Number(formative || 0) + Number(summative || 0);
-                    const grade = gradeFor(gradeTotal, selectedClassLevel);
-                    const total =
-                      record?.formative != null || record?.summative != null
-                        ? Number(record.formative ?? 0) + Number(record.summative ?? 0)
-                        : "";
-                    return (
-                      <td
-                        key={`${student.id}:${subject.id}`}
-                        colSpan={4}
-                        className="min-w-[18rem] border-b border-border px-3 py-3 align-middle"
-                      >
-                        <div className="grid grid-cols-4 gap-2 text-center text-xs sm:text-sm">
-                          <span className="rounded-md bg-muted/40 px-2 py-1 font-medium">
-                            {formative === "" ? "-" : formative}
-                          </span>
-                          <span className="rounded-md bg-muted/40 px-2 py-1 font-medium">
-                            {summative === "" ? "-" : summative}
-                          </span>
-                          <span className="rounded-md bg-muted/40 px-2 py-1 font-semibold">
-                            {total === "" ? "-" : total}
-                          </span>
-                          <span className="rounded-md bg-muted/40 px-2 py-1 font-semibold">
-                            {grade || "-"}
-                          </span>
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {visibleStudents.length === 0 && (
+        {resultsError ? (
+          <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            Unable to load marks: {resultsError.message}
+          </p>
+        ) : resultsLoading ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Loading approved results…</p>
+        ) : visibleStudents.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No active learners match these filters.</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No assigned subjects or approved results were found for these learners in this term.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="min-w-[1050px] w-full text-sm">
+              <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <td
-                    colSpan={1 + (subjects ?? []).length * 4}
-                    className="px-3 py-10 text-center text-sm text-muted-foreground"
-                  >
-                    No learners match the selected filters.
-                  </td>
+                  <th className="px-3 py-3">Learner</th>
+                  <th className="px-3 py-3">Class</th>
+                  <th className="px-3 py-3">Stream</th>
+                  <th className="px-3 py-3">Subject</th>
+                  <th className="px-3 py-3">Paper</th>
+                  <th className="px-3 py-3 text-right">Formative</th>
+                  {activePeriods.map((period) => <th key={period} className="px-3 py-3 text-right">{period}</th>)}
+                  <th className="px-3 py-3 text-right">Total</th>
+                  <th className="px-3 py-3 text-right">Average</th>
+                  <th className="px-3 py-3">Grade</th>
+                  <th className="px-3 py-3">Descriptor / points</th>
+                  <th className="px-3 py-3">Teacher</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((entry) => {
+                  const { row, student, gradingLevel } = entry;
+                  const isSummary = Boolean(row.isSubjectSummary);
+                  const className = classes.find((item) => item.id === student.class_id)?.name ?? "—";
+                  const streamName = streams.find((item) => item.id === student.stream_id)?.name ?? "—";
+                  const periodScore = (period: "BOT" | "MOT" | "EOT") =>
+                    period === "BOT" ? row.bot : period === "MOT" ? row.mot : row.eot;
+                  const detail = gradingLevel === "advanced" ? row.subjectPoints : row.gradeDetail;
+                  return (
+                    <tr
+                      key={entry.key}
+                      className={`border-t border-border ${isSummary ? "bg-blue-50/70 font-semibold dark:bg-blue-950/20" : ""}`}
+                    >
+                      <td className="whitespace-nowrap px-3 py-3 font-medium">{student.full_name}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{className}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{streamName}</td>
+                      <td className="px-3 py-3">{row.subject}</td>
+                      <td className="px-3 py-3">{row.paperName || (isSummary ? "Subject total" : "—")}</td>
+                      <td className="px-3 py-3 text-right">{row.formative || "—"}</td>
+                      {activePeriods.map((period) => (
+                        <td key={period} className="px-3 py-3 text-right">{periodScore(period) || "—"}</td>
+                      ))}
+                      <td className={`px-3 py-3 text-right ${row.total === "MISSING MARK" ? "font-semibold text-red-700" : ""}`}>
+                        {row.total || "—"}
+                      </td>
+                      <td className={`px-3 py-3 text-right ${row.totalAverage === "MISSING MARK" ? "font-semibold text-red-700" : ""}`}>
+                        {row.totalAverage || "—"}
+                      </td>
+                      <td className="px-3 py-3">{row.grade || "—"}</td>
+                      <td className="px-3 py-3">{detail || "—"}</td>
+                      <td className="px-3 py-3">{row.teacher || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Panel>
     </div>
   );

@@ -64,7 +64,7 @@ export function useAcademicsData(schoolId: string | null) {
     queryFn: async () => {
       const schoolQuery = <T extends { eq(column: string, value: string): T }>(query: T) =>
         schoolId ? query.eq("school_id", schoolId) : query;
-      const safeLoad = async <T,>(promise: Promise<QueryResult<T>>, fallback: T) => {
+      const safeLoad = async <T,>(promise: PromiseLike<QueryResult<T>>, fallback: T) => {
         const result = await promise;
         if (result.error) return fallback;
         return (result.data ?? fallback) as T;

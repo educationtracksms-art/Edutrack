@@ -9,6 +9,7 @@ import { PasswordInput } from "@/components/ui-kit";
 import logoUrl from "@/assets/logo-optimized.png";
 import { fetchCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/integrations/supabase/client";
+import { recordSessionActivity } from "@/lib/session";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -46,6 +47,9 @@ function AuthPage() {
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (data.session) {
+        // Mark the restored session as active so its 30-minute inactivity
+        // window starts from now.
+        recordSessionActivity();
         // Warm the user cache in the background while navigating instantly.
         void queryClient.prefetchQuery({
           queryKey: ["current-user"],
@@ -85,6 +89,9 @@ function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      // Mark the new session as active and warm the user cache so the dashboard
+      // loads from cache with no extra round-trips after navigation.
+      recordSessionActivity();
       // Navigate FIRST (shell paints instantly from cached/in-flight user),
       // warm the current-user query in the background. No extra getSession()
       // round-trip: signIn already persisted the session locally.

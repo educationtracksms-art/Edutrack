@@ -8,20 +8,8 @@ import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { fetchDosApprovalRows, type ApprovalRow } from "@/lib/dos-approvals";
-import { updateAssessmentStatus } from "@/lib/admin.functions";
+import { updateAssessmentStatus, updateFormativeMarkStatus } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
-
-type SubmissionSummaryRow = {
-  key: string;
-  teacher_name: string;
-  subject_name: string;
-  class_name: string;
-  stream_name: string;
-  marks_submitted: number;
-  submitted_count: number;
-  expected_count: number;
-  paper_name?: string | null;
-};
 
 export const Route = createFileRoute("/_authenticated/approval")({
   beforeLoad: async () => {
@@ -58,8 +46,9 @@ function ApprovalsPage() {
   const schoolId = me?.profile?.school_id ?? null;
   const isDos = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
   const updateStatus = useServerFn(updateAssessmentStatus);
+  const updateFormativeStatus = useServerFn(updateFormativeMarkStatus);
 
-  const { data: allRows, isLoading } = useQuery({
+  const { data: approvalData, isLoading } = useQuery({
     queryKey: ["dos-assessment-rows", schoolId],
     enabled: !!schoolId && isDos,
     queryFn: async () => fetchDosApprovalRows(schoolId!),
@@ -68,6 +57,8 @@ function ApprovalsPage() {
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
+  const allRows = approvalData?.rows;
+  const coverageRows = approvalData?.coverage ?? [];
   const pendingRows = useMemo(
     () => (allRows ?? []).filter((row) => row.status !== "approved"),
     [allRows],
@@ -124,16 +115,9 @@ function ApprovalsPage() {
     mutationFn: async (vars: { rows: ApprovalRow[]; status: ApprovalRow["status"] }) => {
       for (const row of vars.rows) {
         if (row.record_type === "formative") {
-          const { error } = await (supabase as any)
-            .from("formative_marks")
-            .update({
-              status: vars.status,
-              locked: vars.status === "approved",
-              approved_by: vars.status === "approved" ? me?.userId ?? null : null,
-              approved_at: vars.status === "approved" ? new Date().toISOString() : null,
-            })
-            .eq("id", row.id);
-          if (error) throw new Error(error.message);
+          await updateFormativeStatus({
+            data: { markId: row.id, status: vars.status, reason: null },
+          });
         } else {
           await updateStatus({
             data: { assessmentId: row.id, status: vars.status, reason: null },
@@ -149,70 +133,6 @@ function ApprovalsPage() {
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
-
-  const submissionSummaryRows = useMemo(() => {
-    const rows = pendingRows ?? [];
-    const expectedTotals = new Map<string, number>();
-    const submittedTotals = new Map<string, number>();
-    const teacherNames = new Map<string, string>();
-    const subjectNames = new Map<string, string>();
-    const classNames = new Map<string, string>();
-    const streamNames = new Map<string, string>();
-
-    for (const row of rows) {
-      const coverageKey = [
-        row.submitted_by ?? "unassigned",
-        row.subject_id ?? "unknown-subject",
-        row.class_id ?? "unknown-class",
-        row.stream_id ?? "all-streams",
-      ].join(":");
-
-      if (row.submitted_by) {
-        teacherNames.set(row.submitted_by, row.submitted_by_name ?? "Unknown teacher");
-      }
-      subjectNames.set(row.subject_id, row.subject_name ?? "Unknown subject");
-      classNames.set(row.class_id ?? "unknown-class", row.class_name ?? "Unknown class");
-      streamNames.set(row.stream_id ?? "all-streams", row.stream_name ?? "All streams");
-
-      expectedTotals.set(coverageKey, (expectedTotals.get(coverageKey) ?? 0) + 1);
-      if (row.status === "submitted" || row.status === "approved") {
-        submittedTotals.set(coverageKey, (submittedTotals.get(coverageKey) ?? 0) + 1);
-      }
-    }
-
-    const summary = new Map<string, SubmissionSummaryRow>();
-    for (const row of rows) {
-      if (!row.submitted_by) continue;
-      const coverageKey = [
-        row.submitted_by,
-        row.subject_id ?? "unknown-subject",
-        row.class_id ?? "unknown-class",
-        row.stream_id ?? "all-streams",
-      ].join(":");
-      const expectedCount = expectedTotals.get(coverageKey) ?? 0;
-      const submittedCount = submittedTotals.get(coverageKey) ?? 0;
-      if (expectedCount === 0) continue;
-
-      summary.set(coverageKey, {
-        key: coverageKey,
-        teacher_name: teacherNames.get(row.submitted_by) ?? "Unknown teacher",
-        subject_name: subjectNames.get(row.subject_id) ?? "Unknown subject",
-        class_name: classNames.get(row.class_id ?? "unknown-class") ?? "Unknown class",
-        stream_name: streamNames.get(row.stream_id ?? "all-streams") ?? "All streams",
-        marks_submitted: Math.round((submittedCount / expectedCount) * 100),
-        submitted_count: submittedCount,
-        expected_count: expectedCount,
-      });
-    }
-
-    return Array.from(summary.values()).sort((a, b) => {
-      const teacherCompare = a.teacher_name.localeCompare(b.teacher_name);
-      if (teacherCompare !== 0) return teacherCompare;
-      const subjectCompare = a.subject_name.localeCompare(b.subject_name);
-      if (subjectCompare !== 0) return subjectCompare;
-      return a.class_name.localeCompare(b.class_name);
-    });
-  }, [pendingRows]);
 
   const approvedGroupRows = useMemo(() => {
     const rows = [...(approvedRows ?? [])];
@@ -251,29 +171,30 @@ function ApprovalsPage() {
                 <th className="pb-2">Subject</th>
                 <th className="pb-2">Class</th>
                 <th className="pb-2">Stream</th>
-                <th className="pb-2">Marks submitted</th>
+                <th className="pb-2">Term</th>
+                <th className="pb-2">Assessed</th>
+                <th className="pb-2">Submitted</th>
+                <th className="pb-2">Approved</th>
               </tr>
             </thead>
             <tbody>
-              {submissionSummaryRows.length ? (
-                submissionSummaryRows.map((row) => (
+              {coverageRows.length ? (
+                coverageRows.map((row) => (
                   <tr key={row.key} className="border-t border-border">
                     <td className="py-2 pr-4 font-medium">{row.teacher_name}</td>
                     <td className="py-2 pr-4">{row.subject_name}{row.paper_name ? ` (${row.paper_name})` : ""}</td>
                     <td className="py-2 pr-4">{row.class_name}</td>
                     <td className="py-2 pr-4">{row.stream_name}</td>
-                    <td className="py-2 pr-4">
-                      {row.marks_submitted}%
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({row.submitted_count}/{row.expected_count})
-                      </span>
-                    </td>
+                    <td className="py-2 pr-4">{row.term_name}</td>
+                    <td className="py-2 pr-4">{row.assessed_count}/{row.expected_count}</td>
+                    <td className="py-2 pr-4">{row.submitted_count}/{row.expected_count}</td>
+                    <td className="py-2 pr-4 font-medium">{row.approved_count}/{row.expected_count}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="py-4 text-muted-foreground">
-                    No submitted marks found yet.
+                  <td colSpan={8} className="py-4 text-muted-foreground">
+                    No active teacher allocations or assessment periods were found for this school.
                   </td>
                 </tr>
               )}
@@ -434,13 +355,35 @@ function ApprovalsPage() {
                       const rows = group.rows;
                       const row = rows[0];
                       const formative = rows.find((item) => item.record_type === "formative");
-                      const bot = rows.find((item) => item.exam_type === "beginning_of_term");
-                      const mot = rows.find((item) => item.exam_type === "mid_term");
-                      const eot = rows.find((item) => item.exam_type === "end_of_term");
-                      const isMissing = rows.some((item) => item.is_missing);
-                      const total = Number(formative?.formative ?? 0) +
-                        [bot, mot, eot].filter(Boolean).reduce((sum, item) => sum + Number(item?.summative ?? 0), 0) /
-                          Math.max(1, [bot, mot, eot].filter(Boolean).length);
+                      const periodConfigurationExists = rows.some((item) => item.assessment_periods_configured);
+                      const configuredActiveTypes = rows.find((item) => item.assessment_periods_configured)
+                        ?.active_exam_types ?? [];
+                      const activeTypes = periodConfigurationExists
+                        ? configuredActiveTypes
+                        : rows
+                            .filter((item) => item.record_type === "summative")
+                            .map((item) => item.exam_type ?? "end_of_term");
+                      const activeRows = activeTypes.map((type) =>
+                        rows.find((item) => item.exam_type === type && item.record_type === "summative"),
+                      );
+                      const hasMissingPeriod = activeRows.some((item) => !item || item.summative == null);
+                      const isMissing = rows.some((item) => item.is_missing) || !formative || hasMissingPeriod;
+                      const approvedSummatives = activeRows
+                        .map((item) => item?.summative)
+                        .filter((value): value is number => value != null);
+                      const averageSummative = approvedSummatives.length
+                        ? approvedSummatives.reduce((sum, value) => sum + Number(value), 0) / approvedSummatives.length
+                        : null;
+                      const total = Number(formative?.formative ?? 0) + Number(averageSummative ?? 0);
+                      const periodValue = (examType: string) => {
+                        if (!activeTypes.includes(examType)) return "—";
+                        const assessment = rows.find(
+                          (item) => item.record_type === "summative" && item.exam_type === examType,
+                        );
+                        return !assessment || assessment.summative == null || assessment.is_missing
+                          ? "MISSING MARK"
+                          : assessment.summative;
+                      };
                       return (
                         <tr key={`${row.student_id}-${row.subject_id}-${row.paper_id ?? "subject"}-${row.term_id}`} className="border-t border-border">
                           <td className="py-3 pr-4">
@@ -451,10 +394,12 @@ function ApprovalsPage() {
                           <td className="py-3 pr-4">{row.paper_name || "—"}</td>
                           <td className="py-3 pr-4">{row.stream_name}</td>
                           <td className="py-3 pr-4">{row.term_name}</td>
-                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : formative?.formative ?? "—"}</td>
-                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : bot?.summative ?? "—"}</td>
-                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : mot?.summative ?? "—"}</td>
-                          <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : eot?.summative ?? "—"}</td>
+                          <td className="py-3 pr-4">
+                            {!formative || formative.is_missing ? "MISSING MARK" : formative.formative ?? "—"}
+                          </td>
+                          <td className="py-3 pr-4">{periodValue("beginning_of_term")}</td>
+                          <td className="py-3 pr-4">{periodValue("mid_term")}</td>
+                          <td className="py-3 pr-4">{periodValue("end_of_term")}</td>
                           <td className="py-3 pr-4">{isMissing ? "MISSING MARK" : total}</td>
                           <td className="py-3 pr-4">
                             <Pill tone="success">{row.status}</Pill>

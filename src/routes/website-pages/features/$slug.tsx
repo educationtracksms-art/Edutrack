@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 
 import { PublicShell } from "@/components/layout/PublicShell";
-import { getFeature } from "../features";
+import { getFeature, type Feature } from "../features";
 
 const FIRST_FEATURE_SLUG = "students";
 
@@ -29,12 +29,12 @@ export const Route = createFileRoute("/website-pages/features/$slug")({
         params: { slug: FIRST_FEATURE_SLUG },
       });
     }
-    return feature;
+    return feature!;
   },
 });
 
 function FeatureDetailPage() {
-  const feature = Route.useLoaderData();
+  const feature = Route.useLoaderData() as Feature;
 
   return (
     <PublicShell>

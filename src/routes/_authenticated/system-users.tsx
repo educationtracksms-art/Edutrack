@@ -40,10 +40,10 @@ export const Route = createFileRoute("/_authenticated/system-users")({
 type IssuedCredential = { email: string; password: string };
 type Person = {
   id: string;
-  full_name: string;
+  full_name: string | null;
   email: string;
   initials: string | null;
-  is_active: boolean;
+  is_active?: boolean;
   must_change_password: boolean;
   school_id: string | null;
   department_id: string | null;
