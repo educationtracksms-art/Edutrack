@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_authenticated/academics/allocations")({
 });
 
 function AllocationsPage() {
-  const { me, schoolId, allowed, data, refresh } = useAcademicsPage();
+  const { me, schoolId, allowed, data, isLoading, refresh } = useAcademicsPage();
   const [editingAllocationId, setEditingAllocationId] = useState<string | null>(null);
   const [allocForm, setAllocForm] = useState({
     teacher_id: "",
@@ -48,7 +48,11 @@ function AllocationsPage() {
       const subjectPapers = (data?.subjectPapers ?? [])
         .filter((paper) => paper.subject_id === subject.id)
         .sort((a, b) => a.position - b.position);
-      if (subject.education_level === "advanced" && subjectPapers.length > 0 && !allocForm.paper_id) {
+      if (
+        subject.education_level === "advanced" &&
+        subjectPapers.length > 0 &&
+        !allocForm.paper_id
+      ) {
         throw new Error("Select the A-Level paper this teacher will handle");
       }
       if (subject.education_level !== "advanced" && allocForm.paper_id) {
@@ -107,9 +111,11 @@ function AllocationsPage() {
         if (!createdAllocation) throw new Error("The teacher allocation was not created");
       }
       const { weekly_periods: _weeklyPeriods, ...historyPayload } = payload;
-      const { error: historyError } = await supabase
-        .from("teacher_allocation_history")
-        .insert({ ...historyPayload, action: editingAllocationId ? "updated" : "assigned", performed_by: me?.userId ?? null });
+      const { error: historyError } = await supabase.from("teacher_allocation_history").insert({
+        ...historyPayload,
+        action: editingAllocationId ? "updated" : "assigned",
+        performed_by: me?.userId ?? null,
+      });
       return historyError?.message ?? null;
     },
     onSuccess: (historyError) => {
@@ -122,7 +128,7 @@ function AllocationsPage() {
         stream_id: "",
         weekly_periods: "1",
       });
-      toast.success("Teacher allocated");
+      toast.success(editingAllocationId ? "Allocation updated" : "Teacher allocated");
       if (historyError) {
         toast.error(`Allocation saved, but its history could not be recorded: ${historyError}`);
       }
@@ -206,8 +212,7 @@ function AllocationsPage() {
     (teacher) =>
       Boolean(teacher.department_id) &&
       (!selectedAllocationSubject?.department_id ||
-      teacher.department_id === selectedAllocationSubject.department_id,
-      )
+        teacher.department_id === selectedAllocationSubject.department_id),
   );
   const allocationPapers = (data?.subjectPapers ?? [])
     .filter((paper) => paper.subject_id === allocForm.subject_id)
@@ -230,13 +235,35 @@ function AllocationsPage() {
       />
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
-          { label: "Allocations", value: data?.allocations.length ?? 0, styles: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" },
-          { label: "Teachers", value: data?.teachers.length ?? 0, styles: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" },
-          { label: "Subjects", value: data?.subjects.length ?? 0, styles: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" },
+          {
+            label: "Allocations",
+            value: data?.allocations.length ?? 0,
+            styles:
+              "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
+          },
+          {
+            label: "Teachers",
+            value: data?.teachers.length ?? 0,
+            styles:
+              "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
+          },
+          {
+            label: "Subjects",
+            value: data?.subjects.length ?? 0,
+            styles:
+              "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+          },
         ].map((stat) => (
-          <div key={stat.label} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}>
-            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">{stat.label}</span>
-            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">{stat.value}</span>
+          <div
+            key={stat.label}
+            className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center shadow-sm sm:flex-row sm:justify-between sm:gap-2 sm:px-4 sm:py-3 ${stat.styles}`}
+          >
+            <span className="truncate text-[10px] font-semibold leading-tight sm:text-sm">
+              {stat.label}
+            </span>
+            <span className="text-lg font-bold tabular-nums leading-tight sm:text-xl">
+              {stat.value}
+            </span>
           </div>
         ))}
       </div>
@@ -250,6 +277,7 @@ function AllocationsPage() {
         >
           <Field label="Teacher">
             <select
+              disabled={isLoading}
               required
               className={inputClass}
               value={allocForm.teacher_id}
@@ -269,11 +297,13 @@ function AllocationsPage() {
               }}
             >
               <option value="">
-                {allocationTeachers.length > 0
-                  ? "Select teacher"
-                  : selectedAllocationSubject
-                    ? "No teachers in this department"
-                    : "No eligible teachers"}
+                {isLoading
+                  ? "Loading teachers..."
+                  : allocationTeachers.length > 0
+                    ? "Select teacher"
+                    : selectedAllocationSubject
+                      ? "No teachers in this department"
+                      : "No eligible teachers"}
               </option>
               {allocationTeachers.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -284,6 +314,7 @@ function AllocationsPage() {
           </Field>
           <Field label="Subject">
             <select
+              disabled={isLoading}
               required
               className={inputClass}
               value={allocForm.subject_id}
@@ -303,9 +334,11 @@ function AllocationsPage() {
               }}
             >
               <option value="">
-                {allocationSubjects.length > 0
-                  ? "Select subject"
-                  : "No subjects in this department"}
+                {isLoading
+                  ? "Loading subjects..."
+                  : allocationSubjects.length > 0
+                    ? "Select subject"
+                    : "No subjects in this department"}
               </option>
               {allocationSubjects.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -314,21 +347,25 @@ function AllocationsPage() {
               ))}
             </select>
           </Field>
-          {selectedAllocationSubject?.education_level === "advanced" && allocationPapers.length > 0 && (
-            <Field label="A-Level paper">
-              <select
-                required
-                className={inputClass}
-                value={allocForm.paper_id}
-                onChange={(e) => setAllocForm({ ...allocForm, paper_id: e.target.value })}
-              >
-                <option value="">Select paper</option>
-                {allocationPapers.map((paper) => (
-                  <option key={paper.id} value={paper.id}>{paper.name}</option>
-                ))}
-              </select>
-            </Field>
-          )}
+          {selectedAllocationSubject?.education_level === "advanced" &&
+            allocationPapers.length > 0 && (
+              <Field label="A-Level paper">
+                <select
+                  disabled={isLoading}
+                  required={!isLoading}
+                  className={inputClass}
+                  value={allocForm.paper_id}
+                  onChange={(e) => setAllocForm({ ...allocForm, paper_id: e.target.value })}
+                >
+                  <option value="">Select paper</option>
+                  {allocationPapers.map((paper) => (
+                    <option key={paper.id} value={paper.id}>
+                      {paper.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
           <Field label="Class">
             <select
               required
@@ -338,7 +375,13 @@ function AllocationsPage() {
                 setAllocForm({ ...allocForm, class_id: e.target.value, stream_id: "" })
               }
             >
-              <option value="">Select class</option>
+              <option value="">
+                {isLoading
+                  ? "Loading classes..."
+                  : (data?.classes.length ?? 0) > 0
+                    ? "Select class"
+                    : "No classes available"}
+              </option>
               {(data?.classes ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
                   {classLabel(c)}
@@ -348,16 +391,22 @@ function AllocationsPage() {
           </Field>
           <Field label="Stream">
             <select
-              disabled={!allocForm.class_id}
+              disabled={isLoading || !allocForm.class_id}
               required={Boolean(
                 (data?.streams ?? []).some((stream) => stream.class_id === allocForm.class_id),
               )}
               className={inputClass}
               value={allocForm.stream_id}
-              onChange={(e) => setAllocForm((current) => ({ ...current, stream_id: e.target.value }))}
+              onChange={(e) =>
+                setAllocForm((current) => ({ ...current, stream_id: e.target.value }))
+              }
             >
               <option value="">
-                {allocForm.class_id ? "Select stream" : "Select a class first"}
+                {isLoading
+                  ? "Loading streams..."
+                  : allocForm.class_id
+                    ? "Select stream"
+                    : "Select a class first"}
               </option>
               {(data?.streams ?? [])
                 .filter((s) => !allocForm.class_id || s.class_id === allocForm.class_id)
@@ -388,7 +437,14 @@ function AllocationsPage() {
                 variant="ghost"
                 onClick={() => {
                   setEditingAllocationId(null);
-                  setAllocForm({ teacher_id: "", subject_id: "", paper_id: "", class_id: "", stream_id: "", weekly_periods: "1" });
+                  setAllocForm({
+                    teacher_id: "",
+                    subject_id: "",
+                    paper_id: "",
+                    class_id: "",
+                    stream_id: "",
+                    weekly_periods: "1",
+                  });
                 }}
               >
                 Cancel
@@ -400,76 +456,85 @@ function AllocationsPage() {
         <div className="mb-3 flex items-center justify-between border-t border-border pt-4">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Saved allocations · Output</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Current teacher, subject and class assignments.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Current teacher, subject and class assignments.
+            </p>
           </div>
-          <span className="text-xs text-muted-foreground">{data?.allocations.length ?? 0} total</span>
+          <span className="text-xs text-muted-foreground">
+            {data?.allocations.length ?? 0} total
+          </span>
         </div>
         <div className="overflow-hidden rounded-xl border border-border">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">Teacher</th>
-                <th className="pb-2">Subject</th>
-                <th className="pb-2">Paper</th>
-                <th className="pb-2">Department</th>
-                <th className="pb-2">Class</th>
-                <th className="pb-2">Stream</th>
-                <th className="pb-2">Periods / week</th>
-                <th className="pb-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.allocations ?? []).map((a) => (
-                <tr key={a.id} className="border-t border-border">
-                  <td className="py-2 font-medium">{teacherName(a.teacher_id)}</td>
-                  <td>{subjectName(a.subject_id)}</td>
-                  <td>{a.paper_id ? (data?.subjectPapers ?? []).find((paper) => paper.id === a.paper_id)?.name ?? "Unknown paper" : "—"}</td>
-                  <td>
-                    {departmentName(
-                      data?.subjects.find((s) => s.id === a.subject_id)?.department_id,
-                    )}
-                  </td>
-                  <td>{className(a.class_id)}</td>
-                  <td>{streamName(a.stream_id)}</td>
-                  <td>{a.weekly_periods}</td>
-                  <td className="text-right">
-                    <Btn
-                      variant="ghost"
-                      onClick={() => {
-                        setEditingAllocationId(a.id);
-                        setAllocForm({
-                          teacher_id: a.teacher_id,
-                          subject_id: a.subject_id,
-                          paper_id: a.paper_id ?? "",
-                          class_id: a.class_id,
-                          stream_id: a.stream_id ?? "",
-                          weekly_periods: String(a.weekly_periods ?? 1),
-                        });
-                      }}
-                    >
-                      Edit
-                    </Btn>
-                    <Btn
-                      variant="ghost"
-                      disabled={removeAllocation.isPending}
-                      onClick={() => removeAllocation.mutate(a.id)}
-                    >
-                      Remove
-                    </Btn>
-                  </td>
-                </tr>
-              ))}
-              {(data?.allocations ?? []).length === 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-muted-foreground">
-                    No allocations yet.
-                  </td>
+                  <th className="pb-2">Teacher</th>
+                  <th className="pb-2">Subject</th>
+                  <th className="pb-2">Paper</th>
+                  <th className="pb-2">Department</th>
+                  <th className="pb-2">Class</th>
+                  <th className="pb-2">Stream</th>
+                  <th className="pb-2">Periods / week</th>
+                  <th className="pb-2" />
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {(data?.allocations ?? []).map((a) => (
+                  <tr key={a.id} className="border-t border-border">
+                    <td className="py-2 font-medium">{teacherName(a.teacher_id)}</td>
+                    <td>{subjectName(a.subject_id)}</td>
+                    <td>
+                      {a.paper_id
+                        ? ((data?.subjectPapers ?? []).find((paper) => paper.id === a.paper_id)
+                            ?.name ?? "Unknown paper")
+                        : "—"}
+                    </td>
+                    <td>
+                      {departmentName(
+                        data?.subjects.find((s) => s.id === a.subject_id)?.department_id,
+                      )}
+                    </td>
+                    <td>{className(a.class_id)}</td>
+                    <td>{streamName(a.stream_id)}</td>
+                    <td>{a.weekly_periods}</td>
+                    <td className="text-right">
+                      <Btn
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingAllocationId(a.id);
+                          setAllocForm({
+                            teacher_id: a.teacher_id,
+                            subject_id: a.subject_id,
+                            paper_id: a.paper_id ?? "",
+                            class_id: a.class_id,
+                            stream_id: a.stream_id ?? "",
+                            weekly_periods: String(a.weekly_periods ?? 1),
+                          });
+                        }}
+                      >
+                        Edit
+                      </Btn>
+                      <Btn
+                        variant="ghost"
+                        disabled={removeAllocation.isPending}
+                        onClick={() => removeAllocation.mutate(a.id)}
+                      >
+                        Remove
+                      </Btn>
+                    </td>
+                  </tr>
+                ))}
+                {(data?.allocations ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-muted-foreground">
+                      No allocations yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Panel>
     </div>

@@ -201,5 +201,5 @@ export function useAcademicsPage() {
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["academics", schoolId] });
   }
-  return { me, schoolId, allowed, data: query.data, refresh };
+  return { me, schoolId, allowed, data: query.data, isLoading: query.isLoading, refresh };
 }

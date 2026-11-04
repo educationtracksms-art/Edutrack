@@ -370,7 +370,6 @@ export const recordBursarExpense = createServerFn({ method: "POST" })
     (data: {
       payeeName: string;
       amount: number;
-      paymentMethod: string;
       narration?: string | null;
     }) => data,
   )

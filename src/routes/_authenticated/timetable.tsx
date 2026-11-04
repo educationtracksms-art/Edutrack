@@ -1434,7 +1434,9 @@ function TimetablePage() {
                     required
                     className={inputClass}
                     value={form.subject_id}
-                    onChange={(e) => setForm({ ...form, subject_id: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, subject_id: e.target.value, teacher_id: "" })
+                    }
                   >
                     <option value="">Select</option>
                     {timetableSubjects.map((item) => (
@@ -1652,4 +1654,3 @@ function countConflicts(entries: any[]) {
   }
   return conflicts;
 }
-

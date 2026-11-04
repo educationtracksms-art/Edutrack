@@ -219,11 +219,21 @@ function PromotionsPage() {
               className={inputClass}
               value={toStream}
               onChange={(e) => setToStream(e.target.value)}
-              disabled={outcome !== "promoted"}
+              required={Boolean(
+                outcome === "promoted" &&
+                  (data?.streams ?? []).some((stream) => stream.class_id === toClass),
+              )}
+              disabled={outcome !== "promoted" || !toClass}
             >
-              <option value="">Keep unassigned</option>
+              <option value="">
+                {toClass
+                  ? (data?.streams ?? []).some((stream) => stream.class_id === toClass)
+                    ? "Select stream"
+                    : "No streams (keep unassigned)"
+                  : "Select a target class first"}
+              </option>
               {(data?.streams ?? [])
-                .filter((s) => !toClass || s.class_id === toClass)
+                .filter((s) => s.class_id === toClass)
                 .map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}

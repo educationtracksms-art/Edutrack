@@ -26,15 +26,16 @@ function BankingPage() {
     queryKey: ["bursar-banking", schoolId],
     enabled: !!schoolId && canView,
     queryFn: async () => {
-      const [banks, cash, mobile, reconciliations, movements, statements] = await Promise.all([
+      const [banks, cash, pettyCash, mobile, reconciliations, movements, statements] = await Promise.all([
         db.from("finance_bank_accounts").select("id, account_name, bank_name, current_balance").eq("school_id", schoolId!),
         db.from("finance_cash_accounts").select("id, name, current_balance").eq("school_id", schoolId!),
+        db.from("finance_petty_cash_accounts").select("id, name").eq("school_id", schoolId!),
         db.from("finance_mobile_money_accounts").select("id, provider_name, account_name, current_balance").eq("school_id", schoolId!),
         db.from("finance_bank_reconciliations").select("id, reconciliation_number, bank_account_id, statement_date, statement_balance, book_balance, difference, status").eq("school_id", schoolId!).order("created_at", { ascending: false }).limit(100),
         db.from("bank_transactions").select("id, bank_account_id, reference, amount, value_date, status").eq("school_id", schoolId!).order("value_date", { ascending: false }).limit(300),
         db.from("finance_bank_statement_lines").select("id, bank_account_id, reference, amount, value_date, matched").eq("school_id", schoolId!).order("value_date", { ascending: false }).limit(300),
       ]);
-      return { banks: banks.data ?? [], cash: cash.data ?? [], mobile: mobile.data ?? [], reconciliations: reconciliations.data ?? [], movements: movements.data ?? [], statements: statements.data ?? [] };
+      return { banks: banks.data ?? [], cash: cash.data ?? [], pettyCash: pettyCash.data ?? [], mobile: mobile.data ?? [], reconciliations: reconciliations.data ?? [], movements: movements.data ?? [], statements: statements.data ?? [] };
     },
   });
   const save = useMutation({
@@ -46,7 +47,6 @@ function BankingPage() {
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
-  if (!canView) return <PageHeader title="Banking" description="You do not have permission to view this area." />;
   const liquidTotal = ((data?.banks ?? []) as any[]).reduce((sum, row) => sum + asNumber(row.current_balance), 0)
     + ((data?.cash ?? []) as any[]).reduce((sum, row) => sum + asNumber(row.current_balance), 0)
     + ((data?.mobile ?? []) as any[]).reduce((sum, row) => sum + asNumber(row.current_balance), 0);
@@ -60,6 +60,14 @@ function BankingPage() {
   );
   const latest = (data?.reconciliations ?? [])[0] as any | undefined;
   const latestDiff = latest ? reconciliationDifference({ statementClosingBalance: asNumber(latest.statement_balance), bookBalance: asNumber(latest.book_balance) }) : null;
+  const accountOptions: Array<{ id: string; label: string }> = form.accountKind === "bank"
+    ? (data?.banks ?? []).map((account: { id: string; account_name: string; bank_name: string | null }) => ({ id: account.id, label: `${account.account_name}${account.bank_name ? ` · ${account.bank_name}` : ""}` }))
+    : form.accountKind === "cash"
+      ? (data?.cash ?? []).map((account: { id: string; name: string }) => ({ id: account.id, label: account.name }))
+      : form.accountKind === "mobile_money"
+        ? (data?.mobile ?? []).map((account: { id: string; provider_name: string; account_name: string }) => ({ id: account.id, label: `${account.provider_name} · ${account.account_name}` }))
+        : (data?.pettyCash ?? []).map((account: { id: string; name: string }) => ({ id: account.id, label: account.name }));
+  if (!canView) return <PageHeader title="Banking" description="You do not have permission to view this area." />;
   return (
     <div className="space-y-4">
       <PageHeader
@@ -76,10 +84,32 @@ function BankingPage() {
       </div>
       {canManage && (
         <Panel title="Record movement">
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-5">
             <Field label="Account type">
               <select className={inputClass} value={form.accountKind} onChange={(event) => setForm({ ...form, accountKind: event.target.value, accountId: "" })}>
                 <option value="bank">Bank</option><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="petty_cash">Petty cash</option>
+              </select>
+            </Field>
+            <Field label="Account">
+              <select
+                required
+                className={inputClass}
+                value={form.accountId}
+                disabled={isPending || accountOptions.length === 0}
+                onChange={(event) => setForm({ ...form, accountId: event.target.value })}
+              >
+                <option value="">
+                  {isPending
+                    ? "Loading accounts..."
+                    : accountOptions.length > 0
+                      ? "Select account"
+                      : "No accounts available"}
+                </option>
+                {accountOptions.map((account: { id: string; label: string }) => (
+                  <option key={account.id} value={account.id}>
+                    {account.label}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Direction">
@@ -90,7 +120,7 @@ function BankingPage() {
             <Field label="Amount (UGX)"><input className={inputClass} value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} inputMode="decimal" /></Field>
             <Field label="Reference"><input className={inputClass} value={form.reference} onChange={(event) => setForm({ ...form, reference: event.target.value })} /></Field>
           </div>
-          <div className="mt-3"><Btn variant="accent" onClick={() => save.mutate()} disabled={save.isPending}>Record movement</Btn></div>
+          <div className="mt-3"><Btn variant="accent" onClick={() => save.mutate()} disabled={save.isPending || isPending || !form.accountId}>Record movement</Btn></div>
         </Panel>
       )}
       <Panel title="Reconciliations">
@@ -115,5 +145,3 @@ function BankingPage() {
     </div>
   );
 }
-
-
