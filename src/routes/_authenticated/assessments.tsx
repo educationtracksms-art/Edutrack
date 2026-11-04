@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/assessments")({
   component: AssessmentsPage,
 });
 
-function AssessmentsError({ error, reset }: { error: Error; reset: () => void }) {
+function AssessmentsError({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   useEffect(() => {
     reset();

@@ -5,6 +5,7 @@ import {
   HeadContent,
   useRouter,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -28,7 +29,7 @@ const SEO_CONFIG = {
   themeColor: "#2563eb",
 };
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
 
