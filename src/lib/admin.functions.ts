@@ -1112,6 +1112,37 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       throw new Error("Assessment not found in your school");
     }
 
+    const [{ data: currentPeriod }, { data: currentTerm }, { data: currentYear }] = await Promise.all([
+      context.supabase
+        .from("assessment_periods")
+        .select("is_active, is_locked, exam_type")
+        .eq("school_id", schoolId)
+        .eq("term_id", existingAssessment.term_id)
+        .maybeSingle(),
+      context.supabase
+        .from("terms")
+        .select("id, academic_year_id")
+        .eq("school_id", schoolId)
+        .eq("is_current", true)
+        .maybeSingle(),
+      context.supabase
+        .from("academic_years")
+        .select("id, is_current")
+        .eq("school_id", schoolId)
+        .eq("is_current", true)
+        .maybeSingle(),
+    ]);
+
+    if (existingError) throw new Error(existingError.message);
+    if (!currentPeriod) throw new Error("Assessment period not configured for this term");
+
+    if (!currentPeriod.is_active) {
+      throw new Error("Assessment period is not active. Contact school administration to open the period.");
+    }
+    if (currentPeriod.is_locked && data.status !== "approved") {
+      throw new Error("Assessment period is locked. Only approval status changes are allowed.");
+    }
+
     if (data.status === "approved" && existingAssessment.status !== "submitted") {
       throw new Error("Only submitted assessments can be approved");
     }
@@ -1127,6 +1158,12 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
     }
     if (data.status === "draft" && !["draft", "rejected", "submitted"].includes(existingAssessment.status)) {
       throw new Error("This assessment cannot be moved back to draft");
+    }
+    if (!currentPeriod.is_active) {
+      throw new Error("Assessment period is not active. Contact school administration to open the period.");
+    }
+    if (currentPeriod.is_locked && data.status !== "approved") {
+      throw new Error("Assessment period is locked. Only approval status changes are allowed.");
     }
     if (
       data.status === "submitted" &&
@@ -1235,6 +1272,37 @@ export const updateFormativeMarkStatus = createServerFn({ method: "POST" })
       throw new Error("Formative mark not found in your school");
     }
 
+    const [{ data: currentPeriod }, { data: currentTerm }, { data: currentYear }] = await Promise.all([
+      context.supabase
+        .from("assessment_periods")
+        .select("is_active, is_locked, exam_type")
+        .eq("school_id", schoolId)
+        .eq("term_id", existingMark.term_id)
+        .maybeSingle(),
+      context.supabase
+        .from("terms")
+        .select("id, academic_year_id")
+        .eq("school_id", schoolId)
+        .eq("is_current", true)
+        .maybeSingle(),
+      context.supabase
+        .from("academic_years")
+        .select("id, is_current")
+        .eq("school_id", schoolId)
+        .eq("is_current", true)
+        .maybeSingle(),
+    ]);
+
+    if (existingError) throw new Error(existingError.message);
+    if (!currentPeriod) throw new Error("Assessment period not configured for this term");
+
+    if (!currentPeriod.is_active) {
+      throw new Error("Assessment period is not active. Contact school administration to open the period.");
+    }
+    if (currentPeriod.is_locked && data.status !== "approved") {
+      throw new Error("Assessment period is locked. Only approval status changes are allowed.");
+    }
+
     if (data.status === "approved" && existingMark.status !== "submitted") {
       throw new Error("Only submitted formative marks can be approved");
     }
@@ -1252,6 +1320,12 @@ export const updateFormativeMarkStatus = createServerFn({ method: "POST" })
     }
     if (existingMark.status === "approved" && data.status === "draft") {
       throw new Error("Approved formative marks must be returned for correction before editing");
+    }
+    if (!currentPeriod.is_active) {
+      throw new Error("Assessment period is not active. Contact school administration to open the period.");
+    }
+    if (currentPeriod.is_locked && data.status !== "approved") {
+      throw new Error("Assessment period is locked. Only approval status changes are allowed.");
     }
 
     const patch: Record<string, unknown> = {
