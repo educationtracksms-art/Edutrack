@@ -18,7 +18,7 @@ type GuardContext = { queryClient: QueryClient };
  *  - all other school roles → full-screen blocking message
  */
 
-export type SubscriptionStatus = "active" | "trial" | "past_due" | "pending" | "confirmed" | "expired" | "cancelled" | "no_school" | "not_configured";
+export type SubscriptionStatus = "active" | "trial" | "past_due" | "pending" | "confirmed" | "expired" | "cancelled" | "no_school" | "not_configured" | "not_started";
 
 export async function requireSubscriptionAccess(
   context: GuardContext,
