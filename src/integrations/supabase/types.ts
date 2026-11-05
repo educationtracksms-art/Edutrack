@@ -8089,6 +8089,15 @@ export type Database = {
     };
     Functions: {
             can_view_subscription: { Args: never; Returns: boolean };
+      get_current_school_subscription_status: {
+        Args: never;
+        Returns: {
+          created_at: string;
+          ends_at: string | null;
+          starts_at: string;
+          status: string;
+        }[];
+      };
       consume_server_function_rate_limit: {
         Args: never;
         Returns: {
@@ -8340,7 +8349,6 @@ export const Constants = {
     },
   },
 } as const;
-
 
 
 

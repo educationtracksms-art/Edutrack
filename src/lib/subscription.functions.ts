@@ -552,12 +552,9 @@ export const getSchoolSubscriptionStatus = createServerFn({ method: "GET" })
     const schoolId = await schoolIdOf(context.supabase, context.userId);
     if (!schoolId) return { status: "no_school", subscription: null };
 
-    const { data: subscriptions, error } = await context.supabase
-      .from("school_subscriptions")
-      .select("id, status, starts_at, ends_at, plan_id, payment_reference")
-      .eq("school_id", schoolId)
-      .in("status", ["trial", "active", "past_due", "pending", "confirmed"])
-      .order("created_at", { ascending: false });
+    const { data: subscriptions, error } = await context.supabase.rpc(
+      "get_current_school_subscription_status",
+    );
 
     if (error) throw new Error(error.message);
 
