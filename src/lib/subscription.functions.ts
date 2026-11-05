@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireRateLimitedSupabaseAuth as requireSupabaseAuth } from "@/integrations/supabase/rate-limited-auth-middleware";
+import { isSubscriptionExpired } from "@/lib/subscription-status";
 
 export function durationToDays(value: number, unit: string): number {
   switch (unit) {
@@ -562,14 +563,11 @@ export const getSchoolSubscriptionStatus = createServerFn({ method: "GET" })
 
     if (error) throw new Error(error.message);
 
-    let effectiveStatus = subscription?.status ?? "not_configured";
-    if (subscription?.ends_at) {
-      const today = new Date();
-      const end = new Date(subscription.ends_at);
-      if (end < today && ["trial", "active", "past_due", "pending", "confirmed"].includes(subscription.status)) {
-        effectiveStatus = "expired";
-      }
-    }
+    const effectiveStatus = !subscription
+      ? "not_configured"
+      : isSubscriptionExpired(subscription.status, subscription.ends_at)
+        ? "expired"
+        : subscription.status;
 
     return { status: effectiveStatus, subscription, schoolId };
   });
