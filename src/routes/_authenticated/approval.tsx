@@ -1,10 +1,10 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
+import { Btn, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { fetchDosApprovalRows, type ApprovalRow } from "@/lib/dos-approvals";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/approval")({
       .maybeSingle();
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const roleNames = (roles ?? []).map((item) => item.role);
-    if (!roleNames.some((role) => ["dos", "head_teacher", "deputy_head_teacher"].includes(role))) throw redirect({ to: "/dashboard" });
+    if (!roleNames.some((role) => ["dos", "head_teacher", "deputy_head_teacher", "school_admin"].includes(role))) throw redirect({ to: "/dashboard" });
     if (!profile?.school_id) throw redirect({ to: "/dashboard" });
   },
   head: () => ({
@@ -35,22 +35,22 @@ export const Route = createFileRoute("/_authenticated/approval")({
       },
     ],
   }),
-  component: ApprovalsPage,
+  component: () => <ApprovalsPage view="pending" />,
 });
 
-function ApprovalsPage() {
+export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
   const queryClient = useQueryClient();
   const [sortBy, setSortBy] = useState<"created_at" | "class" | "stream" | "subject">("created_at");
   const [approvedGroupBy, setApprovedGroupBy] = useState<"class" | "subject">("class");
   const { data: me } = useCurrentUser();
   const schoolId = me?.profile?.school_id ?? null;
-  const isDos = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
+  const canManageApprovals = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher", "school_admin"]);
   const updateStatus = useServerFn(updateAssessmentStatus);
   const updateFormativeStatus = useServerFn(updateFormativeMarkStatus);
 
   const { data: approvalData, isLoading } = useQuery({
     queryKey: ["dos-assessment-rows", schoolId],
-    enabled: !!schoolId && isDos,
+    enabled: !!schoolId && canManageApprovals,
     queryFn: async () => fetchDosApprovalRows(schoolId!),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
@@ -58,7 +58,6 @@ function ApprovalsPage() {
     refetchOnMount: false,
   });
   const allRows = approvalData?.rows;
-  const coverageRows = approvalData?.coverage ?? [];
   const pendingRows = useMemo(
     () => (allRows ?? []).filter((row) => row.status !== "approved"),
     [allRows],
@@ -134,6 +133,13 @@ function ApprovalsPage() {
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
 
+  const availableStatusChanges: Record<ApprovalRow["status"], ApprovalRow["status"][]> = {
+    draft: ["submitted"],
+    submitted: ["approved", "rejected"],
+    approved: ["rejected"],
+    rejected: ["draft", "submitted"],
+  };
+
   const approvedGroupRows = useMemo(() => {
     const rows = [...(approvedRows ?? [])];
     const groups = new Map<string, ApprovalRow[]>();
@@ -158,162 +164,156 @@ function ApprovalsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Approvals for DOS"
-        description="Review submitted assessments and approve or return them for correction."
+        title={view === "pending" ? "Marks approvals" : "Approved results"}
+        description={
+          view === "pending"
+            ? "Review marks, change their status, and approve or return submitted assessments."
+            : "Review approved marks and return them for correction if needed."
+        }
+        actions={
+          <>
+            <Link
+              to="/approval"
+              className={`inline-flex min-h-10 items-center justify-center rounded-lg border px-3.5 py-2.5 text-sm font-semibold transition-colors ${
+                view === "pending"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-foreground hover:bg-primary-soft"
+              }`}
+            >
+              Pending marks
+            </Link>
+            <Link
+              to="/approved"
+              className={`inline-flex min-h-10 items-center justify-center rounded-lg border px-3.5 py-2.5 text-sm font-semibold transition-colors ${
+                view === "approved"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-foreground hover:bg-primary-soft"
+              }`}
+            >
+              Approved marks
+            </Link>
+          </>
+        }
       />
 
-      <Panel title="Submission coverage">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="pb-2">Teacher name</th>
-                <th className="pb-2">Subject</th>
-                <th className="pb-2">Class</th>
-                <th className="pb-2">Stream</th>
-                <th className="pb-2">Term</th>
-                <th className="pb-2">Assessed</th>
-                <th className="pb-2">Submitted</th>
-                <th className="pb-2">Approved</th>
-              </tr>
-            </thead>
-            <tbody>
-              {coverageRows.length ? (
-                coverageRows.map((row) => (
-                  <tr key={row.key} className="border-t border-border">
-                    <td className="py-2 pr-4 font-medium">{row.teacher_name}</td>
-                    <td className="py-2 pr-4">{row.subject_name}{row.paper_name ? ` (${row.paper_name})` : ""}</td>
-                    <td className="py-2 pr-4">{row.class_name}</td>
-                    <td className="py-2 pr-4">{row.stream_name}</td>
-                    <td className="py-2 pr-4">{row.term_name}</td>
-                    <td className="py-2 pr-4">{row.assessed_count}/{row.expected_count}</td>
-                    <td className="py-2 pr-4">{row.submitted_count}/{row.expected_count}</td>
-                    <td className="py-2 pr-4 font-medium">{row.approved_count}/{row.expected_count}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="py-4 text-muted-foreground">
-                    No active teacher allocations or assessment periods were found for this school.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-
-      <Panel title="All assessments">
-        <p className="mb-3 text-sm text-muted-foreground">
-          This table shows every non-approved mark row in the database for the school.
-        </p>
-        <div className="mb-3 flex flex-wrap gap-2">
-          <select
-            className={`${inputClass} w-full max-w-xs`}
-            value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
-          >
-            <option value="created_at">Sort by newest</option>
-            <option value="class">Sort by class</option>
-            <option value="stream">Sort by stream</option>
-            <option value="subject">Sort by subject</option>
-          </select>
-        </div>
-
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading approvals…</p>
-        ) : !pendingRows?.length ? (
-          <p className="text-sm text-muted-foreground">
-            No non-approved assessments were found for this school.
+      {view === "pending" && (
+        <Panel title="Marks awaiting action">
+          <p className="mb-3 text-sm text-muted-foreground">
+            This table shows every non-approved mark row in the database for the school.
           </p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="min-w-[1180px] w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-3">Learner</th>
-                  <th className="px-3 py-3">Class</th>
-                  <th className="px-3 py-3">Subject</th>
-                  <th className="px-3 py-3">Paper</th>
-                  <th className="px-3 py-3">Stream</th>
-                  <th className="px-3 py-3">Term</th>
-                  <th className="px-3 py-3 text-right">Formative</th>
-                  <th className="px-3 py-3 text-right">BOT</th>
-                  <th className="px-3 py-3 text-right">MOT</th>
-                  <th className="px-3 py-3 text-right">EOT</th>
-                  <th className="px-3 py-3 text-right">Total</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleData.map((row) => {
-                  const isFormative = row.record_type === "formative";
-                  const isBot = row.exam_type === "beginning_of_term";
-                  const isMot = row.exam_type === "mid_term";
-                  const isEot = row.exam_type === "end_of_term";
-                  const isMissing = Boolean(row.is_missing);
-                  const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
-                  return (
-                    <tr key={row.id} className="border-t border-border">
-                      <td className="whitespace-nowrap px-3 py-3 font-medium">{row.student_name}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{row.class_name}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{row.subject_name}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{row.paper_name || "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{row.stream_name}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{row.term_name}</td>
-                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isFormative ? row.formative ?? "—" : "—"}</td>
-                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isBot ? row.summative ?? "—" : "—"}</td>
-                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isMot ? row.summative ?? "—" : "—"}</td>
-                      <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isEot ? row.summative ?? "—" : "—"}</td>
-                      <td className="px-3 py-3 text-right font-medium">{isMissing ? "MISSING MARK" : total}</td>
-                      <td className="px-3 py-3">
-                        <Pill
-                          tone={
-                            row.status === "approved"
-                              ? "success"
-                              : row.status === "rejected"
-                                ? "danger"
-                                : row.status === "submitted"
-                                  ? "warning"
-                                  : "muted"
-                          }
-                        >
-                          {row.status}
-                        </Pill>
-                        {row.rejection_reason ? (
-                          <p className="mt-1 text-xs text-muted-foreground">{row.rejection_reason}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <select
-                          className={inputClass}
-                          value={row.status}
-                          onChange={(event) => {
-                            const nextStatus = event.target.value as ApprovalRow["status"];
-                            if (nextStatus === row.status) return;
-                            statusMutation.mutate({ rows: [row], status: nextStatus });
-                          }}
-                          disabled={statusMutation.isPending}
-                        >
-                          <option value="draft">Draft</option>
-                          <option value="submitted">Submitted</option>
-                          <option value="approved">Approved</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="mb-3 flex flex-wrap gap-2">
+            <select
+              className={`${inputClass} w-full max-w-xs`}
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+            >
+              <option value="created_at">Sort by newest</option>
+              <option value="class">Sort by class</option>
+              <option value="stream">Sort by stream</option>
+              <option value="subject">Sort by subject</option>
+            </select>
           </div>
-        )}
-      </Panel>
 
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading approvals…</p>
+          ) : !pendingRows?.length ? (
+            <p className="text-sm text-muted-foreground">
+              No non-approved assessments were found for this school.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="min-w-[1180px] w-full text-sm">
+                <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-3">Learner</th>
+                    <th className="px-3 py-3">Class</th>
+                    <th className="px-3 py-3">Subject</th>
+                    <th className="px-3 py-3">Paper</th>
+                    <th className="px-3 py-3">Stream</th>
+                    <th className="px-3 py-3">Term</th>
+                    <th className="px-3 py-3 text-right">Formative</th>
+                    <th className="px-3 py-3 text-right">BOT</th>
+                    <th className="px-3 py-3 text-right">MOT</th>
+                    <th className="px-3 py-3 text-right">EOT</th>
+                    <th className="px-3 py-3 text-right">Total</th>
+                    <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleData.map((row) => {
+                    const isFormative = row.record_type === "formative";
+                    const isBot = row.exam_type === "beginning_of_term";
+                    const isMot = row.exam_type === "mid_term";
+                    const isEot = row.exam_type === "end_of_term";
+                    const isMissing = Boolean(row.is_missing);
+                    const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
+                    return (
+                      <tr key={row.id} className="border-t border-border">
+                        <td className="whitespace-nowrap px-3 py-3 font-medium">{row.student_name}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{row.class_name}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{row.subject_name}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{row.paper_name || "—"}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{row.stream_name}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{row.term_name}</td>
+                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isFormative ? row.formative ?? "—" : "—"}</td>
+                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isBot ? row.summative ?? "—" : "—"}</td>
+                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isMot ? row.summative ?? "—" : "—"}</td>
+                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isEot ? row.summative ?? "—" : "—"}</td>
+                        <td className="px-3 py-3 text-right font-medium">{isMissing ? "MISSING MARK" : total}</td>
+                        <td className="px-3 py-3">
+                          <Pill
+                            tone={
+                              row.status === "approved"
+                                ? "success"
+                                : row.status === "rejected"
+                                  ? "danger"
+                                  : row.status === "submitted"
+                                    ? "warning"
+                                    : "muted"
+                            }
+                          >
+                            {row.status}
+                          </Pill>
+                          {row.rejection_reason ? (
+                            <p className="mt-1 text-xs text-muted-foreground">{row.rejection_reason}</p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3">
+                          <select
+                            className={`${inputClass} min-w-40`}
+                            aria-label={`Change status for ${row.student_name} ${row.subject_name}`}
+                            value={row.status}
+                            onChange={(event) => {
+                              const nextStatus = event.target.value as ApprovalRow["status"];
+                              if (nextStatus !== row.status) {
+                                statusMutation.mutate({ rows: [row], status: nextStatus });
+                              }
+                            }}
+                            disabled={statusMutation.isPending}
+                          >
+                            <option value={row.status}>{row.status}</option>
+                            {availableStatusChanges[row.status].map((status) => (
+                              <option key={status} value={status}>
+                                Change to {status}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {view === "approved" && (
       <Panel title="Approved assessments">
         <p className="mb-3 text-sm text-muted-foreground">
-          This table is independent from the one above and shows only approved marks.
+          Review approved marks and return them to teachers for correction if needed.
         </p>
         <div className="mb-3 flex flex-wrap gap-2">
           <select
@@ -347,7 +347,7 @@ function ApprovalsPage() {
                   <th className="pb-2">EOT</th>
                   <th className="pb-2">Total</th>
                   <th className="pb-2">Status</th>
-                  <th className="pb-2" />
+                  <th className="pb-2">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -405,24 +405,13 @@ function ApprovalsPage() {
                             <Pill tone="success">{row.status}</Pill>
                           </td>
                           <td className="py-3 text-right">
-                            <select
-                              className={inputClass}
-                              value={row.status}
-                              onChange={(event) => {
-                                const nextStatus = event.target.value as ApprovalRow["status"];
-                                if (nextStatus === row.status) return;
-                                statusMutation.mutate({
-                                  rows,
-                                  status: nextStatus,
-                                });
-                              }}
+                            <Btn
+                              variant="danger"
+                              onClick={() => statusMutation.mutate({ rows, status: "rejected" })}
                               disabled={statusMutation.isPending}
                             >
-                              <option value="draft">Draft</option>
-                              <option value="submitted">Submitted</option>
-                              <option value="approved">Approved</option>
-                              <option value="rejected">Rejected</option>
-                            </select>
+                              Return for correction
+                            </Btn>
                           </td>
                         </tr>
                       );
@@ -432,6 +421,7 @@ function ApprovalsPage() {
           </div>
         )}
       </Panel>
+      )}
     </div>
   );
 }

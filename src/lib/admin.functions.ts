@@ -1095,7 +1095,7 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((r) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r))) {
+    if (!roles.some((r) => ["dos", "head_teacher", "deputy_head_teacher", "school_admin", "super_admin"].includes(r))) {
       throw new Error("Only school academic leadership can change assessment status");
     }
 
@@ -1218,7 +1218,7 @@ export const updateFormativeMarkStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    if (!roles.some((role) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(role))) {
+    if (!roles.some((role) => ["dos", "head_teacher", "deputy_head_teacher", "school_admin", "super_admin"].includes(role))) {
       throw new Error("Only school academic leadership can change formative mark status");
     }
 
