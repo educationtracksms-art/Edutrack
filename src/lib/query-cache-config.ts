@@ -56,17 +56,20 @@ export function volatileDataQueryOptions<T = unknown>(queryKey: readonly unknown
 
 /**
  * Tier 4: Subscription status (school subscription, billing info)
- * Moved from 60s check → 5 min to reduce load while maintaining responsiveness.
- * Stale: 5 min | GC: 10 min
+ * Stale: 1 min | GC: 10 min
  */
 export function subscriptionQueryOptions<T = unknown>(queryKey: readonly unknown[]) {
   return {
     queryKey,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
     gcTime: 10 * 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
     retry: 1,
   };
+}
+
+export function subscriptionStatusQueryKey(schoolId: string) {
+  return ["subscription-status", schoolId] as const;
 }

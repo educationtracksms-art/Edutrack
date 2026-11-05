@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { currentUserQueryOptions, type AppRole } from "@/hooks/useCurrentUser";
 import { NO_ACCESS_MESSAGE, setAccessNotice } from "@/lib/access-notice";
+import { subscriptionStatusQueryKey } from "@/lib/query-cache-config";
 import { getSchoolSubscriptionStatus } from "@/lib/subscription.functions";
 
 type GuardContext = { queryClient: QueryClient };
@@ -42,7 +43,7 @@ export async function requireSubscriptionAccess(
   if (!schoolId) return "active";
 
   const { status } = await context.queryClient.fetchQuery({
-    queryKey: ["subscription-status", schoolId],
+    queryKey: subscriptionStatusQueryKey(schoolId),
     staleTime: 60_000, // 1 minute TTL cache
     gcTime: 5 * 60_000,
     queryFn: () => getSchoolSubscriptionStatus(),
@@ -91,7 +92,7 @@ export async function checkSubscriptionExpired(context: GuardContext): Promise<b
   if (!schoolId) return false;
 
   const { status } = await context.queryClient.fetchQuery({
-    queryKey: ["subscription-status-check", schoolId],
+    queryKey: subscriptionStatusQueryKey(schoolId),
     staleTime: 60_000,
     queryFn: () => getSchoolSubscriptionStatus(),
   });
@@ -111,7 +112,7 @@ export async function isExpiredSchoolAdmin(context: GuardContext): Promise<boole
   if (!schoolId) return false;
 
   const { status } = await context.queryClient.fetchQuery({
-    queryKey: ["subscription-status-admin", schoolId],
+    queryKey: subscriptionStatusQueryKey(schoolId),
     staleTime: 60_000,
     queryFn: () => getSchoolSubscriptionStatus(),
   });

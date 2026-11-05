@@ -71,7 +71,11 @@ import {
 } from "@/hooks/useCurrentUser";
 import { useQuery } from "@tanstack/react-query";
 import { getEnabledModuleMap } from "@/lib/modules";
-import { stableDataQueryOptions, subscriptionQueryOptions } from "@/lib/query-cache-config";
+import {
+  stableDataQueryOptions,
+  subscriptionQueryOptions,
+  subscriptionStatusQueryKey,
+} from "@/lib/query-cache-config";
 import { takeAccessNotice } from "@/lib/access-notice";
 import { SubscriptionExpiredBlock } from "@/components/subscription/SubscriptionExpiredBlock";
 import { getSchoolSubscriptionStatus } from "@/lib/subscription.functions";
@@ -501,8 +505,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isSuperAdmin = !!me?.roles?.includes("super_admin");
   const isSchoolScopedUser = !!me?.profile?.school_id && !isSuperAdmin;
   const { data: subscriptionState } = useQuery({
-    ...subscriptionQueryOptions(["shell-subscription-status", me?.profile?.school_id ?? null]),
+    ...subscriptionQueryOptions(
+      subscriptionStatusQueryKey(me?.profile?.school_id ?? ""),
+    ),
     enabled: isSchoolScopedUser,
+    refetchInterval: isSchoolScopedUser ? 60_000 : false,
     queryFn: () => getSchoolSubscriptionStatus(),
   });
   const isLockedSchoolAdmin =
