@@ -490,8 +490,9 @@ function GradingPage() {
                 <th className="px-3 py-3 font-semibold">Type</th>
                 <th className="px-3 py-3 font-semibold">Grade / identifier</th>
                 <th className="px-3 py-3 font-semibold">Score range</th>
-                <th className="px-3 py-3 text-center font-semibold">Points</th>
-                <th className="px-3 py-3 font-semibold">Descriptor</th>
+                <th className="px-3 py-3 font-semibold">
+                  {activeOutput === "a_level" ? "Points" : "Descriptor"}
+                </th>
                 <th className="px-3 py-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
@@ -503,7 +504,6 @@ function GradingPage() {
                     <td className="px-3 py-3"><Pill tone="muted">O-Level</Pill></td>
                     <td className="px-3 py-3 font-semibold text-foreground">{item.grade}</td>
                     <td className="px-3 py-3 tabular-nums">{item.min_score}–{item.max_score}</td>
-                    <td className="px-3 py-3 text-center text-muted-foreground">—</td>
                     <td className="max-w-md px-3 py-3 text-muted-foreground">{item.grade_descriptor}</td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-1">
@@ -518,7 +518,6 @@ function GradingPage() {
                   <td className="px-3 py-3"><Pill tone="muted">O-Level identifier</Pill></td>
                   <td className="px-3 py-3 font-semibold text-foreground">{item.identifier}</td>
                   <td className="px-3 py-3 tabular-nums">{item.min_score}–{item.max_score}</td>
-                  <td className="px-3 py-3 text-center text-muted-foreground">—</td>
                   <td className="px-3 py-3 text-muted-foreground">{item.descriptor}</td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-1">
@@ -536,7 +535,6 @@ function GradingPage() {
                     <td className="px-3 py-3 font-semibold text-foreground">{item.grade}</td>
                     <td className="px-3 py-3 tabular-nums">{item.min_score}–{item.max_score}</td>
                     <td className="px-3 py-3 text-center font-medium">{item.points ?? "—"}</td>
-                    <td className="px-3 py-3 text-muted-foreground">—</td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-1">
                         <Btn variant="ghost" onClick={() => setALevelGradingForm({ id: item.id, grade: item.grade, min_score: String(item.min_score), max_score: String(item.max_score), points: String(item.points ?? "") })}>Edit</Btn>
@@ -549,7 +547,7 @@ function GradingPage() {
                 (activeOutput === "a_level" && !(data?.gradingScales ?? []).some((item) => item.education_level === "advanced")) ||
                 (activeOutput === "identifiers" && !(data?.identifierScales ?? []).length)) && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No {activeOutput === "o_level" ? "O-Level grades" : activeOutput === "a_level" ? "A-Level grades" : "identifiers"} added yet.</td>
+                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">No {activeOutput === "o_level" ? "O-Level grades" : activeOutput === "a_level" ? "A-Level grades" : "identifiers"} added yet.</td>
                 </tr>
               )}
             </tbody>
