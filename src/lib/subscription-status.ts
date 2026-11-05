@@ -6,6 +6,12 @@ const expirableSubscriptionStatuses = new Set([
   "confirmed",
 ]);
 
+const accessGrantedSubscriptionStatuses = new Set(["trial", "active"]);
+
+export function isSubscriptionAccessGranted(status: string): boolean {
+  return accessGrantedSubscriptionStatuses.has(status);
+}
+
 export function isSubscriptionExpired(
   status: string,
   endsAt: string | null,

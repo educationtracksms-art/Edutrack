@@ -79,6 +79,7 @@ import {
 import { takeAccessNotice } from "@/lib/access-notice";
 import { SubscriptionExpiredBlock } from "@/components/subscription/SubscriptionExpiredBlock";
 import { getSchoolSubscriptionStatus } from "@/lib/subscription.functions";
+import { isSubscriptionAccessGranted } from "@/lib/subscription-status";
 import { cn } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 import {
@@ -501,7 +502,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   // Subscription status (Tier 4): 5 min stale (reduced from 60s for efficiency).
-  // A school-scoped, non-admin user whose subscription is not active sees only the blocking screen.
+  // A school-scoped, non-admin user without an access-granting subscription sees only the blocking screen.
   const isSuperAdmin = !!me?.roles?.includes("super_admin");
   const isSchoolScopedUser = !!me?.profile?.school_id && !isSuperAdmin;
   const { data: subscriptionState } = useQuery({
@@ -516,7 +517,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     isSchoolScopedUser &&
     !!me?.roles?.includes("school_admin") &&
     !!subscriptionState &&
-    subscriptionState.status !== "active";
+    !isSubscriptionAccessGranted(subscriptionState.status);
 
   React.useEffect(() => {
     if (isLockedSchoolAdmin && !pathname.startsWith("/subscription")) {
@@ -670,13 +671,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     navigate({ to: "/auth", replace: true });
   }
 
-  // Non-admin school users whose subscription is not active get the full-screen,
+  // Non-admin school users without an access-granting subscription get the full-screen,
   // non-dismissible blocking message instead of any dashboard content.
   const isSchoolAdmin = !!me?.roles?.includes("school_admin");
   if (
     isSchoolScopedUser &&
     !isSchoolAdmin &&
-    subscriptionState && subscriptionState.status !== "active"
+    subscriptionState && !isSubscriptionAccessGranted(subscriptionState.status)
   ) {
     const schoolName = me?.school?.name ?? "your school";
     const userName = (me?.profile as { full_name?: string } | null)?.full_name ?? me?.email ?? "there";

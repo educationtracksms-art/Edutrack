@@ -6,10 +6,10 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite --host localhost --port 3000 --strictPort",
     "build": "vite build",
-    "start": "vite preview --host 0.0.0.0",
-    "preview": "vite preview --host 0.0.0.0",
+    "start": "vite preview --host localhost",
+    "preview": "vite preview --host localhost",
     "test": "tsx --test src/lib/__tests__/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

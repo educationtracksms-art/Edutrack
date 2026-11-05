@@ -5,6 +5,7 @@ import { currentUserQueryOptions, type AppRole } from "@/hooks/useCurrentUser";
 import { NO_ACCESS_MESSAGE, setAccessNotice } from "@/lib/access-notice";
 import { subscriptionStatusQueryKey } from "@/lib/query-cache-config";
 import { getSchoolSubscriptionStatus } from "@/lib/subscription.functions";
+import { isSubscriptionAccessGranted } from "@/lib/subscription-status";
 
 type GuardContext = { queryClient: QueryClient };
 
@@ -51,8 +52,8 @@ export async function requireSubscriptionAccess(
 
   const subStatus = status as SubscriptionStatus;
 
-  if (subStatus !== "active") {
-    // School Admin can only access the Subscription page until active.
+  if (!isSubscriptionAccessGranted(subStatus)) {
+    // School Admin can only access the Subscription page until access is restored.
     if (currentUser.roles.includes("school_admin")) {
       const currentPath = (context as any).routerState?.pathname ?? "";
       if (currentPath.startsWith("/subscription")) {
@@ -81,7 +82,7 @@ export async function requireSubscriptionAccess(
 }
 
 /**
- * Check if the subscription is anything other than active without redirecting.
+ * Check if the subscription does not grant access without redirecting.
  * Used by components to decide whether to render the blocking screen.
  */
 export async function checkSubscriptionExpired(context: GuardContext): Promise<boolean> {
@@ -97,11 +98,11 @@ export async function checkSubscriptionExpired(context: GuardContext): Promise<b
     queryFn: () => getSchoolSubscriptionStatus(),
   });
 
-  return status !== "active";
+  return !isSubscriptionAccessGranted(status);
 }
 
 /**
- * Check if the current user is a school admin whose subscription is not active.
+ * Check if the current user is a school admin whose subscription does not grant access.
  * They should be able to access ONLY the subscription page.
  */
 export async function isExpiredSchoolAdmin(context: GuardContext): Promise<boolean> {
@@ -117,5 +118,5 @@ export async function isExpiredSchoolAdmin(context: GuardContext): Promise<boole
     queryFn: () => getSchoolSubscriptionStatus(),
   });
 
-  return status !== "active";
+  return !isSubscriptionAccessGranted(status);
 }

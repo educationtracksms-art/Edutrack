@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearSessionState, isSessionExpired } from "@/lib/session";
 import { getSchoolSubscriptionStatus } from "@/lib/subscription.functions";
 import { setAccessNotice } from "@/lib/access-notice";
+import { isSubscriptionAccessGranted } from "@/lib/subscription-status";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -59,7 +60,7 @@ export const Route = createFileRoute("/_authenticated")({
         console.error("Could not check school subscription status", error);
       }
 
-      if (status && status !== "active") {
+      if (status && !isSubscriptionAccessGranted(status)) {
         const isSchoolAdmin = currentUser.roles.includes("school_admin");
         const onSubscriptionPage = location.pathname.startsWith("/subscription");
 
