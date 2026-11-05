@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 
-import { PageHeader, Panel, Pill } from "@/components/ui-kit";
+import { Btn, PageHeader, Panel, Pill } from "@/components/ui-kit";
 import { ROLE_HIERARCHY_LEVELS, ROLE_LABELS, type AppRole } from "@/hooks/useCurrentUser";
-import { AccountsTable } from "./-accounts-table";
+import { AccountsTable, type AccountRow } from "./-accounts-table";
 import { useStaffUserMutations, useUsersData } from "./-data";
 
 export const Route = createFileRoute("/_authenticated/users/")({
@@ -27,10 +29,52 @@ function UsersPage() {
   const navigate = useNavigate();
   const { isSuper, people, peopleLoading, peopleError, schoolNameFor } = useUsersData();
   const { resetMutation, deleteMutation } = useStaffUserMutations();
+  const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const count = (people ?? []).length;
+
+  async function resetPassword(person: Pick<AccountRow, "id" | "email">) {
+    try {
+      const result = await resetMutation.mutateAsync(person.id);
+      setIssued({ email: person.email, password: result.oneTimePassword });
+    } catch {
+      // The mutation reports the actionable error through the shared toast.
+    }
+  }
+
+  async function copyCredential() {
+    if (!issued) return;
+    try {
+      await navigator.clipboard.writeText(`Email: ${issued.email}\nOne-time password: ${issued.password}`);
+      toast.success("Sign-in details copied");
+    } catch {
+      toast.error("Could not copy sign-in details");
+    }
+  }
 
   return (
     <div className="min-w-0">
+      {issued && (
+        <section
+          className="sticky top-0 z-30 mb-4 rounded-2xl border border-success/40 bg-background/95 p-4 shadow-lg backdrop-blur sm:p-5"
+          aria-live="polite"
+          aria-label="New one-time sign-in details"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-success">One-time sign-in details</p>
+              <p className="mt-1 break-all text-sm">{issued.email}</p>
+              <p className="mt-1 break-all font-mono text-lg font-semibold">{issued.password}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This stays here until dismissed. The user must change the password at first sign-in.
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Btn variant="ghost" onClick={copyCredential}>Copy details</Btn>
+              <Btn variant="ghost" onClick={() => setIssued(null)}>Dismiss</Btn>
+            </div>
+          </div>
+        </section>
+      )}
       <PageHeader
         eyebrow="Staff & roles"
         title="Staff accounts"
@@ -78,12 +122,12 @@ function UsersPage() {
               people={people}
               isSuper={isSuper}
               schoolNameFor={schoolNameFor}
-              onReset={(person) => resetMutation.mutate(person.id)}
+              onReset={(person) => void resetPassword(person)}
               onEdit={(person) => navigate({ to: "/users/$id/edit", params: { id: person.id } })}
               onDelete={(person) => deleteMutation.mutate(person.id)}
             />
             <p className="mt-3 text-xs text-muted-foreground">
-              Resetting a password issues a one-time password in a toast. It is shown once.
+              Resetting a password displays the one-time password in a pinned panel until dismissed.
             </p>
           </>
         )}
