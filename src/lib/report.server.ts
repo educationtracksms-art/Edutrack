@@ -290,20 +290,21 @@ export async function buildReportCards(
         assignedSubjectIds.add(allocation.subject_id);
       }
     }
-    const subjectIdsWithMarks = new Set([
-      ...marks.map((mark: any) => mark.subject_id),
+    const subjectIdsWithApprovedResults = new Set([
       ...studentFormativeMarks.map((mark: any) => mark.subject_id),
+      ...(assessments ?? [])
+        .filter(
+          (assessment: any) =>
+            assessment.student_id === student.id && assessment.status === "approved",
+        )
+        .map((assessment: any) => assessment.subject_id),
     ]);
-    const subjectIdsToRender = new Set([...assignedSubjectIds, ...subjectIdsWithMarks]);
 
     const totals: number[] = [];
 
     const rows: SubjectRow[] = (subjects ?? [])
       .filter(
-        (subject: any) =>
-          subjectIdsToRender.has(subject.id) &&
-          (subjectIdsWithMarks.has(subject.id) ||
-            (subject.education_level ?? "ordinary") === educationLevel),
+        (subject: any) => subjectIdsWithApprovedResults.has(subject.id),
       )
       .map((subject: any) => {
         const isAssignedSubject = assignedSubjectIds.has(subject.id);
@@ -620,7 +621,7 @@ export async function buildReportCards(
       (subject: any) =>
         subject.education_level === "advanced" &&
         subject.is_subsidiary &&
-        subjectIdsToRender.has(subject.id),
+        subjectIdsWithApprovedResults.has(subject.id),
     );
     const att = attendance?.find((a: any) => a.student_id === student.id);
     const activity = activities?.find((a: any) => a.student_id === student.id);
