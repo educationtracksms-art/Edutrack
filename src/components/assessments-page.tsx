@@ -172,6 +172,11 @@ export function AssessmentsPage() {
     ]);
   const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
   const isHeadTeacher = hasAny(me?.roles, ["head_teacher", "deputy_head_teacher", "dos"]);
+  const canManageCommentCriteria = hasAny(me?.roles, [
+    "dos",
+    "head_teacher",
+    "deputy_head_teacher",
+  ]);
   const canEditComments = isClassTeacher || isHeadTeacher;
   const upsertEntry = useServerFn(upsertAssessmentEntry);
   const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);

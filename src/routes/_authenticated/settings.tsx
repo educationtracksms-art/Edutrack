@@ -8,6 +8,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Btn, Field, PageHeader, Panel, inputClass } from "@/components/ui-kit";
 import { uploadImage } from "@/lib/storage";
 import { friendlyAdminError } from "@/lib/admin-errors";
+import { canManageSchoolModules } from "@/lib/modules";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -127,6 +128,30 @@ function SettingsPage() {
         title="School settings"
         description="Branding shown on report cards and the modules your staff can use."
       />
+
+      {canManageSchoolModules(me?.roles) && (
+        <Panel title="Module toggles" className="lg:col-span-2">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Disabled modules are hidden from report output and staff navigation.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {(toggles ?? []).map((toggle: { id: string; module: string; enabled: boolean }) => (
+              <label
+                key={toggle.id}
+                className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
+              >
+                <span className="text-sm font-medium capitalize">{toggle.module.replace(/_/g, " ")}</span>
+                <input
+                  type="checkbox"
+                  checked={toggle.enabled}
+                  onChange={(e) => toggleMutation.mutate({ id: toggle.id, enabled: e.target.checked })}
+                  disabled={toggleMutation.isPending}
+                />
+              </label>
+            ))}
+          </div>
+        </Panel>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="School profile">

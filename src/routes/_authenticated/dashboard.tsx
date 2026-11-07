@@ -24,7 +24,7 @@ import {
   updateAssessmentStatus,
 } from "@/lib/admin.functions";
 import { friendlyAdminError } from "@/lib/admin-errors";
-import { getEnabledModuleMap } from "@/lib/modules";
+import { canManageSchoolModules, getEnabledModuleMap } from "@/lib/modules";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -452,7 +452,11 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   const pendingMarks = scopeAssessments.filter(
     (assessment: any) => assessment.status === "submitted",
   );
-  const canEditComments = isClassTeacher;
+  const canManageCommentCriteria = hasAny(me?.roles, [
+    "dos",
+    "head_teacher",
+    "deputy_head_teacher",
+  ]);
   const assignedLabels = scopeAllocations.map((allocation) => {
     const subjectName = subjectById.get(allocation.subject_id) ?? "Subject";
     const allocationClassName = allocation.class_id
@@ -590,7 +594,7 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
         )}
       </Panel>
 
-      {canEditComments && (
+      {canManageCommentCriteria && (
         <>
           <CommentEditorPanel
             schoolId={me?.profile?.school_id ?? null}
@@ -875,6 +879,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   });
   const moduleToggleMutation = useMutation({
     mutationFn: async (vars: { module: string; enabled: boolean }) => {
+      if (!canManageSchoolModules(me?.roles)) {
+        throw new Error("Only DOS, Head Teacher, and Deputy Head Teacher can change school modules");
+      }
       if (!schoolId) throw new Error("No school linked to your account");
       const { data: existing, error: selectError } = await supabase
         .from("feature_toggles")
@@ -1360,36 +1367,38 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         )}
       </div>
 
-      <Panel title="Module controls" className="mt-4">
-        <p className="text-sm text-muted-foreground">
-          Turn school modules on or off from the dashboard. Disabled modules disappear from staff
-          navigation and route guards.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {moduleOptions.map((module) => {
-            const enabled = moduleMap?.get(module.key) ?? true;
-            return (
-              <label
-                key={module.key}
-                className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
-              >
-                <span className="text-sm font-medium">{module.label}</span>
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={(e) =>
-                    moduleToggleMutation.mutate({
-                      module: module.key,
-                      enabled: e.target.checked,
-                    })
-                  }
-                  disabled={moduleToggleMutation.isPending}
-                />
-              </label>
-            );
-          })}
-        </div>
-      </Panel>
+      {canManageSchoolModules(me?.roles) && (
+        <Panel title="Module controls" className="mt-4">
+          <p className="text-sm text-muted-foreground">
+            Turn school modules on or off from the dashboard. Disabled modules disappear from staff
+            navigation, route guards, and report output.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {moduleOptions.map((module) => {
+              const enabled = moduleMap?.get(module.key) ?? true;
+              return (
+                <label
+                  key={module.key}
+                  className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
+                >
+                  <span className="text-sm font-medium">{module.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={(e) =>
+                      moduleToggleMutation.mutate({
+                        module: module.key,
+                        enabled: e.target.checked,
+                      })
+                    }
+                    disabled={moduleToggleMutation.isPending}
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
 
       {isDos && timetableEnabled && (
         <Panel title="Timetable snapshot" className="mt-4">

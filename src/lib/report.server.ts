@@ -218,10 +218,13 @@ export async function buildReportCards(
       assessment.status === "approved" && activeTypes.has(assessment.exam_type),
   );
 
-  const feesEnabled = toggles?.find((t: any) => t.module === "fees")?.enabled ?? true;
-  const attendanceEnabled = toggles?.find((t: any) => t.module === "attendance")?.enabled ?? true;
-  const coCurricularEnabled =
-    toggles?.find((t: any) => t.module === "co_curricular")?.enabled ?? true;
+  const featureMap = new Map((toggles ?? []).map((toggle: any) => [toggle.module, !!toggle.enabled]));
+  const reportCardsEnabled = featureMap.get("report_cards") ?? true;
+  if (!reportCardsEnabled) return [];
+
+  const feesEnabled = featureMap.get("fees") ?? true;
+  const attendanceEnabled = featureMap.get("attendance") ?? true;
+  const coCurricularEnabled = featureMap.get("co_curricular") ?? true;
 
   const gradeFor = (total: number, educationLevel: "ordinary" | "advanced") => {
     const hit = (scales ?? []).find(

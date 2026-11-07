@@ -110,6 +110,28 @@ async function notifyTeacherOfApproval(supabase: any, schoolId: string, submitte
 
 const assessmentExamTypes = new Set(["beginning_of_term", "mid_term", "end_of_term"]);
 
+export const REPORT_COMMENT_RULE_MANAGEMENT_ROLES = [
+  "dos",
+  "head_teacher",
+  "deputy_head_teacher",
+] as const;
+
+export const APPROVED_MARK_REJECTION_ROLES = [
+  "dos",
+  "head_teacher",
+  "deputy_head_teacher",
+] as const;
+
+export function canManageReportCommentRules(roles: readonly string[] | string[] | undefined): boolean {
+  const roleSet = new Set(REPORT_COMMENT_RULE_MANAGEMENT_ROLES);
+  return (roles ?? []).some((role) => roleSet.has(role as (typeof REPORT_COMMENT_RULE_MANAGEMENT_ROLES)[number]));
+}
+
+export function canRejectApprovedMarks(roles: readonly string[] | string[] | undefined): boolean {
+  const roleSet = new Set(APPROVED_MARK_REJECTION_ROLES);
+  return (roles ?? []).some((role) => roleSet.has(role as (typeof APPROVED_MARK_REJECTION_ROLES)[number]));
+}
+
 // Keep role assignment closed on the server. The client role selector is only
 // a convenience and must not be treated as an authorization boundary.
 const assignableStaffRoles = new Set([
@@ -930,6 +952,9 @@ export const reviewAssessments = createServerFn({ method: "POST" })
     const isClassTeacher = roles.includes("class_teacher");
     if (!canReviewAny && !isClassTeacher) throw new Error("Not allowed to review assessments");
 
+    const canApproveSubmitted = roles.some((r) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(r));
+    const canRejectApproved = canRejectApprovedMarks(roles);
+
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
@@ -969,8 +994,11 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       }
     }
 
-    if (data.action === "approve" && !roles.some((role) => ["dos", "head_teacher", "deputy_head_teacher", "super_admin"].includes(role))) {
+    if (data.action === "approve" && !canApproveSubmitted) {
       throw new Error("Only school academic leadership can approve submitted marks");
+    }
+    if (data.action === "reject" && !canRejectApproved) {
+      throw new Error("Only DOS, headteacher and deputy headteacher can reject approved marks");
     }
 
     if (data.classId || data.streamId) {
@@ -1043,16 +1071,17 @@ export const reviewAssessments = createServerFn({ method: "POST" })
             approved_at: null,
           };
 
+    const reviewableStatuses = data.action === "reject" ? ["submitted", "approved"] : ["submitted"];
     const { data: updatedRows, error } = await context.supabase
       .from("assessments")
       .update(patch as never)
       .eq("school_id", schoolId)
-      .eq("status", "submitted")
+      .in("status", reviewableStatuses)
       .in("id", data.ids)
       .select("id, submitted_by");
     if (error) throw new Error(error.message);
     if ((updatedRows ?? []).length !== data.ids.length) {
-      throw new Error("Only submitted assessments can be reviewed");
+      throw new Error(data.action === "reject" ? "Only submitted or approved assessments can be rejected" : "Only submitted assessments can be reviewed");
     }
 
     // Notify each teacher whose marks were approved.
@@ -1133,7 +1162,6 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
         .maybeSingle(),
     ]);
 
-    if (existingError) throw new Error(existingError.message);
     if (!currentPeriod) throw new Error("Assessment period not configured for this term");
 
     if (!currentPeriod.is_active) {
@@ -1264,7 +1292,7 @@ export const updateFormativeMarkStatus = createServerFn({ method: "POST" })
 
     const { data: existingMark, error: existingError } = await context.supabase
       .from("formative_marks")
-      .select("id, school_id, status, submitted_by")
+      .select("id, school_id, status, submitted_by, term_id")
       .eq("id", data.markId)
       .maybeSingle();
     if (existingError) throw new Error(existingError.message);
@@ -1293,7 +1321,6 @@ export const updateFormativeMarkStatus = createServerFn({ method: "POST" })
         .maybeSingle(),
     ]);
 
-    if (existingError) throw new Error(existingError.message);
     if (!currentPeriod) throw new Error("Assessment period not configured for this term");
 
     if (!currentPeriod.is_active) {
@@ -1943,17 +1970,7 @@ export const upsertReportCommentRule = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    const allowedRoles =
-      data.commentRole === "class_teacher"
-        ? [
-            "class_teacher",
-            "dos",
-            "school_admin",
-            "head_teacher",
-            "deputy_head_teacher",
-          ]
-        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin"];
-    if (!roles.some((role) => allowedRoles.includes(role))) {
+    if (!canManageReportCommentRules(roles)) {
       throw new Error("Not allowed to manage report comment rules");
     }
 
@@ -1985,17 +2002,7 @@ export const deleteReportCommentRule = createServerFn({ method: "POST" })
   .validator((data: { id: string; commentRole: "class_teacher" | "head_teacher" }) => data)
   .handler(async ({ data, context }) => {
     const roles = await rolesOf(context.supabase, context.userId);
-    const allowedRoles =
-      data.commentRole === "class_teacher"
-        ? [
-            "class_teacher",
-            "dos",
-            "school_admin",
-            "head_teacher",
-            "deputy_head_teacher",
-          ]
-        : ["head_teacher", "deputy_head_teacher", "dos", "school_admin"];
-    if (!roles.some((role) => allowedRoles.includes(role))) {
+    if (!canManageReportCommentRules(roles)) {
       throw new Error("Not allowed to manage report comment rules");
     }
 

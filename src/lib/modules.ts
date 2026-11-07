@@ -17,6 +17,17 @@ export type ModuleKey =
   | "finance"
   | "timetable";
 
+export const SCHOOL_MODULE_MANAGEMENT_ROLES = [
+  "dos",
+  "head_teacher",
+  "deputy_head_teacher",
+] as const;
+
+export function canManageSchoolModules(roles: readonly string[] | string[] | undefined): boolean {
+  const roleSet = new Set(SCHOOL_MODULE_MANAGEMENT_ROLES);
+  return (roles ?? []).some((role) => roleSet.has(role as (typeof SCHOOL_MODULE_MANAGEMENT_ROLES)[number]));
+}
+
 type AnyClient = SupabaseClient<any, any, any>;
 
 export async function getEnabledModuleMap(supabase: AnyClient, schoolId: string | null) {
