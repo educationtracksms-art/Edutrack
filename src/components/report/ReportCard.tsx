@@ -1,8 +1,13 @@
 import type { ReportCardData } from "@/lib/report-types";
-import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
-export function ReportCard({ data }: { data: ReportCardData }) {
+export function ReportCard({
+  data,
+  shrinkToFit = true,
+}: {
+  data: ReportCardData;
+  shrinkToFit?: boolean;
+}) {
   const {
     school,
     student,
@@ -21,7 +26,6 @@ export function ReportCard({ data }: { data: ReportCardData }) {
   const isAdvanced = gradingLevel === "advanced";
   const watermarkLabel = school.name || "School";
   const reportRef = useRef<HTMLDivElement | null>(null);
-  const [printScale, setPrintScale] = useState(1);
   const paymentLabel =
     school.reportPaymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
   const paymentValue =
@@ -62,34 +66,34 @@ export function ReportCard({ data }: { data: ReportCardData }) {
     const node = reportRef.current;
     if (!node) return;
 
-    const updateScale = () => {
-      const height = node.scrollHeight;
-      const width = node.scrollWidth;
-      const pageHeight = 1122;
-      const pageWidth = 794;
-      const heightScale = pageHeight / Math.max(height, 1);
-      const widthScale = pageWidth / Math.max(width, 1);
-      const nextScale = Math.min(1, heightScale, widthScale, 0.98);
-      setPrintScale(Number.isFinite(nextScale) ? Math.max(0.55, nextScale) : 1);
+    const updatePrintScale = () => {
+      const sheet = node.querySelector<HTMLElement>(".report-sheet");
+      if (!sheet) return;
+      const pixelsPerMillimeter = 96 / 25.4;
+      const availableWidth = 192 * pixelsPerMillimeter;
+      const availableHeight = 279 * pixelsPerMillimeter;
+      const contentWidth = Math.max(sheet.scrollWidth, sheet.getBoundingClientRect().width);
+      const contentHeight = Math.max(sheet.scrollHeight, sheet.getBoundingClientRect().height);
+      const scale = shrinkToFit
+        ? Math.min(1, availableWidth / Math.max(contentWidth, 1), availableHeight / Math.max(contentHeight, 1))
+        : 1;
+      node.style.setProperty("--print-scale", String(scale));
     };
 
-    updateScale();
-    const raf = window.requestAnimationFrame(updateScale);
-    window.addEventListener("beforeprint", updateScale);
-    window.addEventListener("resize", updateScale);
+    window.addEventListener("beforeprint", updatePrintScale);
+    window.addEventListener("afterprint", updatePrintScale);
 
     return () => {
-      window.cancelAnimationFrame(raf);
-      window.removeEventListener("beforeprint", updateScale);
-      window.removeEventListener("resize", updateScale);
+      window.removeEventListener("beforeprint", updatePrintScale);
+      window.removeEventListener("afterprint", updatePrintScale);
     };
-  }, [data]);
+  }, [data, shrinkToFit]);
 
   return (
     <div
       ref={reportRef}
       className={`report-doc ${isAdvanced ? "advanced-report" : ""}`}
-      style={{ "--print-scale": printScale } as CSSProperties}
+      style={{ "--print-scale": 1 } as CSSProperties}
     >
       <div className="report-sheet">
         <div className="report-watermark" aria-hidden="true">

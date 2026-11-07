@@ -58,10 +58,26 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
     refetchOnMount: false,
   });
   const allRows = approvalData?.rows;
-  const pendingRows = useMemo(
-    () => (allRows ?? []).filter((row) => row.status !== "approved"),
-    [allRows],
-  );
+  const pendingGroups = useMemo(() => {
+    const groups = new Map<string, { rows: ApprovalRow[]; pendingRows: ApprovalRow[] }>();
+    for (const row of allRows ?? []) {
+      const key = [
+        row.student_id,
+        row.subject_id,
+        row.paper_id ?? "subject",
+        row.term_id,
+        row.class_id,
+        row.stream_id,
+      ].join(":");
+      const group = groups.get(key) ?? { rows: [], pendingRows: [] };
+      group.rows.push(row);
+      if (row.status !== "approved") group.pendingRows.push(row);
+      groups.set(key, group);
+    }
+    return Array.from(groups.entries())
+      .filter(([, group]) => group.pendingRows.length > 0)
+      .map(([key, group]) => ({ key, ...group, first: group.rows[0] }));
+  }, [allRows]);
   const approvedRows = useMemo(
     () => (allRows ?? []).filter((row) => row.status === "approved"),
     [allRows],
@@ -79,36 +95,36 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
   const isApprovedLoading = isLoading;
 
   const visibleData = useMemo(() => {
-    const rows = [...(pendingRows ?? [])];
+    const rows = [...pendingGroups];
     if (sortBy === "class") {
       return rows.sort((a, b) => {
-        const classCompare = (a.class_name ?? "").localeCompare(b.class_name ?? "");
+        const classCompare = (a.first.class_name ?? "").localeCompare(b.first.class_name ?? "");
         if (classCompare !== 0) return classCompare;
-        const streamCompare = (a.stream_name ?? "").localeCompare(b.stream_name ?? "");
+        const streamCompare = (a.first.stream_name ?? "").localeCompare(b.first.stream_name ?? "");
         if (streamCompare !== 0) return streamCompare;
-        return (a.student_name ?? "").localeCompare(b.student_name ?? "");
+        return (a.first.student_name ?? "").localeCompare(b.first.student_name ?? "");
       });
     }
     if (sortBy === "stream") {
       return rows.sort((a, b) => {
-        const streamCompare = (a.stream_name ?? "").localeCompare(b.stream_name ?? "");
+        const streamCompare = (a.first.stream_name ?? "").localeCompare(b.first.stream_name ?? "");
         if (streamCompare !== 0) return streamCompare;
-        const classCompare = (a.class_name ?? "").localeCompare(b.class_name ?? "");
+        const classCompare = (a.first.class_name ?? "").localeCompare(b.first.class_name ?? "");
         if (classCompare !== 0) return classCompare;
-        return (a.student_name ?? "").localeCompare(b.student_name ?? "");
+        return (a.first.student_name ?? "").localeCompare(b.first.student_name ?? "");
       });
     }
     if (sortBy === "subject") {
       return rows.sort((a, b) => {
-        const subjectCompare = (a.subject_name ?? "").localeCompare(b.subject_name ?? "");
+        const subjectCompare = (a.first.subject_name ?? "").localeCompare(b.first.subject_name ?? "");
         if (subjectCompare !== 0) return subjectCompare;
-        const classCompare = (a.class_name ?? "").localeCompare(b.class_name ?? "");
+        const classCompare = (a.first.class_name ?? "").localeCompare(b.first.class_name ?? "");
         if (classCompare !== 0) return classCompare;
-        return (a.student_name ?? "").localeCompare(b.student_name ?? "");
+        return (a.first.student_name ?? "").localeCompare(b.first.student_name ?? "");
       });
     }
     return rows;
-  }, [pendingRows, sortBy]);
+  }, [pendingGroups, sortBy]);
 
   const statusMutation = useMutation({
     mutationFn: async (vars: { rows: ApprovalRow[]; status: ApprovalRow["status"] }) => {
@@ -199,7 +215,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
       {view === "pending" && (
         <Panel title="Marks awaiting action">
           <p className="mb-3 text-sm text-muted-foreground">
-            This table shows every non-approved mark row in the database for the school.
+            Marks for each learner, subject, and term are grouped into one row.
           </p>
           <div className="mb-3 flex flex-wrap gap-2">
             <select
@@ -216,7 +232,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
 
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Loading approvals…</p>
-          ) : !pendingRows?.length ? (
+          ) : !pendingGroups.length ? (
             <p className="text-sm text-muted-foreground">
               No non-approved assessments were found for this school.
             </p>
@@ -241,59 +257,99 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleData.map((row) => {
-                    const isFormative = row.record_type === "formative";
-                    const isBot = row.exam_type === "beginning_of_term";
-                    const isMot = row.exam_type === "mid_term";
-                    const isEot = row.exam_type === "end_of_term";
-                    const isMissing = Boolean(row.is_missing);
-                    const total = Number(row.formative ?? 0) + Number(row.summative ?? 0);
+                  {visibleData.map((group) => {
+                    const row = group.first;
+                    const formative = group.rows.find((item) => item.record_type === "formative");
+                    const periodRow = (examType: string) =>
+                      group.rows.find(
+                        (item) =>
+                          item.record_type !== "formative" && item.exam_type === examType,
+                      );
+                    const displayedValue = (item: ApprovalRow | undefined, value: number | null | undefined) =>
+                      item?.is_missing ? "MISSING MARK" : value ?? "—";
+                    const formativeValue = displayedValue(formative, formative?.formative);
+                    const botValue = displayedValue(
+                      periodRow("beginning_of_term"),
+                      periodRow("beginning_of_term")?.summative,
+                    );
+                    const motValue = displayedValue(
+                      periodRow("mid_term"),
+                      periodRow("mid_term")?.summative,
+                    );
+                    const eotValue = displayedValue(
+                      periodRow("end_of_term"),
+                      periodRow("end_of_term")?.summative,
+                    );
+                    const summativeValues = ["beginning_of_term", "mid_term", "end_of_term"]
+                      .map((examType) => periodRow(examType)?.summative)
+                      .filter((value): value is number => value != null);
+                    const averageSummative = summativeValues.length
+                      ? summativeValues.reduce((sum, value) => sum + Number(value), 0) /
+                        summativeValues.length
+                      : 0;
+                    const hasNumericMarks =
+                      formative?.formative != null || summativeValues.length > 0;
+                    const total = hasNumericMarks
+                      ? Number(formative?.formative ?? 0) + averageSummative
+                      : null;
+                    const statuses = Array.from(new Set(group.pendingRows.map((item) => item.status)));
+                    const statusLabel = statuses.length === 1 ? statuses[0] : "Mixed";
+                    const possibleChanges = Array.from(
+                      new Set(group.pendingRows.flatMap((item) => availableStatusChanges[item.status])),
+                    );
                     return (
-                      <tr key={row.id} className="border-t border-border">
+                      <tr key={group.key} className="border-t border-border">
                         <td className="whitespace-nowrap px-3 py-3 font-medium">{row.student_name}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.class_name}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.subject_name}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.paper_name || "—"}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.stream_name}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.term_name}</td>
-                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isFormative ? row.formative ?? "—" : "—"}</td>
-                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isBot ? row.summative ?? "—" : "—"}</td>
-                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isMot ? row.summative ?? "—" : "—"}</td>
-                        <td className="px-3 py-3 text-right">{isMissing ? "MISSING MARK" : isEot ? row.summative ?? "—" : "—"}</td>
-                        <td className="px-3 py-3 text-right font-medium">{isMissing ? "MISSING MARK" : total}</td>
+                        <td className="px-3 py-3 text-right">{formativeValue}</td>
+                        <td className="px-3 py-3 text-right">{botValue}</td>
+                        <td className="px-3 py-3 text-right">{motValue}</td>
+                        <td className="px-3 py-3 text-right">{eotValue}</td>
+                        <td className="px-3 py-3 text-right font-medium">
+                          {group.rows.some((item) => item.is_missing)
+                            ? "MISSING MARK"
+                            : total ?? "—"}
+                        </td>
                         <td className="px-3 py-3">
                           <Pill
                             tone={
-                              row.status === "approved"
-                                ? "success"
-                                : row.status === "rejected"
+                              statusLabel === "rejected"
                                   ? "danger"
-                                  : row.status === "submitted"
+                                  : statusLabel === "submitted"
                                     ? "warning"
                                     : "muted"
                             }
                           >
-                            {row.status}
+                            {statusLabel}
                           </Pill>
-                          {row.rejection_reason ? (
-                            <p className="mt-1 text-xs text-muted-foreground">{row.rejection_reason}</p>
+                          {group.pendingRows.find((item) => item.rejection_reason)?.rejection_reason ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {group.pendingRows.find((item) => item.rejection_reason)?.rejection_reason}
+                            </p>
                           ) : null}
                         </td>
                         <td className="px-3 py-3">
                           <select
                             className={`${inputClass} min-w-40`}
                             aria-label={`Change status for ${row.student_name} ${row.subject_name}`}
-                            value={row.status}
+                            value=""
                             onChange={(event) => {
                               const nextStatus = event.target.value as ApprovalRow["status"];
-                              if (nextStatus !== row.status) {
-                                statusMutation.mutate({ rows: [row], status: nextStatus });
-                              }
+                              const eligibleRows = group.pendingRows.filter((item) =>
+                                availableStatusChanges[item.status].includes(nextStatus),
+                              );
+                              if (eligibleRows.length) statusMutation.mutate({ rows: eligibleRows, status: nextStatus });
                             }}
                             disabled={statusMutation.isPending}
                           >
-                            <option value={row.status}>{row.status}</option>
-                            {availableStatusChanges[row.status].map((status) => (
+                            <option value="" disabled>
+                              {statusLabel}
+                            </option>
+                            {possibleChanges.map((status) => (
                               <option key={status} value={status}>
                                 Change to {status}
                               </option>

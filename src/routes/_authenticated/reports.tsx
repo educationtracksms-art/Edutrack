@@ -85,6 +85,8 @@ function ReportsPage() {
   const [reportLevel, setReportLevel] = useState<"ordinary" | "advanced">("ordinary");
   const [selected, setSelected] = useState<string[]>([]);
   const [cards, setCards] = useState<ReportCardData[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [shrinkToFit, setShrinkToFit] = useState(true);
   const [reportTab, setReportTab] = useState<"academic" | "attendance">("academic");
   const [attendanceTermId, setAttendanceTermId] = useState("");
   const [attendanceClassId, setAttendanceClassId] = useState("");
@@ -372,6 +374,7 @@ function ReportsPage() {
     },
     onSuccess: (result) => {
       setCards(result);
+      setPreviewOpen(false);
       toast.success(`${result.length} report card(s) ready`);
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -379,7 +382,10 @@ function ReportsPage() {
 
   function print() {
     logPrint({ data: { count: cards.length, scope: classId || "all" } }).catch(() => undefined);
-    window.print();
+    setPreviewOpen(true);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => window.print());
+    });
   }
 
   return (
@@ -392,7 +398,22 @@ function ReportsPage() {
             <Btn variant="accent" onClick={() => generate.mutate()} disabled={generate.isPending}>
               {generate.isPending ? "Generating…" : "Generate"}
             </Btn>
-            {cards.length > 0 && <Btn onClick={print}>Print / Save PDF</Btn>}
+            {cards.length > 0 && (
+              <>
+                <Btn variant="ghost" onClick={() => setPreviewOpen((open) => !open)}>
+                  {previewOpen ? "Hide preview" : "Preview reports"}
+                </Btn>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={shrinkToFit}
+                    onChange={(event) => setShrinkToFit(event.target.checked)}
+                  />
+                  Shrink oversized reports to fit A4
+                </label>
+                <Btn onClick={print}>Print / Save PDF</Btn>
+              </>
+            )}
           </>
         ) : undefined}
       />
@@ -540,12 +561,12 @@ function ReportsPage() {
         </div>
       </Panel>
 
-      <div className="space-y-6">
+      <div className={`report-preview-list space-y-6 ${previewOpen ? "" : "report-preview-hidden"}`}>
         {cards.map((card) =>
           card.gradingLevel === "advanced" ? (
-            <ALevelReportCard key={card.studentId} data={card} />
+            <ALevelReportCard key={card.studentId} data={card} shrinkToFit={shrinkToFit} />
           ) : (
-            <OLevelReportCard key={card.studentId} data={card} />
+            <OLevelReportCard key={card.studentId} data={card} shrinkToFit={shrinkToFit} />
           ),
         )}
       </div>

@@ -58,15 +58,6 @@ export async function buildReportCards(
       .select("id, subject_id, name, position")
       .eq("school_id", schoolId)
       .order("position"),
-    (supabase as any)
-      .from("teacher_allocations")
-      .select("subject_id, paper_id, class_id, stream_id")
-      .eq("school_id", schoolId),
-    supabase
-      .from("student_subjects")
-      .select("student_id, subject_id")
-      .in("student_id", ids)
-      .eq("school_id", schoolId),
     supabase
       .from("grading_scales")
       .select("grade, min_score, max_score, grade_descriptor, education_level, points")
@@ -101,8 +92,6 @@ export async function buildReportCards(
     { data: streams },
     { data: subjects },
     { data: subjectPapers },
-    { data: teacherAllocations },
-    { data: studentSubjects },
     { data: scales },
     { data: identifierScales },
     { data: toggles },
@@ -277,19 +266,6 @@ export async function buildReportCards(
     const studentFormativeMarks = (formativeMarks ?? []).filter(
       (mark: any) => mark.student_id === student.id,
     );
-    const assignedSubjectIds = new Set(
-      (studentSubjects ?? [])
-        .filter((assignment: any) => assignment.student_id === student.id)
-        .map((assignment: any) => assignment.subject_id),
-    );
-    for (const allocation of teacherAllocations ?? []) {
-      if (
-        (!allocation.class_id || allocation.class_id === student.class_id) &&
-        (!allocation.stream_id || allocation.stream_id === student.stream_id)
-      ) {
-        assignedSubjectIds.add(allocation.subject_id);
-      }
-    }
     const subjectIdsWithApprovedResults = new Set([
       ...studentFormativeMarks.map((mark: any) => mark.subject_id),
       ...(assessments ?? [])
@@ -307,7 +283,6 @@ export async function buildReportCards(
         (subject: any) => subjectIdsWithApprovedResults.has(subject.id),
       )
       .map((subject: any) => {
-        const isAssignedSubject = assignedSubjectIds.has(subject.id);
         const papers =
           educationLevel === "advanced"
             ? (subjectPapers ?? []).filter((p: any) => p.subject_id === subject.id)
@@ -351,7 +326,7 @@ export async function buildReportCards(
               if (assessment?.is_missing) return "MISSING MARK";
               return summativeByPeriod[period] != null
                 ? fmt(Number(summativeByPeriod[period]))
-                : "MISSING MARK";
+                : "";
             };
             // Formative is one whole-term mark per paper. Legacy subject-level
             // records remain a fallback so historic report cards still render.
@@ -377,20 +352,7 @@ export async function buildReportCards(
                   : undefined;
             const hasExplicitMissingMark =
               Boolean(formativeRecord?.is_missing) || subjectMarks.some((item: any) => item.is_missing);
-            const hasMissingActivePeriod = Array.from(activeTypes).some(
-              (period) => {
-                const assessment = subjectMarks.find((item: any) => item.exam_type === period);
-                return !assessment || assessment.summative == null || Boolean(assessment.is_missing);
-              },
-            );
-            const hasAnyRelevantRecord = subjectMarks.length > 0 || formativeRecord != null;
-            const isMissingMark =
-              hasExplicitMissingMark ||
-              ((isAssignedSubject || hasAnyRelevantRecord) && hasMissingActivePeriod) ||
-              (isAssignedSubject && activeTypes.size > 0 && averageSummative == null) ||
-              ((Boolean(mark) || formativeMark !== undefined) &&
-                (formativeMark === undefined || averageSummative == null)) ||
-              (isAssignedSubject && !mark && formativeMark === undefined);
+            const isMissingMark = hasExplicitMissingMark;
             if (isMissingMark) {
               // An approved missing mark is a real result: show it on the report and
               // include it as zero when calculating the learner's average.
@@ -402,13 +364,13 @@ export async function buildReportCards(
                 paperId: paper?.id ?? null,
                 isPaper: false,
                 formative:
-                  formativeRecord?.is_missing || formativeMark === undefined
+                  formativeRecord?.is_missing
                     ? "MISSING MARK"
-                    : fmt(formativeMark),
+                    : formativeMark === undefined
+                      ? ""
+                      : fmt(formativeMark),
                 summative:
-                  averageSummative == null || hasMissingActivePeriod
-                    ? "MISSING MARK"
-                    : fmt(averageSummative),
+                  averageSummative == null ? "" : fmt(averageSummative),
                 bot: periodValue("beginning_of_term"),
                 mot: periodValue("mid_term"),
                 eot: periodValue("end_of_term"),
