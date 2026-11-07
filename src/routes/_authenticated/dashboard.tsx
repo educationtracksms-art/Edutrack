@@ -1267,6 +1267,26 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     { key: "timetable", label: "Timetable" },
     { key: "fees", label: "Fees" },
   ] as const;
+  const learnerDistributionByClass = data.classes
+    .map((cls) => {
+      const classStudents = data.students.filter((student) => student.class_id === cls.id);
+      return {
+        name: cls.name,
+        students: classStudents.length,
+        active: classStudents.filter((student) => student.status === "active").length,
+      };
+    })
+    .filter((item) => item.students > 0);
+  const learnerDistributionByStream = data.streams
+    .map((stream) => {
+      const streamStudents = data.students.filter((student) => student.stream_id === stream.id);
+      const className = stream.class_id ? classById.get(stream.class_id) : null;
+      return {
+        name: className ? `${stream.name} (${className})` : stream.name,
+        students: streamStudents.length,
+      };
+    })
+    .filter((item) => item.students > 0);
 
   if (isChartsOnlyRole) {
     return (
@@ -1285,11 +1305,8 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
           ].filter((bucket) => bucket.value > 0)}
           studentStatus={studentStatus}
           classPerformance={classPerformance}
-          classDistribution={data.classes
-            .map((cls: any) => ({
-              name: cls.name.length > 10 ? `${cls.name.slice(0, 10)}...` : cls.name,
-              students: data.students.filter((student: any) => student.class_id === cls.id).length,
-            }))}
+          classDistribution={learnerDistributionByClass}
+          streamDistribution={learnerDistributionByStream}
           attendanceByClass={isChartsOnlyRole && attendanceEnabled ? attendanceByClass : undefined}
           attendanceTrend={isChartsOnlyRole && attendanceEnabled ? attendanceTrend : undefined}
         />
@@ -1705,12 +1722,8 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
           ].filter((b) => b.value > 0)}
           studentStatus={studentStatus}
           classPerformance={classPerformance}
-          classDistribution={data.classes
-            .map((cls: any) => ({
-              name: cls.name.length > 10 ? `${cls.name.slice(0, 10)}...` : cls.name,
-              students: data.students.filter((s: any) => s.class_id === cls.id).length,
-            }))
-            .filter((c: any) => c.students > 0)}
+          classDistribution={learnerDistributionByClass}
+          streamDistribution={learnerDistributionByStream}
           attendanceByClass={isDos && attendanceEnabled ? attendanceByClass : undefined}
           attendanceTrend={isDos && attendanceEnabled ? attendanceTrend : undefined}
         />
@@ -1814,4 +1827,3 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     </div>
   );
 }
-

@@ -67,7 +67,8 @@ type SchoolChartData = {
   genderSplit: Array<{ name: string; value: number }>;
   statusBreakdown?: Array<{ name: string; value: number }>;
   studentStatus?: Array<{ name: string; value: number }>;
-  classDistribution?: Array<{ name: string; students: number }>;
+  classDistribution?: Array<{ name: string; students: number; active?: number }>;
+  streamDistribution?: Array<{ name: string; students: number }>;
   classPerformance?: Array<{ name: string; average: number }>;
   attendanceByClass?: AttendanceChartRow[];
   attendanceTrend?: Array<{ date: string; present: number; absent: number }>;
@@ -317,16 +318,48 @@ export default function DashboardCharts(props: DashboardChartsProps) {
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={props.classDistribution}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={55} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Bar dataKey="students" fill="var(--color-chart-3)" radius={[4, 4, 0, 0]} />
+              {props.classDistribution.some((entry) => entry.active !== undefined) && <Legend />}
+              <Bar
+                dataKey="students"
+                name="Total learners"
+                fill="var(--color-chart-3)"
+                radius={[4, 4, 0, 0]}
+              />
+              {props.classDistribution.some((entry) => entry.active !== undefined) && (
+                <Bar
+                  dataKey="active"
+                  name="Active learners"
+                  fill="var(--color-chart-1)"
+                  radius={[4, 4, 0, 0]}
+                />
+              )}
             </BarChart>
           </ResponsiveContainer>
         ) : (
           <ChartEmptyState message="Class counts will appear here when classes and learners are assigned." />
         )}
       </Panel>
+
+      {props.streamDistribution && (
+        <Panel title="Learners by stream">
+          {props.streamDistribution.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={props.streamDistribution}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={55} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="students" name="Learners" fill="var(--color-chart-4)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <ChartEmptyState message="Stream counts will appear here when learners are assigned to streams." />
+          )}
+        </Panel>
+      )}
 
       {props.classPerformance && (
         <Panel title="Average achievement by class">
