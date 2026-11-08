@@ -151,10 +151,11 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
 
   const availableStatusChanges: Record<ApprovalRow["status"], ApprovalRow["status"][]> = {
     draft: ["submitted"],
-    submitted: ["approved", "rejected"],
+    submitted: ["approved", "rejected", "draft"],
     approved: ["rejected"],
     rejected: ["draft", "submitted"],
   };
+  const allStatuses: ApprovalRow["status"][] = ["approved", "submitted", "draft", "rejected"];
 
   const approvedGroupRows = useMemo(() => {
     const rows = [...(approvedRows ?? [])];
@@ -294,9 +295,6 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                       : null;
                     const statuses = Array.from(new Set(group.pendingRows.map((item) => item.status)));
                     const statusLabel = statuses.length === 1 ? statuses[0] : "Mixed";
-                    const possibleChanges = Array.from(
-                      new Set(group.pendingRows.flatMap((item) => availableStatusChanges[item.status])),
-                    );
                     return (
                       <tr key={group.key} className="border-t border-border">
                         <td className="whitespace-nowrap px-3 py-3 font-medium">{row.student_name}</td>
@@ -349,9 +347,15 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                             <option value="" disabled>
                               {statusLabel}
                             </option>
-                            {possibleChanges.map((status) => (
-                              <option key={status} value={status}>
-                                Change to {status}
+                            {allStatuses.map((status) => (
+                              <option
+                                key={status}
+                                value={status}
+                                disabled={!group.pendingRows.some((item) =>
+                                  availableStatusChanges[item.status].includes(status),
+                                )}
+                              >
+                                Change to {status.charAt(0).toUpperCase() + status.slice(1)}
                               </option>
                             ))}
                           </select>

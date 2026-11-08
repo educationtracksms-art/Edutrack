@@ -2687,8 +2687,8 @@ export function AssessmentsPage() {
                               {submitGroupMutation.isPending
                                 ? "Submitting..."
                                 : row.status === "rejected"
-                                  ? "Submit all again"
-                                  : "Submit all drafts"}
+                                  ? "Resubmit for approval"
+                                  : "Submit drafts for approval"}
                             </Btn>
                           ) : null}
                           {canDeleteGroup ? (

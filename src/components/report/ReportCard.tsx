@@ -67,22 +67,31 @@ export function ReportCard({
     if (!node) return;
 
     // Initial scale computation on mount, after the first render
+    // Use a base scale that ensures the report is legible on A4 paper.
+    // We compute scale based on content width relative to A4 width (794px at 96dpi).
+    // If content is wider than A4, we shrink; if narrower, we keep full size but ensure minimum readability.
     const computeInitialScale = () => {
       const sheet = node.querySelector<HTMLElement>(".report-sheet");
       if (!sheet) return;
       const pixelsPerMillimeter = 96 / 25.4;
-      // A4 paper size in millimeters (210mm x 297mm)
-      const a4WidthMM = 210;
-      const a4HeightMM = 297;
-      const availableWidth = a4WidthMM * pixelsPerMillimeter;
-      const availableHeight = a4HeightMM * pixelsPerMillimeter;
+      // A4 paper size in millimeters (210mm x 297mm) -> 210 * 96/25.4 ≈ 794px wide, 297 * 96/25.4 ≈ 1123px high
+      const a4WidthPx = 210 * pixelsPerMillimeter;
+      const a4HeightPx = 297 * pixelsPerMillimeter;
       // Measure content width/height after the sheet has rendered its content
-      // Use clientWidth/Height which includes padding but not scrollbars; scrollWidth includes overflow
       const contentWidth = Math.max(sheet.clientWidth, sheet.getBoundingClientRect().width);
       const contentHeight = Math.max(sheet.clientHeight, sheet.getBoundingClientRect().height);
-      const scale = shrinkToFit
-        ? Math.min(1, availableWidth / Math.max(contentWidth, 1), availableHeight / Math.max(contentHeight, 1))
-        : 1;
+      // Base scale: if content fits within A4, use 1 (full size); if wider, shrink to fit width only.
+      // We use a ratio that preserves legibility - don't shrink below 0.8 even if content is very wide.
+      let scale = 1;
+      if (contentWidth > a4WidthPx) {
+        scale = Math.max(0.8, a4WidthPx / contentWidth); // shrink but not below 80%
+      } else {
+        // Content narrower than A4 - we can scale up slightly for better readability, up to 1.1x
+        scale = Math.min(1.1, a4WidthPx / contentWidth);
+      }
+      // Also consider height - ensure nothing is cut off vertically
+      const heightRatio = a4HeightPx / Math.max(contentHeight, 1);
+      scale = Math.min(scale, heightRatio);
       node.style.setProperty("--print-scale", String(scale));
     };
 
@@ -94,17 +103,7 @@ export function ReportCard({
       if (!sheet) return;
       // Force a reflow to get accurate dimensions
       sheet.style.display = "inline-block";
-      const pixelsPerMillimeter = 96 / 25.4;
-      const a4WidthMM = 210;
-      const a4HeightMM = 297;
-      const availableWidth = a4WidthMM * pixelsPerMillimeter;
-      const availableHeight = a4HeightMM * pixelsPerMillimeter;
-      const contentWidth = Math.max(sheet.scrollWidth, sheet.getBoundingClientRect().width);
-      const contentHeight = Math.max(sheet.scrollHeight, sheet.getBoundingClientRect().height);
-      const scale = shrinkToFit
-        ? Math.min(1, availableWidth / Math.max(contentWidth, 1), availableHeight / Math.max(contentHeight, 1))
-        : 1;
-      node.style.setProperty("--print-scale", String(scale));
+      computePrintScale(sheet, shrinkToFit);
     };
     const onAfterPrint = () => {
       // Reset scale after printing for proper display on screen
@@ -120,6 +119,23 @@ export function ReportCard({
       clearTimeout(initialTimer);
     };
   }, [data, shrinkToFit]);
+
+// Helper: compute and apply print scale to the sheet element
+function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
+  const pixelsPerMillimeter = 96 / 25.4;
+  const printableWidth = 206 * pixelsPerMillimeter;
+  const printableHeight = 293 * pixelsPerMillimeter;
+  const contentWidth = Math.max(sheet.scrollWidth, sheet.getBoundingClientRect().width);
+  const contentHeight = Math.max(sheet.scrollHeight, sheet.getBoundingClientRect().height);
+  const scale = shrinkToFit
+    ? Math.min(
+        1,
+        printableWidth / Math.max(contentWidth, 1),
+        printableHeight / Math.max(contentHeight, 1),
+      )
+    : 1;
+  sheet.style.setProperty("--print-scale", String(scale));
+}
 
   return (
     <div
