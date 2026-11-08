@@ -60,6 +60,19 @@ type TeacherWorkloadRow = {
   classes: number;
 };
 
+type LeadershipLineCharts = {
+  performanceByTerm: Array<{ term: string; average: number }>;
+  attendanceByDate: Array<{ date: string; rate: number }>;
+  assessmentStatusByTerm: Array<{
+    term: string;
+    approved: number;
+    submitted: number;
+    rejected: number;
+  }>;
+  classPerformanceByTerm: Array<Record<string, string | number | null>>;
+  classPerformanceSeries: Array<{ key: string; name: string }>;
+};
+
 type SchoolChartData = {
   subjectPerformance: Array<{ name: string; average: number }>;
   gradeBuckets: Array<{ name: string; value: number }>;
@@ -78,6 +91,7 @@ type SchoolChartData = {
   coCurricularParticipation?: CoCurricularChartRow[];
   timetableUtilization?: TimetableChartRow[];
   moduleAdoption?: Array<{ name: string; value: number }>;
+  leadershipLineCharts?: LeadershipLineCharts;
 };
 
 type DashboardChartsProps =
@@ -175,7 +189,92 @@ export default function DashboardCharts(props: DashboardChartsProps) {
   }
 
   return (
-    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+    <div className="mt-4 space-y-4">
+      {props.leadershipLineCharts && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Panel title="Average achievement by term">
+            {props.leadershipLineCharts.performanceByTerm.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={props.leadershipLineCharts.performanceByTerm} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="term" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(value) => [`${value}%`, "Average"]} />
+                  <Line type="monotone" dataKey="average" name="Average score" stroke="var(--color-chart-1)" strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartEmptyState message="Term averages will appear here when results are available." />
+            )}
+          </Panel>
+
+          <Panel title="Attendance rate by day">
+            {props.leadershipLineCharts.attendanceByDate.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={props.leadershipLineCharts.attendanceByDate} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(value) => [`${value}%`, "Attendance"]} />
+                  <Line type="monotone" dataKey="rate" name="Attendance rate" stroke="var(--color-chart-2)" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartEmptyState message="Daily attendance rates will appear here when attendance is recorded." />
+            )}
+          </Panel>
+
+          <Panel title="Assessment status by term">
+            {props.leadershipLineCharts.assessmentStatusByTerm.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={props.leadershipLineCharts.assessmentStatusByTerm} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="term" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="approved" name="Approved" stroke="var(--color-chart-3)" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="submitted" name="Submitted" stroke="var(--color-chart-4)" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="rejected" name="Returned" stroke="var(--color-chart-5)" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartEmptyState message="Assessment status by term will appear when marks are submitted." />
+            )}
+          </Panel>
+
+          <Panel title="Achievement by class and term">
+            {props.leadershipLineCharts.classPerformanceByTerm.length > 0 &&
+            props.leadershipLineCharts.classPerformanceSeries.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={props.leadershipLineCharts.classPerformanceByTerm} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="term" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(value) => [`${value}%`, "Average"]} />
+                  <Legend />
+                  {props.leadershipLineCharts.classPerformanceSeries.map((series, index) => (
+                    <Line
+                      key={series.key}
+                      type="monotone"
+                      dataKey={series.key}
+                      name={series.name}
+                      stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartEmptyState message="Class achievement trends will appear when marks are available across terms." />
+            )}
+          </Panel>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
       <Panel title="Subject performance">
         {props.subjectPerformance.length > 0 ? (
           <ResponsiveContainer width="100%" height={260}>
@@ -212,7 +311,7 @@ export default function DashboardCharts(props: DashboardChartsProps) {
         )}
       </Panel>
 
-      <Panel title="Performance trend">
+      {!props.leadershipLineCharts && <Panel title="Performance trend">
         {props.trend.length > 0 ? (
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={props.trend}>
@@ -235,7 +334,7 @@ export default function DashboardCharts(props: DashboardChartsProps) {
             height={240}
           />
         )}
-      </Panel>
+      </Panel>}
 
       <Panel title="Learner gender">
         {props.genderSplit.length > 0 ? (
@@ -409,7 +508,7 @@ export default function DashboardCharts(props: DashboardChartsProps) {
         </Panel>
       )}
 
-      {props.attendanceTrend && (
+      {!props.leadershipLineCharts && props.attendanceTrend && (
         <Panel title="Attendance trend">
           {props.attendanceTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -546,6 +645,7 @@ export default function DashboardCharts(props: DashboardChartsProps) {
           </ResponsiveContainer>
         </Panel>
       )}
+      </div>
     </div>
   );
 }

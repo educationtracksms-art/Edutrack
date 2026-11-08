@@ -1164,6 +1164,50 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
           : 0,
       };
     });
+  const trendTerms = [...data.terms]
+    .sort((left, right) => (left.start_date ?? "").localeCompare(right.start_date ?? ""))
+    .filter((term) => data.assessments.some((assessment) => assessment.term_id === term.id))
+    .slice(-8);
+  const assessmentStatusByTerm = trendTerms.map((term) => {
+    const termAssessments = data.assessments.filter((assessment) => assessment.term_id === term.id);
+    return {
+      term: term.name,
+      approved: termAssessments.filter((assessment) => assessment.status === "approved").length,
+      submitted: termAssessments.filter((assessment) => assessment.status === "submitted").length,
+      rejected: termAssessments.filter((assessment) => assessment.status === "rejected").length,
+    };
+  });
+  const classPerformanceSeries = data.classes
+    .map((schoolClass) => {
+      const studentIds = new Set(
+        data.students
+          .filter((student) => student.class_id === schoolClass.id)
+          .map((student) => student.id),
+      );
+      const assessmentCount = data.assessments.filter((assessment) =>
+        studentIds.has(assessment.student_id),
+      ).length;
+      return { key: `class_${schoolClass.id}`, name: schoolClass.name, studentIds, assessmentCount };
+    })
+    .filter((schoolClass) => schoolClass.assessmentCount > 0)
+    .sort((left, right) => right.assessmentCount - left.assessmentCount)
+    .slice(0, 5);
+  const classPerformanceByTerm = trendTerms.map((term) => {
+    const point: Record<string, string | number | null> = { term: term.name };
+    for (const schoolClass of classPerformanceSeries) {
+      const scores = data.assessments
+        .filter(
+          (assessment) =>
+            assessment.term_id === term.id &&
+            schoolClass.studentIds.has(assessment.student_id),
+        )
+        .map((assessment) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+      point[schoolClass.key] = scores.length
+        ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
+        : null;
+    }
+    return point;
+  });
   const classPerformance = data.classes.map((item) => {
     const classStudentIds = new Set(data.students.filter((student) => student.class_id === item.id).map((student) => student.id));
     const classScores = data.assessments
@@ -1245,6 +1289,13 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         absent: count ? Math.round((totals.absent / count) * 1000) / 10 : 0,
       };
     });
+  const leadershipLineCharts = {
+    performanceByTerm: trend,
+    attendanceByDate: attendanceTrend.map(({ date, present }) => ({ date, rate: present })),
+    assessmentStatusByTerm,
+    classPerformanceByTerm,
+    classPerformanceSeries: classPerformanceSeries.map(({ key, name }) => ({ key, name })),
+  };
   const learnersBelowAttendanceTarget = data.students.filter((student) => {
     const summary = summaryByStudent.get(student.id);
     const daily = dailyByStudent.get(student.id) ?? { present: 0, absent: 0 };
@@ -1305,6 +1356,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
           ].filter((bucket) => bucket.value > 0)}
           studentStatus={studentStatus}
           classPerformance={classPerformance}
+          leadershipLineCharts={leadershipLineCharts}
           classDistribution={learnerDistributionByClass}
           streamDistribution={learnerDistributionByStream}
           attendanceByClass={isChartsOnlyRole && attendanceEnabled ? attendanceByClass : undefined}
@@ -1722,6 +1774,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
           ].filter((b) => b.value > 0)}
           studentStatus={studentStatus}
           classPerformance={classPerformance}
+          leadershipLineCharts={leadershipLineCharts}
           classDistribution={learnerDistributionByClass}
           streamDistribution={learnerDistributionByStream}
           attendanceByClass={isDos && attendanceEnabled ? attendanceByClass : undefined}

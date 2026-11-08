@@ -960,7 +960,6 @@ export function AssessmentsPage() {
   }, [rows, tableSubjectFilter]);
 
   const summativeGroups = useMemo(() => {
-    const activePeriods = new Set(data?.activeAssessmentPeriods ?? []);
     const groups = new Map<
       string,
       {
@@ -972,11 +971,11 @@ export function AssessmentsPage() {
     >();
     for (const row of visibleRows) {
       const examType = row.exam_type as "beginning_of_term" | "mid_term" | "end_of_term";
-      if (!activePeriods.has(examType)) continue;
       const key = `${row.student_id}:${row.subject_id}:${row.term_id}:${row.paper_id ?? "subject"}`;
       const group = groups.get(key) ?? { row, periods: {}, rows: [], formativeMark: null };
-      const score = Number(row.summative);
-      if (Number.isFinite(score)) group.periods[examType] = score;
+      if (row.summative != null && Number.isFinite(Number(row.summative))) {
+        group.periods[examType] = Number(row.summative);
+      }
       group.rows.push(row);
       groups.set(key, group);
     }
@@ -998,7 +997,7 @@ export function AssessmentsPage() {
         : null,
       };
     });
-  }, [data?.activeAssessmentPeriods, tableData?.formativeMarks, visibleRows]);
+  }, [tableData?.formativeMarks, visibleRows]);
 
   const sortedSummativeGroups = useMemo(() => {
     const groups = [...summativeGroups];

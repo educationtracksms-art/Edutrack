@@ -66,12 +66,39 @@ export function ReportCard({
     const node = reportRef.current;
     if (!node) return;
 
-    const updatePrintScale = () => {
+    // Initial scale computation on mount, after the first render
+    const computeInitialScale = () => {
       const sheet = node.querySelector<HTMLElement>(".report-sheet");
       if (!sheet) return;
       const pixelsPerMillimeter = 96 / 25.4;
-      const availableWidth = 192 * pixelsPerMillimeter;
-      const availableHeight = 279 * pixelsPerMillimeter;
+      // A4 paper size in millimeters (210mm x 297mm)
+      const a4WidthMM = 210;
+      const a4HeightMM = 297;
+      const availableWidth = a4WidthMM * pixelsPerMillimeter;
+      const availableHeight = a4HeightMM * pixelsPerMillimeter;
+      // Measure content width/height after the sheet has rendered its content
+      // Use clientWidth/Height which includes padding but not scrollbars; scrollWidth includes overflow
+      const contentWidth = Math.max(sheet.clientWidth, sheet.getBoundingClientRect().width);
+      const contentHeight = Math.max(sheet.clientHeight, sheet.getBoundingClientRect().height);
+      const scale = shrinkToFit
+        ? Math.min(1, availableWidth / Math.max(contentWidth, 1), availableHeight / Math.max(contentHeight, 1))
+        : 1;
+      node.style.setProperty("--print-scale", String(scale));
+    };
+
+    // Run after the first paint to get accurate measurements
+    const initialTimer = setTimeout(computeInitialScale, 0);
+    // Also compute on beforeprint to adjust if needed
+    const onBeforePrint = () => {
+      const sheet = node.querySelector<HTMLElement>(".report-sheet");
+      if (!sheet) return;
+      // Force a reflow to get accurate dimensions
+      sheet.style.display = "inline-block";
+      const pixelsPerMillimeter = 96 / 25.4;
+      const a4WidthMM = 210;
+      const a4HeightMM = 297;
+      const availableWidth = a4WidthMM * pixelsPerMillimeter;
+      const availableHeight = a4HeightMM * pixelsPerMillimeter;
       const contentWidth = Math.max(sheet.scrollWidth, sheet.getBoundingClientRect().width);
       const contentHeight = Math.max(sheet.scrollHeight, sheet.getBoundingClientRect().height);
       const scale = shrinkToFit
@@ -79,13 +106,18 @@ export function ReportCard({
         : 1;
       node.style.setProperty("--print-scale", String(scale));
     };
+    const onAfterPrint = () => {
+      // Reset scale after printing for proper display on screen
+      node.style.setProperty("--print-scale", "1");
+    };
 
-    window.addEventListener("beforeprint", updatePrintScale);
-    window.addEventListener("afterprint", updatePrintScale);
+    window.addEventListener("beforeprint", onBeforePrint);
+    window.addEventListener("afterprint", onAfterPrint);
 
     return () => {
-      window.removeEventListener("beforeprint", updatePrintScale);
-      window.removeEventListener("afterprint", updatePrintScale);
+      window.removeEventListener("beforeprint", onBeforePrint);
+      window.removeEventListener("afterprint", onAfterPrint);
+      clearTimeout(initialTimer);
     };
   }, [data, shrinkToFit]);
 
