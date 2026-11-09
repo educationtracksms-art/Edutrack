@@ -36,6 +36,11 @@ export type DailyRollup = {
   apiCalls: number;
   queryLatency: LatencySummary;
   apiLatency: LatencySummary;
+  lcpLatency: LatencySummary;
+  inpLatency: LatencySummary;
+  clsLatency: LatencySummary;
+  ttfbLatency: LatencySummary;
+  routeLatency: LatencySummary;
 };
 
 export function emptyLatency(): LatencySummary {
@@ -80,6 +85,11 @@ export function emptyRollup(date: string): DailyRollup {
     apiCalls: 0,
     queryLatency: emptyLatency(),
     apiLatency: emptyLatency(),
+    lcpLatency: emptyLatency(),
+    inpLatency: emptyLatency(),
+    clsLatency: emptyLatency(),
+    ttfbLatency: emptyLatency(),
+    routeLatency: emptyLatency(),
   };
 }
 
@@ -95,6 +105,11 @@ export function mergeRollup(base: DailyRollup, incoming: DailyRollup): DailyRoll
     apiCalls: base.apiCalls + incoming.apiCalls,
     queryLatency: mergeLatency(base.queryLatency, incoming.queryLatency),
     apiLatency: mergeLatency(base.apiLatency, incoming.apiLatency),
+    lcpLatency: mergeLatency(base.lcpLatency, incoming.lcpLatency),
+    inpLatency: mergeLatency(base.inpLatency, incoming.inpLatency),
+    clsLatency: mergeLatency(base.clsLatency, incoming.clsLatency),
+    ttfbLatency: mergeLatency(base.ttfbLatency, incoming.ttfbLatency),
+    routeLatency: mergeLatency(base.routeLatency, incoming.routeLatency)
   };
 }
 
@@ -150,7 +165,12 @@ export function isDailyRollup(value: unknown): value is DailyRollup {
     isFiniteNumber(rollup.queryErrors) &&
     isFiniteNumber(rollup.apiCalls) &&
     isLatencySummary(rollup.queryLatency) &&
-    isLatencySummary(rollup.apiLatency)
+    isLatencySummary(rollup.apiLatency),
+    isLatencySummary(rollup.lcpLatency),
+    isLatencySummary(rollup.inpLatency),
+    isLatencySummary(rollup.clsLatency),
+    isLatencySummary(rollup.ttfbLatency),
+    isLatencySummary(rollup.routeLatency)
   );
 }
 
@@ -216,3 +236,4 @@ export function dayKey(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
 }
+

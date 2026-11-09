@@ -1,3 +1,5 @@
+import type { ReportModulePreferences } from "./report-module-preferences";
+
 export type SubjectRow = {
   subjectId?: string;
   paperId?: string | null;
@@ -71,6 +73,7 @@ export type ReportPreviewState = {
   cards: ReportCardData[];
   reportLevel: ReportCardData["gradingLevel"];
   shrinkToFit: boolean;
+  modulePreferences?: ReportModulePreferences;
 };
 
 declare module "@tanstack/history" {

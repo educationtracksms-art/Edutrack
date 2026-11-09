@@ -1,8 +1,16 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+import { Btn, Field, PageHeader, Panel, inputClass } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DEFAULT_REPORT_MODULE_PREFERENCES,
+  parseReportModulePreferences,
+  REPORT_MODULE_PREFERENCES_STORAGE_KEY,
+  type ReportModulePreferences,
+} from "@/lib/report-module-preferences";
 import { isModuleEnabled } from "@/lib/modules";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export const Route = createFileRoute("/_authenticated/academics/report-modules")({
   beforeLoad: async () => {
@@ -20,175 +28,143 @@ export const Route = createFileRoute("/_authenticated/academics/report-modules")
       throw redirect({ to: "/dashboard" });
     }
   },
+  head: () => ({
+    meta: [{ title: "Report modules | EduTrack" }],
+  }),
   component: ReportModulesPage,
 });
 
 function ReportModulesPage() {
-  const { data: me } = useCurrentUser();
+  const [prefs, setPrefs] = useState<ReportModulePreferences>(DEFAULT_REPORT_MODULE_PREFERENCES);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load saved preferences from localStorage, or defaults
-  const [prefs, setPrefs] = useState<{
-    grades: boolean;
-    comments: boolean;
-    attendance: boolean;
-    coCurricular: boolean;
-    includeFeesBalance: boolean;
-    paymentReferenceType: "account_number" | "sch_pay";
-    accountNumber: string;
-  }>(() => {
-    const saved = localStorage.getItem("report-modules-prefs");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        grades: parsed.grades ?? true,
-        comments: parsed.comments ?? true,
-        attendance: parsed.attendance ?? true,
-        coCurricular: parsed.coCurricular ?? true,
-        includeFeesBalance: parsed.includeFeesBalance ?? true,
-        paymentReferenceType: parsed.paymentReferenceType ?? "sch_pay",
-        accountNumber: parsed.accountNumber ?? "",
-      };
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(REPORT_MODULE_PREFERENCES_STORAGE_KEY);
+      if (saved) setPrefs(parseReportModulePreferences(JSON.parse(saved)));
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? `Could not load report module preferences: ${error.message}`
+          : "Could not load report module preferences",
+      );
+    } finally {
+      setIsLoaded(true);
     }
-    return {
-      grades: true,
-      comments: true,
-      attendance: true,
-      coCurricular: true,
-      includeFeesBalance: true,
-      paymentReferenceType: "sch_pay",
-      accountNumber: "",
-    };
-  });
+  }, []);
 
-  const handleSave = () => {
-    localStorage.setItem("report-modules-prefs", JSON.stringify(prefs));
-    alert("Report modules preferences saved.");
+  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (prefs.paymentReferenceType === "account_number" && !prefs.accountNumber.trim()) {
+      toast.error("Enter an account number for the report cards");
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(REPORT_MODULE_PREFERENCES_STORAGE_KEY, JSON.stringify(prefs));
+      toast.success("Report module preferences saved");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? `Could not save report module preferences: ${error.message}`
+          : "Could not save report module preferences",
+      );
+    }
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-6">Report Modules</h2>
-
-      <form className="space-y-4">
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={prefs.grades}
-            onChange={(e) => setPrefs((p) => ({ ...p, grades: e.target.checked }))}
-            className="rounded border"
-          />
-          <span className="text-sm">Include grades</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={prefs.comments}
-            onChange={(e) => setPrefs((p) => ({ ...p, comments: e.target.checked }))}
-            className="rounded border"
-          />
-          <span className="text-sm">Include teacher comments</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={prefs.attendance}
-            onChange={(e) => setPrefs((p) => ({ ...p, attendance: e.target.checked }))}
-            className="rounded border"
-          />
-          <span className="text-sm">Include attendance</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={prefs.coCurricular}
-            onChange={(e) => setPrefs((p) => ({ ...p, coCurricular: e.target.checked }))}
-            className="rounded border"
-          />
-          <span className="text-sm">Include co‑curricular</span>
-        </div>
-
-<div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={prefs.includeFeesBalance}
-            onChange={(e) => setPrefs((p) => ({ ...p, includeFeesBalance: e.target.checked }))}
-            className="rounded border"
-          />
-          <span className="text-sm">Include fees balance</span>
-        </div>
-
-        <fieldset className="border p-4 rounded">
-          <legend className="font-semibold">Payment reference type</legend>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="paymentType"
-                value="sch_pay"
-                checked={prefs.paymentReferenceType === "sch_pay"}
-                onChange={() => setPrefs((p) => ({ ...p, paymentReferenceType: "sch_pay" }))}
-                className="rounded border"
-              />
-              <span>School Pay code (SchPay)</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="paymentType"
-                value="account_number"
-                checked={prefs.paymentReferenceType === "account_number"}
-                onChange={() => setPrefs((p) => ({ ...p, paymentReferenceType: "account_number" }))}
-                className="rounded border"
-              />
-              <span>Account number</span>
-            </label>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Academic setup"
+        title="Report modules"
+        description="Choose which sections appear on generated report cards and set the payment reference."
+      />
+      <Panel title="Report card sections">
+        <form className="space-y-5" onSubmit={handleSave}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([
+              ["grades", "Include grades"],
+              ["comments", "Include teacher comments"],
+              ["attendance", "Include attendance"],
+              ["coCurricular", "Include co-curricular activities"],
+              ["includeFeesBalance", "Include fees balance"],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={prefs[key]}
+                  onChange={(event) =>
+                    setPrefs((current) => ({ ...current, [key]: event.target.checked }))
+                  }
+                  className="rounded border"
+                />
+                {label}
+              </label>
+            ))}
           </div>
 
-          {prefs.paymentReferenceType === "account_number" ? (
-            <div className="mt-2 flex items-center gap-2">
-              <label htmlFor="accountNumber" className="text-sm">
-                Account number:
+          <fieldset className="space-y-3 rounded-xl border border-border p-4">
+            <legend className="px-1 text-sm font-semibold">Payment reference</legend>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
                 <input
+                  type="radio"
+                  name="paymentReferenceType"
+                  value="sch_pay"
+                  checked={prefs.paymentReferenceType === "sch_pay"}
+                  onChange={() =>
+                    setPrefs((current) => ({ ...current, paymentReferenceType: "sch_pay" }))
+                  }
+                />
+                School Pay code
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="paymentReferenceType"
+                  value="account_number"
+                  checked={prefs.paymentReferenceType === "account_number"}
+                  onChange={() =>
+                    setPrefs((current) => ({
+                      ...current,
+                      paymentReferenceType: "account_number",
+                    }))
+                  }
+                />
+                Account number
+              </label>
+            </div>
+            {prefs.paymentReferenceType === "account_number" ? (
+              <Field label="Account number">
+                <input
+                  required
                   id="accountNumber"
                   type="text"
                   value={prefs.accountNumber}
-                  onChange={(e) => setPrefs((p) => ({ ...p, accountNumber: e.target.value }))}
-                  placeholder="e.g. 1234567890"
-                  className="rounded border w-32 px-2 py-1 text-sm"
+                  onChange={(event) =>
+                    setPrefs((current) => ({ ...current, accountNumber: event.target.value }))
+                  }
+                  placeholder="Enter the report-card account number"
+                  className={inputClass}
                 />
-              </label>
-            </div>
-          ) : (
-            <div className="mt-2 text-sm text-muted-foreground">
-              SchPay code will be used instead of account number.
-            </div>
-          )}
-        </fieldset>
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            className="rounded px-4 py-2 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            Save preferences
-          </button>
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="rounded px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
+              </Field>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                The learner&apos;s School Pay code will appear on the report card.
+              </p>
+            )}
+          </fieldset>
 
-      <p className="mt-6 text-sm text-muted-foreground">
-        These settings control which sections appear on generated report cards.
-        Changes are saved locally and will take effect for new reports.
-      </p>
+          <div className="flex justify-end">
+            <Btn type="submit" variant="accent" disabled={!isLoaded}>
+              Save preferences
+            </Btn>
+          </div>
+        </form>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Saved preferences are applied the next time report cards are generated in this browser.
+        </p>
+      </Panel>
     </div>
   );
 }

@@ -5,8 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
-import { hasAny } from "@/hooks/useCurrentUser";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { deleteReportCommentRule, upsertReportCommentRule } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicsPage } from "./-shared";
@@ -45,7 +44,12 @@ function CommentsPage() {
     comment: "",
   });
 
-  const { data: reportCommentRules = [], isLoading: isLoadingCommentRules } = useQuery({
+  const {
+    data: reportCommentRules = [],
+    isLoading: isLoadingCommentRules,
+    isError: isCommentRulesError,
+    error: commentRulesError,
+  } = useQuery({
     queryKey: ["academics-report-comment-rules", schoolId],
     enabled: !!schoolId && canManageReportComments,
     queryFn: async () => {
@@ -123,6 +127,13 @@ function CommentsPage() {
       </p>
     );
   }
+  if (!schoolId) {
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        Your account is not linked to a school, so report comment criteria cannot be loaded.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -132,6 +143,11 @@ function CommentsPage() {
         description="Set the criteria and report remarks used for class-teacher and head-teacher comments."
       />
       <Panel title="Report comment criteria">
+        {isCommentRulesError && (
+          <p role="alert" className="mb-4 text-sm text-destructive">
+            Could not load report comment criteria: {commentRulesError.message}
+          </p>
+        )}
         <form
           className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-4"
           onSubmit={(event) => {
@@ -281,7 +297,7 @@ function CommentsPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoadingCommentRules && reportCommentRules.length === 0 && (
+              {!isLoadingCommentRules && !isCommentRulesError && reportCommentRules.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
                     No report comment criteria added yet.

@@ -26,7 +26,7 @@ export const getRouter = () => {
     scrollRestoration: true,
     // Start loading the next route as soon as a user points at a navigation
     // item. The shell links opt into intent preloading below.
-    defaultPreload: "intent",
+    defaultPreload: "render",
     defaultPreloadDelay: 0,
     defaultPreloadStaleTime: 30_000,
   });

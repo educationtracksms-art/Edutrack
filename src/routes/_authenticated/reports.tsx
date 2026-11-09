@@ -24,6 +24,12 @@ import { friendlyAdminError } from "@/lib/admin-errors";
 import { logReportPrint } from "@/lib/admin.functions";
 import { getALevelReportCards, getOLevelReportCards } from "@/lib/report.functions";
 import type { ReportCardData } from "@/lib/report-types";
+import {
+  DEFAULT_REPORT_MODULE_PREFERENCES,
+  parseReportModulePreferences,
+  REPORT_MODULE_PREFERENCES_STORAGE_KEY,
+  type ReportModulePreferences,
+} from "@/lib/report-module-preferences";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
@@ -86,12 +92,31 @@ function ReportsPage() {
   const [reportLevel, setReportLevel] = useState<"ordinary" | "advanced">("ordinary");
   const [selected, setSelected] = useState<string[]>([]);
   const [cards, setCards] = useState<ReportCardData[]>([]);
+  const [modulePreferences, setModulePreferences] = useState<ReportModulePreferences>(
+    DEFAULT_REPORT_MODULE_PREFERENCES,
+  );
+  const [areModulePreferencesLoaded, setAreModulePreferencesLoaded] = useState(false);
 const [previewOpen, setPreviewOpen] = useState(true);
 
   const [shrinkToFit, setShrinkToFit] = useState(true);
   const [reportTab, setReportTab] = useState<"academic" | "attendance">("academic");
   const [attendanceTermId, setAttendanceTermId] = useState("");
   const [attendanceClassId, setAttendanceClassId] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(REPORT_MODULE_PREFERENCES_STORAGE_KEY);
+      if (saved) setModulePreferences(parseReportModulePreferences(JSON.parse(saved)));
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? `Could not load report module preferences: ${error.message}`
+          : "Could not load report module preferences",
+      );
+    } finally {
+      setAreModulePreferencesLoaded(true);
+    }
+  }, []);
 
   const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["classes"],
@@ -397,7 +422,11 @@ const [previewOpen, setPreviewOpen] = useState(true);
         description="Academic reports, attendance summaries and school performance analytics."
         actions={reportTab === "academic" ? (
           <>
-            <Btn variant="accent" onClick={() => generate.mutate()} disabled={generate.isPending}>
+            <Btn
+              variant="accent"
+              onClick={() => generate.mutate()}
+              disabled={generate.isPending || !areModulePreferencesLoaded}
+            >
               {generate.isPending ? "Generating…" : "Generate"}
             </Btn>
             {cards.length > 0 && (
@@ -408,7 +437,7 @@ const [previewOpen, setPreviewOpen] = useState(true);
                     navigate({
                       to: "/reports/preview",
                       state: {
-                        reportPreview: { cards, reportLevel, shrinkToFit },
+                        reportPreview: { cards, reportLevel, shrinkToFit, modulePreferences },
                       },
                     })
                   }
@@ -577,9 +606,19 @@ const [previewOpen, setPreviewOpen] = useState(true);
       <div className={`report-preview-list space-y-6 ${previewOpen ? "" : "report-preview-hidden"}`}>
         {cards.map((card) =>
           card.gradingLevel === "advanced" ? (
-            <ALevelReportCard key={card.studentId} data={card} shrinkToFit={shrinkToFit} />
+            <ALevelReportCard
+              key={card.studentId}
+              data={card}
+              shrinkToFit={shrinkToFit}
+              modulePreferences={modulePreferences}
+            />
           ) : (
-            <OLevelReportCard key={card.studentId} data={card} shrinkToFit={shrinkToFit} />
+            <OLevelReportCard
+              key={card.studentId}
+              data={card}
+              shrinkToFit={shrinkToFit}
+              modulePreferences={modulePreferences}
+            />
           ),
         )}
       </div>

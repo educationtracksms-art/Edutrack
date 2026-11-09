@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ALevelReportCard } from "@/components/report/ALevelReportCard";
 import { OLevelReportCard } from "@/components/report/OLevelReportCard";
 import { Btn, PageHeader } from "@/components/ui-kit";
+import { DEFAULT_REPORT_MODULE_PREFERENCES } from "@/lib/report-module-preferences";
 
 export const Route = createFileRoute("/_authenticated/reports/preview")({
   beforeLoad: async () => {
@@ -60,12 +61,14 @@ function PreviewPage() {
                 key={card.studentId}
                 data={card}
                 shrinkToFit={preview.shrinkToFit}
+                modulePreferences={preview.modulePreferences ?? DEFAULT_REPORT_MODULE_PREFERENCES}
               />
             ) : (
               <OLevelReportCard
                 key={card.studentId}
                 data={card}
                 shrinkToFit={preview.shrinkToFit}
+                modulePreferences={preview.modulePreferences ?? DEFAULT_REPORT_MODULE_PREFERENCES}
               />
             ),
           )}

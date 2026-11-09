@@ -1,12 +1,18 @@
 import type { ReportCardData } from "@/lib/report-types";
+import {
+  DEFAULT_REPORT_MODULE_PREFERENCES,
+  type ReportModulePreferences,
+} from "@/lib/report-module-preferences";
 import { useEffect, useRef, type CSSProperties } from "react";
 
 export function ReportCard({
   data,
   shrinkToFit = true,
+  modulePreferences = DEFAULT_REPORT_MODULE_PREFERENCES,
 }: {
   data: ReportCardData;
   shrinkToFit?: boolean;
+  modulePreferences?: ReportModulePreferences;
 }) {
   const {
     school,
@@ -27,10 +33,10 @@ export function ReportCard({
   const watermarkLabel = school.name || "School";
   const reportRef = useRef<HTMLDivElement | null>(null);
   const paymentLabel =
-    school.reportPaymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
+    modulePreferences.paymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
   const paymentValue =
-    school.reportPaymentReferenceType === "account_number"
-      ? school.reportAccountNumber || "_____________________"
+    modulePreferences.paymentReferenceType === "account_number"
+      ? modulePreferences.accountNumber || school.reportAccountNumber || "_____________________"
       : student.schpayCode || "_____________________";
   const nextTermBeginsOn = (() => {
     const value = school.reportNextTermBeginsOn?.trim();
@@ -118,7 +124,7 @@ export function ReportCard({
       window.removeEventListener("afterprint", onAfterPrint);
       clearTimeout(initialTimer);
     };
-  }, [data, shrinkToFit]);
+  }, [data, modulePreferences, shrinkToFit]);
 
 // Helper: compute and apply print scale to the sheet element
 function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
@@ -183,7 +189,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
               <td className="label-name">Name:</td>
               <td className="value-name">{student.name}</td>
               <td className="attendance-cell" rowSpan={3}>
-                {attendance && (
+                {modulePreferences.attendance && attendance && (
                   <table>
                     <tbody>
                       <tr>
@@ -220,7 +226,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
             <tr>
               <td className="label-small">{paymentLabel}:</td>
               <td className="value-small">{paymentValue}</td>
-              {student.feesBalance !== null ? (
+              {modulePreferences.includeFeesBalance && student.feesBalance !== null ? (
                 <>
                   <td className="label-small">Fees Bal:</td>
                   <td className="value-small">{student.feesBalance}</td>
@@ -241,6 +247,8 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
           </tbody>
         </table>
 
+        {modulePreferences.grades && (
+          <>
         <h2 className="title">ASSESSMENT RESULTS SUMMARY</h2>
         <table className="results">
           <colgroup>
@@ -416,38 +424,45 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
             </div>
           )}
         </section>
+          </>
+        )}
 
-        <h2 className="section-title">CO CURRICULAR ACTIVITIES AND PROJECTS</h2>
-        <table className="activities">
-          <tbody>
-            <tr>
-              <td>Games</td>
-              <td>{coCurricular.games}</td>
-            </tr>
-            <tr>
-              <td>Clubs</td>
-              <td>{coCurricular.clubs}</td>
-            </tr>
-            <tr>
-              <td>Projects</td>
-              <td>{coCurricular.projects}</td>
-            </tr>
-          </tbody>
-        </table>
+        {modulePreferences.coCurricular && (
+          <>
+            <h2 className="section-title">CO CURRICULAR ACTIVITIES AND PROJECTS</h2>
+            <table className="activities">
+              <tbody>
+                <tr>
+                  <td>Games</td>
+                  <td>{coCurricular.games}</td>
+                </tr>
+                <tr>
+                  <td>Clubs</td>
+                  <td>{coCurricular.clubs}</td>
+                </tr>
+                <tr>
+                  <td>Projects</td>
+                  <td>{coCurricular.projects}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
 
         <table className="comments">
           <tbody>
-            <tr>
-              <td className="label">
-                Class Teacher&apos;s Comment
-                {staff.classTeacher && <></>}
-              </td>
-              <td>{comments.classTeacher}</td>
-            </tr>
-            <tr>
-              <td className="label">Head Teacher&apos;s Comment</td>
-              <td>{comments.headTeacher}</td>
-            </tr>
+            {modulePreferences.comments && (
+              <>
+                <tr>
+                  <td className="label">Class Teacher&apos;s Comment</td>
+                  <td>{comments.classTeacher}</td>
+                </tr>
+                <tr>
+                  <td className="label">Head Teacher&apos;s Comment</td>
+                  <td>{comments.headTeacher}</td>
+                </tr>
+              </>
+            )}
             <tr>
               <td className="label">
                 <strong>Next term begins on</strong>
