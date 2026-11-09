@@ -105,6 +105,8 @@ export function NotificationPanel({
           <label className="mb-3 flex items-center justify-between rounded-xl bg-muted/50 p-3 text-sm">
             <span>Notify me about my next class</span>
             <input
+              id="next-class-notifications"
+              name="next-class-notifications"
               type="checkbox"
               checked={nextClassEnabled}
               onChange={(event) => toggleNextClassNotifications(event.target.checked)}

@@ -8,6 +8,7 @@ import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import {
   deleteAssessmentGroup,
+  loadAssessmentRecords,
   reviewAssessments,
   updateAssessmentDraftEntry,
   submitAssessmentEntry,
@@ -161,6 +162,7 @@ export function AssessmentsPage() {
   const submitEntry = useServerFn(submitAssessmentEntry);
   const submitEntries = useServerFn(submitAssessmentEntries);
   const deleteGroup = useServerFn(deleteAssessmentGroup);
+  const fetchAssessmentRecords = useServerFn(loadAssessmentRecords);
   const [subjectFilter, setSubjectFilter] = useState("");
   const [tableSubjectFilter, setTableSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -201,8 +203,7 @@ export function AssessmentsPage() {
     queryFn: async () => {
       const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
       let [
-        assessmentsResult,
-        formativeMarksResult,
+        assessmentRecords,
         assessmentPeriodsResult,
         studentsResult,
         subjectsResult,
@@ -215,12 +216,7 @@ export function AssessmentsPage() {
         profilesResult,
         profileResult,
       ] = (await Promise.all([
-        schoolQuery(supabase.from("assessments").select("*").order("created_at")),
-        schoolQuery(
-          (supabase as any)
-            .from("formative_marks")
-            .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked"),
-        ),
+        fetchAssessmentRecords(),
         schoolQuery(
           (supabase as any)
             .from("assessment_periods")
@@ -281,9 +277,6 @@ export function AssessmentsPage() {
 
       // These datasets were added after the original assessments workflow. Keep
       // the core page available while a deployment is catching up with them.
-      if (isMissingRelationError(formativeMarksResult)) {
-        formativeMarksResult = { data: [], error: null };
-      }
       if (isMissingRelationError(assessmentPeriodsResult)) {
         assessmentPeriodsResult = { data: [], error: null };
       }
@@ -292,8 +285,6 @@ export function AssessmentsPage() {
       }
 
       const failedResult = [
-        assessmentsResult,
-        formativeMarksResult,
         assessmentPeriodsResult,
         studentsResult,
         subjectsResult,
@@ -308,8 +299,8 @@ export function AssessmentsPage() {
       ].find((result) => result.error);
       if (failedResult?.error) throw new Error(`Unable to load assessments: ${failedResult.error.message}`);
 
-      const assessmentRows = (assessmentsResult.data ?? []) as AssessmentRow[];
-      const formativeMarkRows = (formativeMarksResult.data ?? []) as FormativeMarkRow[];
+      const assessmentRows = assessmentRecords.assessments as AssessmentRow[];
+      const formativeMarkRows = assessmentRecords.formativeMarks as FormativeMarkRow[];
       const assessmentPeriods = (assessmentPeriodsResult.data ?? []) as Array<{
         term_id: string;
         exam_type: string;
@@ -386,104 +377,7 @@ export function AssessmentsPage() {
       };
     },
   });
-  const { data: tableData } = useQuery<{
-    assessments: AssessmentRow[];
-    formativeMarks: FormativeMarkRow[];
-    students: StudentRow[];
-    subjects: SubjectRow[];
-    subjectPapers: SubjectPaperRow[];
-    terms: TermRow[];
-    classes: ClassRow[];
-    gradingScales: GradingScaleRow[];
-    staffProfileMap: Map<string, string>;
-  }>({
-    queryKey: ["assessment-table", schoolId],
-    queryFn: async () => {
-      const schoolQuery = (query: any) => (schoolId ? query.eq("school_id", schoolId) : query);
-      let [
-        assessmentsResult,
-        formativeMarksResult,
-        studentsResult,
-        subjectsResult,
-        subjectPapersResult,
-        termsResult,
-        classesResult,
-        gradingScalesResult,
-        profilesResult,
-      ] = (await Promise.all([
-        schoolQuery(supabase.from("assessments").select("*").order("created_at")),
-        schoolQuery(
-          (supabase as any)
-            .from("formative_marks")
-            .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked"),
-        ),
-        schoolQuery(
-          supabase
-            .from("students")
-            .select("id, full_name, class_id, stream_id, status")
-            .eq("status", "active")
-            .order("full_name"),
-        ),
-        schoolQuery(supabase.from("subjects").select("id, name, education_level").order("position")),
-        schoolQuery((supabase as any).from("subject_papers").select("id, subject_id, name, position").order("position")),
-        schoolQuery(
-          supabase
-            .from("terms")
-            .select("id, name, is_current")
-            .order("start_date", { ascending: false }),
-        ),
-        schoolQuery(
-          supabase
-            .from("classes")
-            .select("id, name, class_teacher_id, education_level")
-            .order("name"),
-        ),
-        schoolQuery(
-          supabase
-            .from("grading_scales")
-            .select("grade, min_score, max_score, grade_descriptor, education_level, points")
-            .order("min_score", { ascending: false }),
-        ),
-        schoolQuery(supabase.from("profiles").select("id, full_name")),
-      ])) as any[];
-      if (isMissingRelationError(subjectPapersResult)) {
-        subjectPapersResult = { data: [], error: null };
-      }
-      const failedResult = [
-        assessmentsResult,
-        formativeMarksResult,
-        studentsResult,
-        subjectsResult,
-        subjectPapersResult,
-        termsResult,
-        classesResult,
-        gradingScalesResult,
-        profilesResult,
-      ].find((result) => result.error);
-      if (failedResult?.error) throw new Error(`Unable to load assessment records: ${failedResult.error.message}`);
-      const staffProfiles = (profilesResult.data ?? []) as StaffProfileRow[];
-      const staffProfileMap = new Map(
-        staffProfiles.map((profile) => [profile.id, profile.full_name]),
-      );
-
-      return {
-        assessments: (assessmentsResult.data ?? []) as AssessmentRow[],
-        formativeMarks: (formativeMarksResult.data ?? []) as FormativeMarkRow[],
-        students: (studentsResult.data ?? []) as StudentRow[],
-        subjects: (subjectsResult.data ?? []) as SubjectRow[],
-        subjectPapers: (subjectPapersResult.data ?? []) as SubjectPaperRow[],
-        terms: (termsResult.data ?? []) as TermRow[],
-        classes: (classesResult.data ?? []) as ClassRow[],
-        gradingScales: ((gradingScalesResult.data ?? []) as Array<
-          Omit<GradingScaleRow, "descriptor"> & { grade_descriptor: string }
-        >).map((scale) => ({
-          ...scale,
-          descriptor: scale.grade_descriptor,
-        })),
-        staffProfileMap,
-      };
-    },
-  });
+  const tableData = data;
 
   const selectedAllocation = useMemo(
     () =>
@@ -886,7 +780,6 @@ export function AssessmentsPage() {
     onSuccess: () => {
       toast.success("Formative and summative marks submitted for approval");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
-      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -954,7 +847,6 @@ export function AssessmentsPage() {
     onSuccess: () => {
       toast.success("Formative, BOT, MOT, and EOT marks deleted");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
-      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });
@@ -1048,7 +940,7 @@ export function AssessmentsPage() {
     },
     onSuccess: () => {
       toast.success(editingAssessmentId ? "Assessment updated" : "Assessment saved as draft");
-      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
       resetEntryForm();
       setEditingAssessmentId("");
     },
@@ -1245,7 +1137,6 @@ export function AssessmentsPage() {
     onSuccess: () => {
       toast.success("Formative and summative drafts saved");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
-      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
       setEditingAssessmentId("");
       setEntryForm((current) => ({
         ...current,
@@ -1274,7 +1165,7 @@ export function AssessmentsPage() {
     }) => reviewAssessments({ data: vars }),
     onSuccess: () => {
       toast.success("Review recorded");
-      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
+      queryClient.invalidateQueries({ queryKey: ["assessments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -1419,7 +1310,6 @@ export function AssessmentsPage() {
     onSuccess: () => {
       toast.success("Allocation marks submitted for approval");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
-      queryClient.invalidateQueries({ queryKey: ["assessment-table"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
   });

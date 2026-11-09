@@ -961,7 +961,7 @@ function TimetablePage() {
                   key={day}
                   className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
                 >
-                  <input
+                  <input id={`day-${value}`} name="day-filter"
                     type="checkbox"
                     checked={checked}
                     onChange={() =>

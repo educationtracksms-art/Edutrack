@@ -1452,6 +1452,8 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                 >
                   <span className="text-sm font-medium">{module.label}</span>
                   <input
+                    id={`module-${module.key}`}
+                    name="module-toggle"
                     type="checkbox"
                     checked={enabled}
                     onChange={(e) =>

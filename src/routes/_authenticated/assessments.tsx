@@ -1,9 +1,14 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 
-import { AssessmentsPage } from "@/components/assessments-page";
 import { supabase } from "@/integrations/supabase/client";
 import { isModuleEnabled } from "@/lib/modules";
+
+const AssessmentsPage = lazy(() =>
+  import("@/components/assessments-page").then(({ AssessmentsPage }) => ({
+    default: AssessmentsPage,
+  })),
+);
 
 export const Route = createFileRoute("/_authenticated/assessments")({
   beforeLoad: async () => {
@@ -34,8 +39,25 @@ export const Route = createFileRoute("/_authenticated/assessments")({
     ],
   }),
   errorComponent: AssessmentsError,
-  component: AssessmentsPage,
+  component: AssessmentsRoutePage,
 });
+
+function AssessmentsRoutePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Loading assessments…
+          </div>
+        </div>
+      }
+    >
+      <AssessmentsPage />
+    </Suspense>
+  );
+}
 
 function AssessmentsError({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);

@@ -557,7 +557,7 @@ function StudentsPage() {
               </select>
             </Field>
             <Field label="Stream">
-              <select
+              <select id="stream-select" name="stream"
                 required={Boolean((streams ?? []).some((stream) => stream.class_id === form.class_id))}
                 className={inputClass}
                 value={form.stream_id}

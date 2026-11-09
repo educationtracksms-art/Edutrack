@@ -447,6 +447,8 @@ const [previewOpen, setPreviewOpen] = useState(true);
 
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input
+                    id="shrink-to-fit"
+                    name="shrink-to-fit"
                     type="checkbox"
                     checked={shrinkToFit}
                     onChange={(event) => setShrinkToFit(event.target.checked)}
@@ -586,7 +588,7 @@ const [previewOpen, setPreviewOpen] = useState(true);
               key={student.id}
               className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
             >
-              <input
+              <input id={`student-${student.id}`} name="student"
                 type="checkbox"
                 checked={selected.includes(student.id)}
                 onChange={(event) =>

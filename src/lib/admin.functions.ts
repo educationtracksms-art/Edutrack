@@ -682,6 +682,138 @@ export const listStaffUsers = createServerFn({ method: "GET" })
     };
   });
 
+export const loadAssessmentRecords = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const [{ data: profile, error: profileError }, { data: roleRows, error: rolesError }] =
+      await Promise.all([
+        context.supabase
+          .from("profiles")
+          .select("school_id")
+          .eq("id", context.userId)
+          .maybeSingle(),
+        context.supabase.from("user_roles").select("role, school_id").eq("user_id", context.userId),
+      ]);
+    if (profileError) throw new Error(profileError.message);
+    if (rolesError) throw new Error(rolesError.message);
+    if (!profile?.school_id) throw new Error("Your account is not linked to a school");
+
+    const roles = (roleRows ?? [])
+      .filter((row) => row.school_id === profile.school_id)
+      .map((row) => row.role);
+    if (
+      !roles.some((role) =>
+        [
+          "subject_teacher",
+          "class_teacher",
+          "hod",
+          "dos",
+          "school_admin",
+          "head_teacher",
+          "deputy_head_teacher",
+          "super_admin",
+        ].includes(role),
+      )
+    ) {
+      throw new Error("Not allowed to view assessments");
+    }
+
+    const canViewAllAssessments = roles.some((role) =>
+      [
+        "super_admin",
+        "school_admin",
+        "head_teacher",
+        "deputy_head_teacher",
+        "dos",
+        "hod",
+      ].includes(role),
+    );
+    const [assessmentsResult, formativeMarksResult, scopeResults] = await Promise.all([
+      context.supabase
+        .from("assessments")
+        .select("*")
+        .eq("school_id", profile.school_id)
+        .order("created_at"),
+      (context.supabase as any)
+        .from("formative_marks")
+        .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked")
+        .eq("school_id", profile.school_id),
+      canViewAllAssessments
+        ? Promise.resolve(null)
+        : Promise.all([
+            context.supabase
+              .from("students")
+              .select("id, class_id, stream_id")
+              .eq("school_id", profile.school_id)
+              .eq("status", "active"),
+            context.supabase
+              .from("teacher_allocations")
+              .select("subject_id, paper_id, class_id, stream_id")
+              .eq("school_id", profile.school_id)
+              .eq("teacher_id", context.userId),
+            context.supabase
+              .from("classes")
+              .select("id")
+              .eq("school_id", profile.school_id)
+              .eq("class_teacher_id", context.userId),
+          ]),
+    ]);
+    if (assessmentsResult.error) throw new Error(assessmentsResult.error.message);
+
+    const formativeMarksError = formativeMarksResult.error;
+    const missingFormativeMarksTable =
+      formativeMarksError?.code === "42P01" ||
+      formativeMarksError?.code === "PGRST205" ||
+      /does not exist|could not find the table/i.test(formativeMarksError?.message ?? "");
+    if (formativeMarksError && !missingFormativeMarksTable) {
+      throw new Error(formativeMarksError.message);
+    }
+
+    let assessments = assessmentsResult.data ?? [];
+    let formativeMarks = missingFormativeMarksTable ? [] : formativeMarksResult.data ?? [];
+    if (!canViewAllAssessments) {
+      if (!scopeResults) throw new Error("Unable to determine assessment access scope");
+      const [studentsResult, allocationsResult, classesResult] = scopeResults;
+      const scopeError = [studentsResult, allocationsResult, classesResult].find(
+        (result) => result.error,
+      )?.error;
+      if (scopeError) throw new Error(scopeError.message);
+
+      const studentsById = new Map(
+        (studentsResult.data ?? []).map((student) => [student.id, student]),
+      );
+      const assignedClassIds = new Set((classesResult.data ?? []).map((classRow) => classRow.id));
+      const allocations = allocationsResult.data ?? [];
+      const canViewStudentRecord = (
+        record: { student_id: string; subject_id: string; paper_id?: string | null },
+      ) => {
+        const student = studentsById.get(record.student_id);
+        if (!student) return false;
+        if (student.class_id && assignedClassIds.has(student.class_id)) return true;
+        return allocations.some(
+          (allocation) =>
+            allocation.subject_id === record.subject_id &&
+            (allocation.paper_id ?? null) === (record.paper_id ?? null) &&
+            (!allocation.class_id || allocation.class_id === student.class_id) &&
+            (!allocation.stream_id || allocation.stream_id === student.stream_id),
+        );
+      };
+
+      assessments = assessments.filter(
+        (assessment) =>
+          studentsById.has(assessment.student_id) &&
+          (canViewStudentRecord(assessment) ||
+            (assessment.status === "rejected" && assessment.submitted_by === context.userId)),
+      );
+      formativeMarks = formativeMarks.filter(canViewStudentRecord);
+    }
+
+    return {
+      assessments,
+      formativeMarks,
+    };
+  });
+
 export const createStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(

@@ -584,7 +584,7 @@ function PlanFormDialog({
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
           <div>
             <label className="block text-sm font-medium">Plan Name</label>
-            <input
+            <input id="plan-name" name="plan-name"
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -597,7 +597,7 @@ function PlanFormDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium">Price (UGX)</label>
-              <input
+              <input id="plan-price" name="plan-price"
                 type="number"
                 value={price}
                 onChange={(event) => setPrice(Number(event.target.value))}
@@ -609,7 +609,7 @@ function PlanFormDialog({
             </div>
             <div>
               <label className="block text-sm font-medium">Duration Value</label>
-              <input
+              <input id="plan-duration-value" name="plan-duration-value"
                 type="number"
                 value={durationValue}
                 onChange={(event) => setDurationValue(Number(event.target.value))}
@@ -623,7 +623,7 @@ function PlanFormDialog({
 
           <div>
             <label className="block text-sm font-medium">Duration Unit</label>
-            <select
+            <select id="plan-duration-unit" name="plan-duration-unit"
               value={durationUnit}
               onChange={(event) =>
                 setDurationUnit(event.target.value as "days" | "weeks" | "months" | "years")
@@ -639,7 +639,7 @@ function PlanFormDialog({
 
           <div>
             <label className="block text-sm font-medium">Description (optional)</label>
-            <textarea
+            <textarea id="plan-description" name="plan-description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               className="mt-1 w-full resize-none rounded-lg border border-border bg-background p-2"
@@ -650,7 +650,7 @@ function PlanFormDialog({
 
           {isEdit && (
             <label className="flex items-center gap-2 text-sm">
-              <input
+              <input id="plan-is-active" name="plan-is-active"
                 type="checkbox"
                 checked={isActive}
                 onChange={(event) => setIsActive(event.target.checked)}
@@ -861,6 +861,8 @@ function RevokeDialog({
         <div className="mt-4">
           <label className="mb-1 block text-sm font-medium">Reason (optional)</label>
           <textarea
+            id="sub-reason"
+            name="sub-reason"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             className="w-full resize-none rounded-lg border border-border bg-background p-2"

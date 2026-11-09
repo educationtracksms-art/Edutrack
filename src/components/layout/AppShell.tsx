@@ -955,9 +955,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="flex items-center gap-2 border-b border-border px-2 pb-2">
                       <Search className="h-4 w-4 text-muted-foreground" />
                       <input
+                        id="search-tools-input"
+                        name="search-tools"
                         ref={searchInputRef}
                         value={searchTerm}
-                        onChange={(event) => setSearchTerm(event.target.value)}
+                        onChange={(event) => React.startTransition(() => setSearchTerm(event.target.value))}
                         placeholder="Search school tools..."
                         className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none"
                         aria-label="Search school tools"

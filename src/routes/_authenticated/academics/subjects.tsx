@@ -518,7 +518,7 @@ function SubjectsPage() {
               </Field>
             </div>
             <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-3">
-              <input type="checkbox" checked={aLevelSubjectForm.is_subsidiary} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, is_subsidiary: event.target.checked })} />
+              <input id="subject-is-subsidiary" name="subject-is-subsidiary" type="checkbox" checked={aLevelSubjectForm.is_subsidiary} onChange={(event) => setALevelSubjectForm({ ...aLevelSubjectForm, is_subsidiary: event.target.checked })} />
               Subsidiary subject (50+ = 1 point, below 50 = 0)
             </label>
             <div className="rounded-lg border border-violet-200 bg-background/70 p-3 dark:border-violet-800 sm:col-span-2 lg:col-span-3">

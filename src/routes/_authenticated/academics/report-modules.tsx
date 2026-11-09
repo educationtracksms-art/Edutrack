@@ -91,6 +91,8 @@ function ReportModulesPage() {
             ] as const).map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-sm">
                 <input
+                  id={`report-module-${key}`}
+                  name="report-module"
                   type="checkbox"
                   checked={prefs[key]}
                   onChange={(event) =>

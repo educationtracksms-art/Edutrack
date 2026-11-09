@@ -262,6 +262,8 @@ function SettingsPage() {
               >
                 <span className="capitalize">{toggle.module.replace(/_/g, " ")}</span>
                 <input
+                  id={`module-${toggle.id}`}
+                  name="module-toggle"
                   type="checkbox"
                   checked={toggle.enabled}
                   onChange={(e) =>

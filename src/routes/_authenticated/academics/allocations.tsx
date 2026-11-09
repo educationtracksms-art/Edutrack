@@ -390,7 +390,7 @@ function AllocationsPage() {
             </select>
           </Field>
           <Field label="Stream">
-            <select
+            <select id="allocation-stream" name="allocation-stream"
               disabled={isLoading || !allocForm.class_id}
               required={Boolean(
                 (data?.streams ?? []).some((stream) => stream.class_id === allocForm.class_id),
