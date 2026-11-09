@@ -66,3 +66,15 @@ export type ReportCardData = {
   comments: { classTeacher: string; headTeacher: string };
   staff: { classTeacher: string; headTeacher: string };
 };
+
+export type ReportPreviewState = {
+  cards: ReportCardData[];
+  reportLevel: ReportCardData["gradingLevel"];
+  shrinkToFit: boolean;
+};
+
+declare module "@tanstack/history" {
+  interface HistoryState {
+    reportPreview?: ReportPreviewState;
+  }
+}

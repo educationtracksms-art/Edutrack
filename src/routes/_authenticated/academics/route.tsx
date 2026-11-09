@@ -44,7 +44,9 @@ const SECTIONS: {
   { to: "/academics/subjects", label: "Subjects" },
   { to: "/academics/calendar", label: "Years & terms" },
   { to: "/academics/grading", label: "Grading" },
+  { to: "/academics/comments", label: "Comments" },
   { to: "/academics/allocations", label: "Allocations" },
+  { to: "/academics/report-modules", label: "Report modules" },
 ];
 
 function AcademicsLayout() {

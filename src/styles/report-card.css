@@ -1,0 +1,557 @@
+.report-doc {
+  width: min(100%, 210mm);
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 6mm;
+  box-sizing: border-box;
+  color: #172334;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9pt;
+  line-height: 1.25;
+  background: #f7faff;
+  border: 1px solid #d5deeb;
+  box-shadow: 0 8px 26px rgb(22 42 68 / 12%);
+}
+
+.report-doc *,
+.report-doc *::before,
+.report-doc *::after {
+  box-sizing: border-box;
+}
+
+.report-doc .report-sheet {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 281mm;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 58%, #f7faff 100%);
+}
+
+.report-doc .report-watermark {
+  position: absolute;
+  z-index: 0;
+  top: 52%;
+  left: 50%;
+  display: flex;
+  width: 72%;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  opacity: 0.1;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+.report-doc .report-sheet > :not(.report-watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+.report-doc .report-watermark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.report-doc .report-watermark span {
+  color: #2a4262;
+  font-size: clamp(72px, 16vw, 190px);
+  font-weight: 800;
+}
+
+.report-doc header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-bottom: 3mm;
+  padding: 2mm 2mm 1mm;
+  text-align: center;
+  background: #f0f5fc;
+  border-radius: 3mm 3mm 0 0;
+}
+
+.report-doc .header-top {
+  display: flex;
+  min-height: 17mm;
+  align-items: center;
+  justify-content: center;
+  gap: 4mm;
+}
+
+.report-doc .logo {
+  display: flex;
+  width: 17mm;
+  height: 17mm;
+  flex: 0 0 17mm;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #174477;
+  font-size: 10pt;
+  font-weight: 700;
+  border: 1px solid #c5d2e3;
+  border-radius: 50%;
+  background: white;
+}
+
+.report-doc .logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.report-doc .school-details {
+  flex: 1;
+  text-align: center;
+}
+
+.report-doc .school-details h1 {
+  margin: 0 0 1mm;
+  color: #17263c;
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: 0.15px;
+  text-transform: uppercase;
+}
+
+.report-doc .school-details p {
+  margin: 0.5mm 0;
+  color: #38475b;
+  font-size: 7pt;
+}
+
+.report-doc .school-details p.motto {
+  font-size: 6.5pt;
+  font-style: italic;
+}
+
+.report-doc .blue-line,
+.report-doc .red-line {
+  width: 100%;
+  height: 0.35mm;
+}
+
+.report-doc .blue-line {
+  margin-top: 1mm;
+  background: #214f87;
+}
+
+.report-doc .red-line {
+  margin-top: 0.6mm;
+  margin-bottom: 1.5mm;
+  background: #c62832;
+}
+
+.report-doc header > h2 {
+  margin: 0;
+  color: #1d2b40;
+  font-size: 9pt;
+  font-weight: 500;
+  letter-spacing: 0.15px;
+  text-transform: uppercase;
+}
+
+.report-doc table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.report-doc .student-info-table {
+  margin-bottom: 2mm;
+  table-layout: fixed;
+  border: 0.25mm solid #8e9aab;
+}
+
+.report-doc .student-info-table td {
+  height: 5mm;
+  padding: 0.7mm 1mm;
+  border: 0.2mm solid #aeb8c5;
+  vertical-align: middle;
+  font-size: 7pt;
+}
+
+.report-doc .student-info-table .label-lin {
+  width: 8%;
+  font-weight: 700;
+}
+
+.report-doc .student-info-table .value-lin {
+  width: 13%;
+}
+
+.report-doc .student-info-table .label-name {
+  width: 10%;
+  font-weight: 700;
+}
+
+.report-doc .student-info-table .value-name {
+  width: 31%;
+  font-weight: 600;
+}
+
+.report-doc .student-info-table .label-small {
+  width: 12%;
+  font-weight: 600;
+}
+
+.report-doc .student-info-table .value-small {
+  width: 18%;
+}
+
+.report-doc .student-info-table .attendance-cell {
+  width: 19%;
+  padding: 0.5mm;
+  text-align: center;
+}
+
+.report-doc .attendance-cell table {
+  height: 100%;
+  font-size: 6pt;
+}
+
+.report-doc .attendance-cell th,
+.report-doc .attendance-cell td {
+  height: auto;
+  padding: 0.5mm 0.8mm;
+  text-align: center;
+  border: 0.2mm solid #64748b;
+}
+
+.report-doc .attendance-cell th {
+  color: white;
+  font-size: 6pt;
+  font-weight: 700;
+  background: #26384d;
+}
+
+.report-doc .student-info-table .passport-cell {
+  width: 15%;
+  padding: 1mm;
+  text-align: center;
+}
+
+.report-doc .passport {
+  display: flex;
+  width: 22mm;
+  height: 27mm;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  padding: 1mm;
+  color: #26384d;
+  font-size: 6.5pt;
+  font-weight: 700;
+  text-align: center;
+  border: 0.6mm solid #c62832;
+  border-radius: 2mm;
+  background: #fff;
+  object-fit: cover;
+}
+
+.report-doc .title,
+.report-doc .section-title {
+  margin: 1.5mm 0 1mm;
+  padding-left: 1.5mm;
+  color: #1c2b40;
+  font-size: 7.5pt;
+  font-weight: 700;
+  line-height: 1.3;
+  border-left: 0.8mm solid #c62832;
+  text-transform: uppercase;
+}
+
+.report-doc .results {
+  margin-bottom: 1.5mm;
+  table-layout: fixed;
+  font-size: 6.5pt;
+}
+
+.report-doc .results-subject-col {
+  width: 18%;
+}
+
+.report-doc .results-formative-col,
+.report-doc .results-summative-col {
+  width: 7%;
+}
+
+.report-doc .results-total-col,
+.report-doc .results-grade-col {
+  width: 7%;
+}
+
+.report-doc .results-descriptor-col {
+  width: 32%;
+}
+
+.report-doc .results-teacher-col {
+  width: 8%;
+}
+
+.report-doc.advanced-report .results-subject-col {
+  width: 17%;
+}
+
+.report-doc.advanced-report .results-paper-col {
+  width: 12%;
+}
+
+.report-doc.advanced-report .results-formative-col,
+.report-doc.advanced-report .results-summative-col {
+  width: 7%;
+}
+
+.report-doc.advanced-report .results-total-col,
+.report-doc.advanced-report .results-average-col,
+.report-doc.advanced-report .results-grade-col {
+  width: 7%;
+}
+
+.report-doc.advanced-report .results-descriptor-col,
+.report-doc.advanced-report .results-teacher-col {
+  width: 8%;
+}
+
+.report-doc .results th,
+.report-doc .results td {
+  padding: 1mm 0.7mm;
+  overflow-wrap: anywhere;
+  text-align: center;
+  vertical-align: middle;
+  border: 0.2mm solid #8190a3;
+}
+
+.report-doc .results th {
+  color: #18283d;
+  font-size: 6pt;
+  font-weight: 700;
+  background: #e7eef8;
+}
+
+.report-doc .results th:first-child,
+.report-doc .results td:first-child {
+  text-align: left;
+}
+
+.report-doc .results tbody tr:nth-child(even) {
+  background: rgb(236 242 250 / 55%);
+}
+
+.report-doc.advanced-report .results th,
+.report-doc.advanced-report .results td {
+  font-size: 5.7pt;
+}
+
+.report-doc .overall-table {
+  margin: 1mm 0 2mm;
+  border: 0.25mm solid #8290a1;
+}
+
+.report-doc .overall-table td {
+  padding: 1.2mm;
+  font-size: 6.5pt;
+}
+
+.report-doc .overall-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2mm;
+}
+
+.report-doc .overall-cell strong {
+  font-weight: 700;
+}
+
+.report-doc .avg-score {
+  font-weight: 700;
+}
+
+.report-doc .definitions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 2mm;
+  margin: 1mm 0 2mm;
+  padding: 1.5mm;
+  border: 0.25mm solid #d5deeb;
+  border-radius: 2mm;
+  background: rgb(255 255 255 / 68%);
+}
+
+.report-doc .definitions h3 {
+  margin: 0 0 1mm;
+  color: #c62832;
+  font-size: 6.3pt;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.report-doc .keywords table th,
+.report-doc .keywords table td {
+  padding: 0.8mm;
+  font-size: 6pt;
+  text-align: left;
+  border: 0.2mm solid #a6b0bd;
+}
+
+.report-doc .keywords table th {
+  font-weight: 700;
+  background: #edf2f8;
+}
+
+.report-doc .meaning p {
+  margin: 0 0 0.7mm;
+  font-size: 6pt;
+  line-height: 1.25;
+}
+
+.report-doc .activities,
+.report-doc .comments {
+  margin: 0 0 1.5mm;
+  table-layout: fixed;
+}
+
+.report-doc .activities td,
+.report-doc .comments td {
+  height: 5mm;
+  padding: 0.8mm 1mm;
+  font-size: 6.5pt;
+  border: 0.2mm solid #8e9aab;
+}
+
+.report-doc .activities td:first-child {
+  width: 34%;
+  font-weight: 600;
+}
+
+.report-doc .comments .label {
+  width: 34%;
+  font-weight: 600;
+}
+
+.report-doc .approved-note {
+  margin: 0 0 1mm;
+  color: #214f87;
+  font-size: 6.5pt;
+  font-weight: 600;
+}
+
+.report-doc .signature-area {
+  display: flex;
+  justify-content: space-between;
+  gap: 12mm;
+  margin-top: auto;
+  padding: 2mm 0 0;
+  border-top: 0.25mm solid #c5d2e3;
+}
+
+.report-doc .signature-area > div {
+  width: 42%;
+  min-height: 19mm;
+  font-size: 6.5pt;
+}
+
+.report-preview-hidden {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 210mm !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .report-preview-list,
+  .report-preview-list * {
+    visibility: visible !important;
+  }
+
+  .report-preview-list {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    display: block !important;
+    width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .report-preview-hidden {
+    display: block !important;
+  }
+
+  .report-doc {
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .report-preview-list > .report-doc:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .report-doc .report-sheet {
+    display: flex !important;
+    width: 100% !important;
+    min-height: 285mm !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    transform: scale(var(--print-scale, 1));
+    transform-origin: top left;
+  }
+
+  .report-doc .signature-area {
+    margin-top: auto;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  .report-doc {
+    min-height: 0;
+    padding: 3mm;
+    font-size: 8pt;
+  }
+
+  .report-doc .report-sheet {
+    min-height: 0;
+  }
+
+  .report-doc .definitions {
+    grid-template-columns: 1fr;
+  }
+}

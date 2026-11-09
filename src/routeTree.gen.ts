@@ -70,8 +70,11 @@ import { Route as AuthenticatedAcademicsIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedAcademicsAllocationsRouteImport } from './routes/_authenticated/academics/allocations'
 import { Route as AuthenticatedAcademicsCalendarRouteImport } from './routes/_authenticated/academics/calendar'
 import { Route as AuthenticatedAcademicsClassesRouteImport } from './routes/_authenticated/academics/classes'
+import { Route as AuthenticatedAcademicsCommentsRouteImport } from './routes/_authenticated/academics/comments'
 import { Route as AuthenticatedAcademicsGradingRouteImport } from './routes/_authenticated/academics/grading'
+import { Route as AuthenticatedAcademicsReportModulesRouteImport } from './routes/_authenticated/academics/report-modules'
 import { Route as AuthenticatedAcademicsSubjectsRouteImport } from './routes/_authenticated/academics/subjects'
+import { Route as AuthenticatedReportsPreviewRouteImport } from './routes/_authenticated/reports/preview'
 import { Route as AuthenticatedStudentsIdRouteImport } from './routes/_authenticated/students.$id'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedUsersDepartmentsRouteImport } from './routes/_authenticated/users/departments'
@@ -415,10 +418,22 @@ const AuthenticatedAcademicsClassesRoute =
     path: '/classes',
     getParentRoute: () => AuthenticatedAcademicsRouteRoute,
   } as any)
+const AuthenticatedAcademicsCommentsRoute =
+  AuthenticatedAcademicsCommentsRouteImport.update({
+    id: '/comments',
+    path: '/comments',
+    getParentRoute: () => AuthenticatedAcademicsRouteRoute,
+  } as any)
 const AuthenticatedAcademicsGradingRoute =
   AuthenticatedAcademicsGradingRouteImport.update({
     id: '/grading',
     path: '/grading',
+    getParentRoute: () => AuthenticatedAcademicsRouteRoute,
+  } as any)
+const AuthenticatedAcademicsReportModulesRoute =
+  AuthenticatedAcademicsReportModulesRouteImport.update({
+    id: '/report-modules',
+    path: '/report-modules',
     getParentRoute: () => AuthenticatedAcademicsRouteRoute,
   } as any)
 const AuthenticatedAcademicsSubjectsRoute =
@@ -426,6 +441,12 @@ const AuthenticatedAcademicsSubjectsRoute =
     id: '/subjects',
     path: '/subjects',
     getParentRoute: () => AuthenticatedAcademicsRouteRoute,
+  } as any)
+const AuthenticatedReportsPreviewRoute =
+  AuthenticatedReportsPreviewRouteImport.update({
+    id: '/preview',
+    path: '/preview',
+    getParentRoute: () => AuthenticatedReportsRoute,
   } as any)
 const AuthenticatedStudentsIdRoute = AuthenticatedStudentsIdRouteImport.update({
   id: '/$id',
@@ -510,7 +531,7 @@ export interface FileRoutesByFullPath {
   '/marksheet': typeof AuthenticatedMarksheetRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
-  '/reports': typeof AuthenticatedReportsRoute
+  '/reports': typeof AuthenticatedReportsRouteWithChildren
   '/schools': typeof AuthenticatedSchoolsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/students': typeof AuthenticatedStudentsRouteWithChildren
@@ -527,8 +548,11 @@ export interface FileRoutesByFullPath {
   '/academics/allocations': typeof AuthenticatedAcademicsAllocationsRoute
   '/academics/calendar': typeof AuthenticatedAcademicsCalendarRoute
   '/academics/classes': typeof AuthenticatedAcademicsClassesRoute
+  '/academics/comments': typeof AuthenticatedAcademicsCommentsRoute
   '/academics/grading': typeof AuthenticatedAcademicsGradingRoute
+  '/academics/report-modules': typeof AuthenticatedAcademicsReportModulesRoute
   '/academics/subjects': typeof AuthenticatedAcademicsSubjectsRoute
+  '/reports/preview': typeof AuthenticatedReportsPreviewRoute
   '/students/$id': typeof AuthenticatedStudentsIdRoute
   '/users/departments': typeof AuthenticatedUsersDepartmentsRoute
   '/users/new': typeof AuthenticatedUsersNewRoute
@@ -579,7 +603,7 @@ export interface FileRoutesByTo {
   '/marksheet': typeof AuthenticatedMarksheetRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
-  '/reports': typeof AuthenticatedReportsRoute
+  '/reports': typeof AuthenticatedReportsRouteWithChildren
   '/schools': typeof AuthenticatedSchoolsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/students': typeof AuthenticatedStudentsRouteWithChildren
@@ -596,8 +620,11 @@ export interface FileRoutesByTo {
   '/academics/allocations': typeof AuthenticatedAcademicsAllocationsRoute
   '/academics/calendar': typeof AuthenticatedAcademicsCalendarRoute
   '/academics/classes': typeof AuthenticatedAcademicsClassesRoute
+  '/academics/comments': typeof AuthenticatedAcademicsCommentsRoute
   '/academics/grading': typeof AuthenticatedAcademicsGradingRoute
+  '/academics/report-modules': typeof AuthenticatedAcademicsReportModulesRoute
   '/academics/subjects': typeof AuthenticatedAcademicsSubjectsRoute
+  '/reports/preview': typeof AuthenticatedReportsPreviewRoute
   '/students/$id': typeof AuthenticatedStudentsIdRoute
   '/users/departments': typeof AuthenticatedUsersDepartmentsRoute
   '/users/new': typeof AuthenticatedUsersNewRoute
@@ -652,7 +679,7 @@ export interface FileRoutesById {
   '/_authenticated/marksheet': typeof AuthenticatedMarksheetRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/promotions': typeof AuthenticatedPromotionsRoute
-  '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/reports': typeof AuthenticatedReportsRouteWithChildren
   '/_authenticated/schools': typeof AuthenticatedSchoolsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/students': typeof AuthenticatedStudentsRouteWithChildren
@@ -669,8 +696,11 @@ export interface FileRoutesById {
   '/_authenticated/academics/allocations': typeof AuthenticatedAcademicsAllocationsRoute
   '/_authenticated/academics/calendar': typeof AuthenticatedAcademicsCalendarRoute
   '/_authenticated/academics/classes': typeof AuthenticatedAcademicsClassesRoute
+  '/_authenticated/academics/comments': typeof AuthenticatedAcademicsCommentsRoute
   '/_authenticated/academics/grading': typeof AuthenticatedAcademicsGradingRoute
+  '/_authenticated/academics/report-modules': typeof AuthenticatedAcademicsReportModulesRoute
   '/_authenticated/academics/subjects': typeof AuthenticatedAcademicsSubjectsRoute
+  '/_authenticated/reports/preview': typeof AuthenticatedReportsPreviewRoute
   '/_authenticated/students/$id': typeof AuthenticatedStudentsIdRoute
   '/_authenticated/users/departments': typeof AuthenticatedUsersDepartmentsRoute
   '/_authenticated/users/new': typeof AuthenticatedUsersNewRoute
@@ -742,8 +772,11 @@ export interface FileRouteTypes {
     | '/academics/allocations'
     | '/academics/calendar'
     | '/academics/classes'
+    | '/academics/comments'
     | '/academics/grading'
+    | '/academics/report-modules'
     | '/academics/subjects'
+    | '/reports/preview'
     | '/students/$id'
     | '/users/departments'
     | '/users/new'
@@ -811,8 +844,11 @@ export interface FileRouteTypes {
     | '/academics/allocations'
     | '/academics/calendar'
     | '/academics/classes'
+    | '/academics/comments'
     | '/academics/grading'
+    | '/academics/report-modules'
     | '/academics/subjects'
+    | '/reports/preview'
     | '/students/$id'
     | '/users/departments'
     | '/users/new'
@@ -883,8 +919,11 @@ export interface FileRouteTypes {
     | '/_authenticated/academics/allocations'
     | '/_authenticated/academics/calendar'
     | '/_authenticated/academics/classes'
+    | '/_authenticated/academics/comments'
     | '/_authenticated/academics/grading'
+    | '/_authenticated/academics/report-modules'
     | '/_authenticated/academics/subjects'
+    | '/_authenticated/reports/preview'
     | '/_authenticated/students/$id'
     | '/_authenticated/users/departments'
     | '/_authenticated/users/new'
@@ -1338,11 +1377,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAcademicsClassesRouteImport
       parentRoute: typeof AuthenticatedAcademicsRouteRoute
     }
+    '/_authenticated/academics/comments': {
+      id: '/_authenticated/academics/comments'
+      path: '/comments'
+      fullPath: '/academics/comments'
+      preLoaderRoute: typeof AuthenticatedAcademicsCommentsRouteImport
+      parentRoute: typeof AuthenticatedAcademicsRouteRoute
+    }
     '/_authenticated/academics/grading': {
       id: '/_authenticated/academics/grading'
       path: '/grading'
       fullPath: '/academics/grading'
       preLoaderRoute: typeof AuthenticatedAcademicsGradingRouteImport
+      parentRoute: typeof AuthenticatedAcademicsRouteRoute
+    }
+    '/_authenticated/academics/report-modules': {
+      id: '/_authenticated/academics/report-modules'
+      path: '/report-modules'
+      fullPath: '/academics/report-modules'
+      preLoaderRoute: typeof AuthenticatedAcademicsReportModulesRouteImport
       parentRoute: typeof AuthenticatedAcademicsRouteRoute
     }
     '/_authenticated/academics/subjects': {
@@ -1351,6 +1404,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/academics/subjects'
       preLoaderRoute: typeof AuthenticatedAcademicsSubjectsRouteImport
       parentRoute: typeof AuthenticatedAcademicsRouteRoute
+    }
+    '/_authenticated/reports/preview': {
+      id: '/_authenticated/reports/preview'
+      path: '/preview'
+      fullPath: '/reports/preview'
+      preLoaderRoute: typeof AuthenticatedReportsPreviewRouteImport
+      parentRoute: typeof AuthenticatedReportsRoute
     }
     '/_authenticated/students/$id': {
       id: '/_authenticated/students/$id'
@@ -1408,7 +1468,9 @@ interface AuthenticatedAcademicsRouteRouteChildren {
   AuthenticatedAcademicsAllocationsRoute: typeof AuthenticatedAcademicsAllocationsRoute
   AuthenticatedAcademicsCalendarRoute: typeof AuthenticatedAcademicsCalendarRoute
   AuthenticatedAcademicsClassesRoute: typeof AuthenticatedAcademicsClassesRoute
+  AuthenticatedAcademicsCommentsRoute: typeof AuthenticatedAcademicsCommentsRoute
   AuthenticatedAcademicsGradingRoute: typeof AuthenticatedAcademicsGradingRoute
+  AuthenticatedAcademicsReportModulesRoute: typeof AuthenticatedAcademicsReportModulesRoute
   AuthenticatedAcademicsSubjectsRoute: typeof AuthenticatedAcademicsSubjectsRoute
   AuthenticatedAcademicsIndexRoute: typeof AuthenticatedAcademicsIndexRoute
 }
@@ -1419,7 +1481,10 @@ const AuthenticatedAcademicsRouteRouteChildren: AuthenticatedAcademicsRouteRoute
       AuthenticatedAcademicsAllocationsRoute,
     AuthenticatedAcademicsCalendarRoute: AuthenticatedAcademicsCalendarRoute,
     AuthenticatedAcademicsClassesRoute: AuthenticatedAcademicsClassesRoute,
+    AuthenticatedAcademicsCommentsRoute: AuthenticatedAcademicsCommentsRoute,
     AuthenticatedAcademicsGradingRoute: AuthenticatedAcademicsGradingRoute,
+    AuthenticatedAcademicsReportModulesRoute:
+      AuthenticatedAcademicsReportModulesRoute,
     AuthenticatedAcademicsSubjectsRoute: AuthenticatedAcademicsSubjectsRoute,
     AuthenticatedAcademicsIndexRoute: AuthenticatedAcademicsIndexRoute,
   }
@@ -1459,6 +1524,17 @@ const AuthenticatedFinanceRouteChildren: AuthenticatedFinanceRouteChildren = {
 
 const AuthenticatedFinanceRouteWithChildren =
   AuthenticatedFinanceRoute._addFileChildren(AuthenticatedFinanceRouteChildren)
+
+interface AuthenticatedReportsRouteChildren {
+  AuthenticatedReportsPreviewRoute: typeof AuthenticatedReportsPreviewRoute
+}
+
+const AuthenticatedReportsRouteChildren: AuthenticatedReportsRouteChildren = {
+  AuthenticatedReportsPreviewRoute: AuthenticatedReportsPreviewRoute,
+}
+
+const AuthenticatedReportsRouteWithChildren =
+  AuthenticatedReportsRoute._addFileChildren(AuthenticatedReportsRouteChildren)
 
 interface AuthenticatedStudentsRouteChildren {
   AuthenticatedStudentsIdRoute: typeof AuthenticatedStudentsIdRoute
@@ -1512,7 +1588,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMarksheetRoute: typeof AuthenticatedMarksheetRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedPromotionsRoute: typeof AuthenticatedPromotionsRoute
-  AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedReportsRoute: typeof AuthenticatedReportsRouteWithChildren
   AuthenticatedSchoolsRoute: typeof AuthenticatedSchoolsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStudentsRoute: typeof AuthenticatedStudentsRouteWithChildren
@@ -1562,7 +1638,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMarksheetRoute: AuthenticatedMarksheetRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedPromotionsRoute: AuthenticatedPromotionsRoute,
-  AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedReportsRoute: AuthenticatedReportsRouteWithChildren,
   AuthenticatedSchoolsRoute: AuthenticatedSchoolsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStudentsRoute: AuthenticatedStudentsRouteWithChildren,

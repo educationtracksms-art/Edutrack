@@ -7,14 +7,12 @@ import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui
 import { hasAny, useCurrentUser } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import {
-  deleteReportComment,
   deleteAssessmentGroup,
   reviewAssessments,
   updateAssessmentDraftEntry,
   submitAssessmentEntry,
   submitAssessmentEntries,
   upsertAssessmentEntry,
-  upsertReportComment,
 } from "@/lib/admin.functions";
 import { descriptorFromAssessmentScore } from "@/lib/descriptor";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,18 +90,6 @@ type ClassRow = {
 type StreamRow = { id: string; name: string; class_id: string | null };
 type ProfileRow = { initials: string | null };
 type StaffProfileRow = { id: string; full_name: string };
-type CommentRow = {
-  student_id: string;
-  class_teacher_comment: string | null;
-  head_teacher_comment: string | null;
-};
-type CoCurricularRow = {
-  student_id: string;
-  games: string | null;
-  clubs: string | null;
-  projects: string | null;
-};
-
 function readAssessmentMark(value: string, label: string, maximum: number) {
   if (!value.trim()) throw new Error(`Add the ${label} mark before saving the assessment`);
   const mark = Number(value);
@@ -122,7 +108,6 @@ type AssessmentsData = {
   terms: TermRow[];
   classes: ClassRow[];
   streams: StreamRow[];
-  coCurricular: CoCurricularRow[];
   allocations: TeacherAllocationView[];
   gradingScales: GradingScaleRow[];
   currentTermId: string;
@@ -170,21 +155,11 @@ export function AssessmentsPage() {
       "head_teacher",
       "deputy_head_teacher",
     ]);
-  const isClassTeacher = hasAny(me?.roles, ["class_teacher"]);
-  const isHeadTeacher = hasAny(me?.roles, ["head_teacher", "deputy_head_teacher", "dos"]);
-  const canManageCommentCriteria = hasAny(me?.roles, [
-    "dos",
-    "head_teacher",
-    "deputy_head_teacher",
-  ]);
-  const canEditComments = isClassTeacher || isHeadTeacher;
   const upsertEntry = useServerFn(upsertAssessmentEntry);
   const updateDraftEntry = useServerFn(updateAssessmentDraftEntry);
   const submitEntry = useServerFn(submitAssessmentEntry);
   const submitEntries = useServerFn(submitAssessmentEntries);
   const deleteGroup = useServerFn(deleteAssessmentGroup);
-  const saveComment = useServerFn(upsertReportComment);
-  const removeComment = useServerFn(deleteReportComment);
   const [subjectFilter, setSubjectFilter] = useState("");
   const [tableSubjectFilter, setTableSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -196,20 +171,7 @@ export function AssessmentsPage() {
   const [learnerSearch, setLearnerSearch] = useState("");
   const [learnerSortKey, setLearnerSortKey] = useState<LearnerSortKey>("class");
   const [learnerSortDirection, setLearnerSortDirection] = useState<"asc" | "desc">("asc");
-  const [activeCommentStudentId, setActiveCommentStudentId] = useState("");
   const [editingAssessmentId, setEditingAssessmentId] = useState("");
-  const [commentDrafts, setCommentDrafts] = useState<
-    Record<
-      string,
-      {
-        classTeacherComment: string;
-        headTeacherComment: string;
-        games: string;
-        clubs: string;
-        projects: string;
-      }
-    >
-  >({});
   const [entryForm, setEntryForm] = useState({
     studentId: "",
     subjectId: "",
@@ -377,20 +339,6 @@ export function AssessmentsPage() {
       );
       const teacherInitials = (profileResult.data?.initials ?? "") as string;
       const currentTermId = termRows.find((term) => term.is_current)?.id ?? "";
-      const { data: coCurricularData, error: coCurricularError } = currentTermId && studentRows.length
-        ? await supabase
-            .from("co_curricular")
-            .select("student_id, games, clubs, projects")
-            .eq("term_id", currentTermId)
-            .in(
-              "student_id",
-              studentRows.map((student) => student.id),
-            )
-        : { data: [] as CoCurricularRow[] };
-      if (coCurricularError) {
-        throw new Error(`Unable to load co-curricular records: ${coCurricularError.message}`);
-      }
-      const coCurricularRows = (coCurricularData ?? []) as CoCurricularRow[];
 
       const allocationOptions: TeacherAllocationView[] = isTeacher
         ? allocationRows.map((allocation) => {
@@ -423,7 +371,6 @@ export function AssessmentsPage() {
         terms: termRows,
         classes: classRows,
         streams: streamRows,
-        coCurricular: coCurricularRows,
         allocations: allocationOptions,
         gradingScales: gradingScaleRows,
         currentTermId,

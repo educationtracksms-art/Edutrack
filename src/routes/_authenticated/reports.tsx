@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -74,6 +74,7 @@ export const Route = createFileRoute("/_authenticated/reports")({
 });
 
 function ReportsPage() {
+  const navigate = useNavigate();
   const { data: me } = useCurrentUser();
   const buildOLevel = useServerFn(getOLevelReportCards);
   const buildALevel = useServerFn(getALevelReportCards);
@@ -85,7 +86,8 @@ function ReportsPage() {
   const [reportLevel, setReportLevel] = useState<"ordinary" | "advanced">("ordinary");
   const [selected, setSelected] = useState<string[]>([]);
   const [cards, setCards] = useState<ReportCardData[]>([]);
-  const [previewOpen, setPreviewOpen] = useState(false);
+const [previewOpen, setPreviewOpen] = useState(true);
+
   const [shrinkToFit, setShrinkToFit] = useState(true);
   const [reportTab, setReportTab] = useState<"academic" | "attendance">("academic");
   const [attendanceTermId, setAttendanceTermId] = useState("");
@@ -374,7 +376,7 @@ function ReportsPage() {
     },
     onSuccess: (result) => {
       setCards(result);
-      setPreviewOpen(false);
+
       toast.success(`${result.length} report card(s) ready`);
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -382,7 +384,7 @@ function ReportsPage() {
 
   function print() {
     logPrint({ data: { count: cards.length, scope: classId || "all" } }).catch(() => undefined);
-    setPreviewOpen(true);
+
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => window.print());
     });
@@ -400,9 +402,20 @@ function ReportsPage() {
             </Btn>
             {cards.length > 0 && (
               <>
-                <Btn variant="ghost" onClick={() => setPreviewOpen((open) => !open)}>
-                  {previewOpen ? "Hide preview" : "Preview reports"}
+                <Btn
+                  variant="ghost"
+                  onClick={() =>
+                    navigate({
+                      to: "/reports/preview",
+                      state: {
+                        reportPreview: { cards, reportLevel, shrinkToFit },
+                      },
+                    })
+                  }
+                >
+                  View Reports
                 </Btn>
+
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input
                     type="checkbox"

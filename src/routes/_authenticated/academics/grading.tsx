@@ -1,20 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Btn, Field, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
-import { supabase } from "@/integrations/supabase/client";
 import {
   deleteGradingScale,
   deleteIdentifierScale,
-  deleteReportCommentRule,
   upsertGradingScale,
   upsertIdentifierScale,
-  upsertReportCommentRule,
 } from "@/lib/admin.functions";
-import { hasAny } from "@/hooks/useCurrentUser";
 import { useAcademicsPage } from "./-shared";
 
 export const Route = createFileRoute("/_authenticated/academics/grading")({
@@ -25,23 +21,12 @@ export const Route = createFileRoute("/_authenticated/academics/grading")({
 });
 
 function GradingPage() {
-  const { me, schoolId, allowed, data, refresh } = useAcademicsPage();
-  const queryClient = useQueryClient();
+  const { schoolId, allowed, data, refresh } = useAcademicsPage();
   const [activeOutput, setActiveOutput] = useState<"o_level" | "a_level" | "identifiers">("o_level");
   const saveGradingScaleFn = useServerFn(upsertGradingScale);
   const deleteGradingScaleFn = useServerFn(deleteGradingScale);
   const saveIdentifierScaleFn = useServerFn(upsertIdentifierScale);
   const deleteIdentifierScaleFn = useServerFn(deleteIdentifierScale);
-  const saveReportCommentRuleFn = useServerFn(upsertReportCommentRule);
-  const deleteReportCommentRuleFn = useServerFn(deleteReportCommentRule);
-  const canManageReportComments = hasAny(me?.roles, ["dos", "head_teacher", "deputy_head_teacher"]);
-  const [commentRuleForm, setCommentRuleForm] = useState({
-    id: "",
-    commentRole: "class_teacher" as "class_teacher" | "head_teacher",
-    descriptor: "Outstanding",
-    points: "",
-    comment: "",
-  });
   const [oLevelGradingForm, setOLevelGradingForm] = useState({
     id: "",
     grade: "",
@@ -186,83 +171,6 @@ function GradingPage() {
     onSuccess: () => {
       toast.success("Identifier criteria deleted");
       refresh();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const { data: reportCommentRules = [], isLoading: isLoadingCommentRules } = useQuery({
-    queryKey: ["academics-report-comment-rules", schoolId],
-    enabled: !!schoolId && canManageReportComments,
-    queryFn: async () => {
-      const { data: rules, error } = await supabase
-        .from("report_comment_rules")
-        .select("id, comment_role, descriptor, points, comment")
-        .eq("school_id", schoolId!)
-        .order("comment_role")
-        .order("points", { ascending: true, nullsFirst: false })
-        .order("descriptor");
-      if (error) throw new Error(error.message);
-      return (rules ?? []) as {
-        id: string;
-        comment_role: "class_teacher" | "head_teacher";
-        descriptor: string;
-        points: number | null;
-        comment: string;
-      }[];
-    },
-  });
-
-  const saveReportCommentRule = useMutation({
-    mutationFn: async () => {
-      const comment = commentRuleForm.comment.trim();
-      if (!comment) throw new Error("Enter the comment text first");
-      if (commentRuleForm.points) {
-        const points = Number(commentRuleForm.points);
-        if (!Number.isInteger(points) || points < 3 || points > 17) {
-          throw new Error("Points must be a whole number between 3 and 17");
-        }
-        return saveReportCommentRuleFn({
-          data: {
-            id: commentRuleForm.id || null,
-            commentRole: commentRuleForm.commentRole,
-            descriptor: commentRuleForm.points,
-            points,
-            comment,
-          },
-        });
-      }
-      const descriptor = commentRuleForm.descriptor.trim();
-      if (!descriptor) throw new Error("Enter a descriptor");
-      return saveReportCommentRuleFn({
-        data: {
-          id: commentRuleForm.id || null,
-          commentRole: commentRuleForm.commentRole,
-          descriptor,
-          points: null,
-          comment,
-        },
-      });
-    },
-    onSuccess: async () => {
-      setCommentRuleForm({
-        id: "",
-        commentRole: "class_teacher",
-        descriptor: "Outstanding",
-        points: "",
-        comment: "",
-      });
-      toast.success("Report comment criterion saved");
-      await queryClient.invalidateQueries({ queryKey: ["academics-report-comment-rules", schoolId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const removeReportCommentRule = useMutation({
-    mutationFn: async (rule: { id: string; comment_role: "class_teacher" | "head_teacher" }) =>
-      deleteReportCommentRuleFn({ data: { id: rule.id, commentRole: rule.comment_role } }),
-    onSuccess: async () => {
-      toast.success("Report comment criterion deleted");
-      await queryClient.invalidateQueries({ queryKey: ["academics-report-comment-rules", schoolId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -647,179 +555,6 @@ function GradingPage() {
         </div>
       </Panel>
 
-      {canManageReportComments && (
-        <Panel title="Report comment criteria">
-          <p className="mb-4 text-sm text-muted-foreground">
-            Set the comments used for class-teacher and head-teacher report remarks.
-          </p>
-          <form
-            className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveReportCommentRule.mutate();
-            }}
-          >
-            <Field label="Comment role">
-              <select
-                className={inputClass}
-                value={commentRuleForm.commentRole}
-                onChange={(event) =>
-                  setCommentRuleForm({
-                    ...commentRuleForm,
-                    commentRole: event.target.value as "class_teacher" | "head_teacher",
-                  })
-                }
-              >
-                <option value="class_teacher">Class teacher</option>
-                <option value="head_teacher">Head teacher</option>
-              </select>
-            </Field>
-            <Field label="Criterion type">
-              <select
-                className={inputClass}
-                value={commentRuleForm.points ? "points" : "descriptor"}
-                onChange={(event) =>
-                  setCommentRuleForm({
-                    ...commentRuleForm,
-                    points: event.target.value === "points" ? commentRuleForm.points || "3" : "",
-                  })
-                }
-              >
-                <option value="descriptor">Descriptor</option>
-                <option value="points">A-Level points</option>
-              </select>
-            </Field>
-            <Field label={commentRuleForm.points ? "Points (3-17)" : "Descriptor"}>
-              {commentRuleForm.points ? (
-                <select
-                  className={inputClass}
-                  value={commentRuleForm.points}
-                  onChange={(event) =>
-                    setCommentRuleForm({ ...commentRuleForm, points: event.target.value })
-                  }
-                >
-                  {Array.from({ length: 15 }, (_, index) => index + 3).map((points) => (
-                    <option key={points} value={points}>{points}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  required
-                  className={inputClass}
-                  value={commentRuleForm.descriptor}
-                  onChange={(event) =>
-                    setCommentRuleForm({ ...commentRuleForm, descriptor: event.target.value })
-                  }
-                  placeholder="Outstanding"
-                />
-              )}
-            </Field>
-            <Field label="Comment">
-              <input
-                required
-                className={inputClass}
-                value={commentRuleForm.comment}
-                onChange={(event) =>
-                  setCommentRuleForm({ ...commentRuleForm, comment: event.target.value })
-                }
-                placeholder="Enter report comment"
-              />
-            </Field>
-            <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
-              <Btn type="submit" variant="accent" disabled={saveReportCommentRule.isPending}>
-                {commentRuleForm.id ? "Save changes" : "Add criterion"}
-              </Btn>
-              {commentRuleForm.id && (
-                <Btn
-                  variant="ghost"
-                  onClick={() =>
-                    setCommentRuleForm({
-                      id: "",
-                      commentRole: "class_teacher",
-                      descriptor: "Outstanding",
-                      points: "",
-                      comment: "",
-                    })
-                  }
-                >
-                  Cancel
-                </Btn>
-              )}
-            </div>
-          </form>
-
-          <div className="mt-5 overflow-x-auto rounded-xl border border-border">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-3">Role</th>
-                  <th className="px-3 py-3">Criterion</th>
-                  <th className="px-3 py-3">Comment</th>
-                  <th className="px-3 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {reportCommentRules.map((rule) => (
-                  <tr key={rule.id} className="align-top hover:bg-muted/30">
-                    <td className="px-3 py-3">
-                      <Pill tone="muted">
-                        {rule.comment_role === "class_teacher" ? "Class teacher" : "Head teacher"}
-                      </Pill>
-                    </td>
-                    <td className="px-3 py-3">
-                      {rule.points != null ? `Points ${rule.points}` : rule.descriptor}
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground">{rule.comment}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex justify-end gap-1">
-                        <Btn
-                          variant="ghost"
-                          onClick={() =>
-                            setCommentRuleForm({
-                              id: rule.id,
-                              commentRole: rule.comment_role,
-                              descriptor: rule.descriptor,
-                              points: rule.points == null ? "" : String(rule.points),
-                              comment: rule.comment,
-                            })
-                          }
-                        >
-                          Edit
-                        </Btn>
-                        <Btn
-                          variant="danger"
-                          disabled={removeReportCommentRule.isPending}
-                          onClick={() => {
-                            if (window.confirm("Delete this report comment criterion?")) {
-                              removeReportCommentRule.mutate(rule);
-                            }
-                          }}
-                        >
-                          Delete
-                        </Btn>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!isLoadingCommentRules && reportCommentRules.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
-                      No report comment criteria added yet.
-                    </td>
-                  </tr>
-                )}
-                {isLoadingCommentRules && (
-                  <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
-                      Loading criteria...
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      )}
     </div>
   );
 }

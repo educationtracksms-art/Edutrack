@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BookOpen,
   CalendarRange,
+  MessageSquareText,
   ListChecks,
   School,
   Users,
@@ -61,6 +62,14 @@ function AcademicsOverview() {
       description: "Configure grade bands and identifiers.",
       stat: `${data?.gradingScales.length ?? 0} grade bands`,
       detail: `${data?.identifierScales.length ?? 0} identifier bands`,
+    },
+    {
+      to: "/academics/comments" as const,
+      icon: MessageSquareText,
+      title: "Comments",
+      description: "Set report comment criteria for class and head teachers.",
+      stat: "Report remarks",
+      detail: "Comment criteria",
     },
     {
       to: "/academics/allocations" as const,

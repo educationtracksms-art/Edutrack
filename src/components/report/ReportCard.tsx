@@ -182,7 +182,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
               <td className="value-lin">{student.lin}</td>
               <td className="label-name">Name:</td>
               <td className="value-name">{student.name}</td>
-              <td className="attendance-cell" rowSpan={4}>
+              <td className="attendance-cell" rowSpan={3}>
                 {attendance && (
                   <table>
                     <tbody>
@@ -205,7 +205,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
                   </table>
                 )}
               </td>
-              <td className="passport-cell" rowSpan={4}>
+              <td className="passport-cell" rowSpan={3}>
                 {student.photoUrl ? (
                   <img className="passport" src={student.photoUrl} alt={student.name} />
                 ) : (
