@@ -7,7 +7,7 @@ import { type ReactNode } from "react";
  */
 export function Navbar({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <nav className={`flex items-center gap-2 p-2 rounded-xl border border-border bg-card ${className}`}>
+    <nav className={`flex flex-col sm:flex-row items-center gap-2 p-2 rounded-xl border border-border bg-card ${className}`}>
       {/* Home Icon */}
       <Pill tone="success">
         <Btn variant="ghost">

@@ -1006,16 +1006,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Suspense fallback={null}>
                 <NotificationPanel showLabel={false} />
               </Suspense>
-              <div className="hidden items-center gap-2 md:flex">
-                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+              <div className="items-center gap-2 sm:flex sm:text-xs md:text-sm">
+                <span className="rounded-full border border-border px-3 py-1">
                   {primaryRole ? ROLE_LABELS[primaryRole] : "No role"}
                 </span>
               </div>
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-4 sm:p-5 md:p-7">
-          <div className="mx-auto w-full max-w-[1800px]">{children}</div>
+        <main className="min-w-0 flex-1 p-2 sm:p-3 md:p-4 lg:p-6">
+          <div className="mx-auto w-full max-w-[1400px]">{children}</div>
         </main>
       </div>
     </div>
