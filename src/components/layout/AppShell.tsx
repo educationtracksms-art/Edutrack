@@ -484,6 +484,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isReportRoute = pathname.toLowerCase().includes("report");
   const isMobile = useIsMobile();
   // Module metadata is stable (Tier 1): 30 min stale, 60 min GC
   const { data: moduleMap } = useQuery({
@@ -1014,7 +1015,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-2 sm:p-3 md:p-4 lg:p-6">
+        <main
+          className="min-w-0 flex-1 p-2 sm:p-3 md:p-4 lg:p-6"
+          data-mobile-ux={isReportRoute ? undefined : "enabled"}
+        >
           <div className="mx-auto w-full max-w-[1400px]">{children}</div>
         </main>
       </div>

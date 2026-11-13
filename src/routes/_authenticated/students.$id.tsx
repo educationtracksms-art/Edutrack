@@ -244,15 +244,21 @@ function StudentStatisticsPage() {
     classesAndStreams?.classes.find((item) => item.id === student.class_id)?.name ?? "Unassigned";
   const streamName =
     classesAndStreams?.streams.find((item) => item.id === student.stream_id)?.name ?? "—";
+  const studentEducationLevel =
+    classesAndStreams?.classes.find((item) => item.id === student.class_id)?.education_level;
 
   const assessmentRows = statistics.assessments.map((assessment) => {
     const hasScore =
       !assessment.is_missing &&
-      (assessment.formative !== null || assessment.summative !== null);
+      (studentEducationLevel === "advanced"
+        ? assessment.summative !== null
+        : assessment.formative !== null || assessment.summative !== null);
     return {
       ...assessment,
       total: hasScore
-        ? Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0)
+        ? studentEducationLevel === "advanced"
+          ? Number(assessment.summative ?? 0)
+          : Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0)
         : null,
       subjectName: subjectNameById.get(assessment.subject_id) ?? "Unknown subject",
       termName: termById.get(assessment.term_id)?.name ?? "Unknown term",

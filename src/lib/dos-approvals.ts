@@ -12,6 +12,7 @@ export type ApprovalRow = {
   assessment_periods_configured?: boolean;
   class_id?: string | null;
   stream_id?: string | null;
+  education_level?: "ordinary" | "advanced" | string | null;
   formative: number | null;
   mark?: number | null;
   summative: number | null;
@@ -144,6 +145,7 @@ export async function fetchDosApprovalRows(schoolId: string) {
       formative: null,
       class_id: classId,
       stream_id: streamId,
+      education_level: classLevelMap.get(classId ?? "") ?? "ordinary",
       student_name: studentMap.get(row.student_id) ?? "Unknown learner",
       subject_name: subjectMap.get(row.subject_id) ?? "Unknown subject",
       paper_name: row.paper_id ? paperMap.get(row.paper_id) ?? "Unknown paper" : "",
@@ -165,6 +167,7 @@ export async function fetchDosApprovalRows(schoolId: string) {
       summative: null,
       class_id: classId,
       stream_id: streamId,
+      education_level: classLevelMap.get(classId ?? "") ?? "ordinary",
       student_name: studentMap.get(row.student_id) ?? "Unknown learner",
       subject_name: subjectMap.get(row.subject_id) ?? "Unknown subject",
       paper_name: row.paper_id ? paperMap.get(row.paper_id) ?? "Unknown paper" : "",

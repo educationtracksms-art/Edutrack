@@ -268,7 +268,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
             {isAdvanced ? (
               <tr>
                 <th colSpan={2}>SUBJECT</th>
-                {activeSummativePeriods.map((period) => <th key={period}>{period}</th>)}
+                {activeSummativePeriods.map((period) => <th key={period}>{period} / 100</th>)}
                 <th>Total</th>
                 <th>TOTAL A/V</th>
                 <th>Grade</th>

@@ -337,7 +337,7 @@ export async function buildReportCards(
             };
             // Formative is one whole-term mark per paper. Legacy subject-level
             // records remain a fallback so historic report cards still render.
-            const formativeRecord = studentFormativeMarks.find(
+            const formativeRecord = educationLevel === "advanced" ? undefined : studentFormativeMarks.find(
               (m: any) =>
                 m.subject_id === subject.id &&
                 (m.paper_id ?? null) === (paper?.id ?? null),
@@ -348,7 +348,7 @@ export async function buildReportCards(
                   )
                 : undefined);
             const standaloneFormative = formativeRecord?.mark;
-            const legacyFormative = subjectMarks
+            const legacyFormative = educationLevel === "advanced" ? undefined : subjectMarks
               .map((m: any) => m.formative)
               .find((value: unknown) => value != null && Number(value) > 0);
             const formativeMark =
@@ -358,7 +358,8 @@ export async function buildReportCards(
                   ? Number(legacyFormative)
                   : undefined;
             const hasExplicitMissingMark =
-              Boolean(formativeRecord?.is_missing) || subjectMarks.some((item: any) => item.is_missing);
+              (educationLevel !== "advanced" && Boolean(formativeRecord?.is_missing)) ||
+              subjectMarks.some((item: any) => item.is_missing);
             const isMissingMark = hasExplicitMissingMark;
             if (isMissingMark) {
               // An approved missing mark is a real result: show it on the report and

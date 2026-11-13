@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Btn, Field, PageHeader, Panel, Stat, inputClass } from "@/components/ui-kit";
+import { ResponsiveCardTable } from "@/components/ui/responsive-card-table";
 import { asNumber, downloadCsv, money, toCsv, useFinanceContext, useFinanceSettings } from "@/lib/bursar";
 import { calculatePayroll } from "@/lib/finance-calc";
 import { createBursarPayrollRun, updateBursarPayrollStatus } from "@/lib/bursar.functions";
@@ -118,27 +119,51 @@ function PayrollPage() {
       )}
       <Panel title="Payroll runs">
         {isPending ? <p className="text-sm text-muted-foreground">Loading payroll…</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="py-2 pr-3">Period</th><th className="py-2 pr-3 text-right">Gross</th><th className="py-2 pr-3 text-right">Net</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Actions</th></tr></thead>
-              <tbody>
-                {((data?.runs ?? []) as any[]).map((row: any) => (
-                  <tr key={row.id} className="border-t">
-                    <td className="py-2 pr-3 font-medium">{row.period_name}</td>
-                    <td className="py-2 pr-3 text-right">{money(row.gross_amount, settings)}</td>
-                    <td className="py-2 pr-3 text-right font-semibold">{money(row.net_amount, settings)}</td>
-                    <td className="py-2 pr-3 text-xs">{row.status}</td>
-                    <td className="py-2 pr-3">
-                      <div className="flex gap-2">
+          <ResponsiveCardTable
+            desktop={
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="py-2 pr-3">Period</th><th className="py-2 pr-3 text-right">Gross</th><th className="py-2 pr-3 text-right">Net</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Actions</th></tr></thead>
+                  <tbody>
+                    {((data?.runs ?? []) as any[]).map((row: any) => (
+                      <tr key={row.id} className="border-t">
+                        <td className="py-2 pr-3 font-medium">{row.period_name}</td>
+                        <td className="py-2 pr-3 text-right">{money(row.gross_amount, settings)}</td>
+                        <td className="py-2 pr-3 text-right font-semibold">{money(row.net_amount, settings)}</td>
+                        <td className="py-2 pr-3 text-xs">{row.status}</td>
+                        <td className="py-2 pr-3">
+                          <div className="flex gap-2">
+                            <Btn variant="ghost" onClick={() => setStatus.mutate({ payrollRunId: row.id, status: "approved" })}>Approve</Btn>
+                            <Btn variant="ghost" onClick={() => setStatus.mutate({ payrollRunId: row.id, status: "paid" })}>Pay</Btn>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            }
+            mobile={
+              ((data?.runs ?? []) as any[]).map((row: any) => (
+                <div key={row.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{row.period_name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{money(row.gross_amount, settings)}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Net: {money(row.net_amount, settings)}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-muted-foreground">{row.status}</p>
+                      <div className="flex gap-2 mt-1">
                         <Btn variant="ghost" onClick={() => setStatus.mutate({ payrollRunId: row.id, status: "approved" })}>Approve</Btn>
                         <Btn variant="ghost" onClick={() => setStatus.mutate({ payrollRunId: row.id, status: "paid" })}>Pay</Btn>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            }
+          />
         )}
       </Panel>
     </div>

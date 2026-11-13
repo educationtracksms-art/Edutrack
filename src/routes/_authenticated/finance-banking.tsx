@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Btn, Field, PageHeader, Panel, Stat, inputClass } from "@/components/ui-kit";
+import { ResponsiveCardTable } from "@/components/ui/responsive-card-table";
 import { asNumber, downloadCsv, money, toCsv, useFinanceContext, useFinanceSettings } from "@/lib/bursar";
 import { reconciliationDifference, suggestReconciliationMatches } from "@/lib/finance-calc";
 import { recordBankingMovement } from "@/lib/bursar.functions";
@@ -130,16 +131,37 @@ function BankingPage() {
           </p>
         )}
         {isPending ? <p className="text-sm text-muted-foreground">Loading reconciliations…</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="py-2 pr-3">Reference</th><th className="py-2 pr-3">Statement date</th><th className="py-2 pr-3 text-right">Book</th><th className="py-2 pr-3 text-right">Difference</th><th className="py-2 pr-3">Status</th></tr></thead>
-              <tbody>
-                {((data?.reconciliations ?? []) as any[]).map((row: any) => (
-                  <tr key={row.id} className="border-t"><td className="py-2 pr-3 font-medium">{row.reconciliation_number}</td><td className="py-2 pr-3">{String(row.statement_date ?? "").slice(0, 10)}</td><td className="py-2 pr-3 text-right">{money(row.book_balance, settings)}</td><td className="py-2 pr-3 text-right">{money(row.difference, settings)}</td><td className="py-2 pr-3 text-xs">{row.status}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveCardTable
+            desktop={
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="py-2 pr-3">Reference</th><th className="py-2 pr-3">Statement date</th><th className="py-2 pr-3 text-right">Book</th><th className="py-2 pr-3 text-right">Difference</th><th className="py-2 pr-3 text-right">Status</th></tr></thead>
+                  <tbody>
+                    {((data?.reconciliations ?? []) as any[]).map((row: any) => (
+                      <tr key={row.id} className="border-t"><td className="py-2 pr-3 font-medium">{row.reconciliation_number}</td><td className="py-2 pr-3">{String(row.statement_date ?? "").slice(0, 10)}</td><td className="py-2 pr-3 text-right">{money(row.book_balance, settings)}</td><td className="py-2 pr-3 text-right">{money(row.difference, settings)}</td><td className="py-2 pr-3 text-xs">{row.status}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            }
+            mobile={
+              ((data?.reconciliations ?? []) as any[]).map((row: any) => (
+                <div key={row.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{row.reconciliation_number}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{String(row.statement_date ?? "").slice(0, 10)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">{money(row.book_balance, settings)}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{money(row.difference, settings)}</p>
+                      <p className={`mt-1 text-xs font-medium ${row.status === "matched" ? "text-success" : row.status === "unmatched" ? "text-muted" : "text-amber-600"}`}>{row.status}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            }
+          />
         )}
       </Panel>
     </div>

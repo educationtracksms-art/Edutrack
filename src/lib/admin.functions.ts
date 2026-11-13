@@ -186,12 +186,6 @@ async function validateAssessmentRelationships(
     throw new Error("Choose a valid assessment period before saving the assessment");
   }
 
-  // A missing mark is deliberately stored as zero with its own flag so it is
-  // never confused with a learner who genuinely scored zero.
-  const isMissing = Boolean(options.isMissing);
-  const formative = isMissing ? 0 : requiredAssessmentScore(options.formative, "formative", 20);
-  const summative = isMissing ? 0 : requiredAssessmentScore(options.summative, "summative", 80);
-
   const [studentResult, subjectResult, paperResult, subjectPapersResult, termResult, profileResult, currentYearResult, currentTermResult] = await Promise.all([
     supabase
       .from("students")
@@ -314,6 +308,18 @@ async function validateAssessmentRelationships(
   ) {
     throw new Error("Choose a subject that belongs to the learner's class level");
   }
+  const educationLevel = (classRow.education_level ?? "ordinary") as "ordinary" | "advanced";
+  // A missing mark is deliberately stored as zero with its own flag so it is
+  // never confused with a learner who genuinely scored zero.
+  const isMissing = Boolean(options.isMissing);
+  const formative = educationLevel === "advanced"
+    ? null
+    : isMissing
+      ? 0
+      : requiredAssessmentScore(options.formative, "formative", 20);
+  const summative = isMissing
+    ? 0
+    : requiredAssessmentScore(options.summative, "summative", educationLevel === "advanced" ? 100 : 80);
 
   const { data: classStreams, error: streamError } = await supabase
     .from("streams")
@@ -370,7 +376,7 @@ async function validateAssessmentRelationships(
     subject,
     term,
     examType,
-    educationLevel: (classRow.education_level ?? "ordinary") as "ordinary" | "advanced",
+    educationLevel,
     formative,
     summative,
     isMissing,
@@ -417,6 +423,15 @@ function gradeForAssessment(
   return isMissing
     ? { grade: "", descriptor: "MISSING MARK" }
     : gradeFromScale(scales, total, educationLevel);
+}
+
+function assessmentScoreForLevel(
+  educationLevel: "ordinary" | "advanced",
+  formative: number | null,
+  summative: number,
+) {
+  if (educationLevel === "advanced") return summative;
+  return (formative ?? 0) + summative;
 }
 
 async function requireOpenAssessmentPeriod(
@@ -2286,7 +2301,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
-    const totalScore = summative;
+    const totalScore = assessmentScoreForLevel(educationLevel, formative, summative);
     const gradeMatch = gradeForAssessment(
       gradingScales ?? [],
       totalScore,
@@ -2425,7 +2440,11 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
-    const totalScore = validated.formative + validated.summative;
+    const totalScore = assessmentScoreForLevel(
+      validated.educationLevel,
+      validated.formative,
+      validated.summative,
+    );
     const gradeMatch = gradeForAssessment(
       gradingScales ?? [],
       totalScore,
@@ -2538,7 +2557,11 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
-    const totalScore = validated.formative + validated.summative;
+    const totalScore = assessmentScoreForLevel(
+      validated.educationLevel,
+      validated.formative,
+      validated.summative,
+    );
     const gradeMatch = gradeForAssessment(
       gradingScales ?? [],
       totalScore,
@@ -2675,7 +2698,11 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
     }
     const gradeMatch = gradeForAssessment(
       gradingScales ?? [],
-      validated.formative + validated.summative,
+      assessmentScoreForLevel(
+        validated.educationLevel,
+        validated.formative,
+        validated.summative,
+      ),
       validated.educationLevel,
       validated.isMissing,
     );
@@ -2862,7 +2889,11 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     );
 
     const entries = validatedAssessments.map(({ assessment, validated }) => {
-      const totalScore = validated.formative + validated.summative;
+      const totalScore = assessmentScoreForLevel(
+        validated.educationLevel,
+        validated.formative,
+        validated.summative,
+      );
       const gradeMatch = gradeForAssessment(
         gradingScales ?? [],
         totalScore,
@@ -4759,6 +4790,9 @@ export const upsertGradingScale = createServerFn({ method: "POST" })
       (!Number.isFinite(Number(data.points)) || Number(data.points) < 1 || Number(data.points) > 5)
     ) {
       throw new Error("Enter A-level points between 1 and 5");
+    }
+    if (educationLevel === "advanced" && (data.minScore < 0 || data.maxScore > 100)) {
+      throw new Error("A-level score ranges must be between 0 and 100");
     }
     if (data.minScore > data.maxScore) {
       throw new Error("The minimum score cannot exceed the maximum score");

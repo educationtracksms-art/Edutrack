@@ -104,6 +104,22 @@ type DashboardStudentRow = {
   stream_id: string | null;
 };
 
+type DashboardClassRow = {
+  id: string;
+  name: string;
+  class_teacher_id: string | null;
+  education_level: "ordinary" | "advanced" | null;
+};
+
+function assessmentTotalForLevel(
+  assessment: { formative?: number | null; summative?: number | null },
+  educationLevel: string | null | undefined,
+) {
+  return educationLevel === "advanced"
+    ? Number(assessment.summative ?? 0)
+    : Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
+}
+
 type DashboardData = {
   schools: Array<{ id: string; name: string; status: string }>;
   students: DashboardStudentRow[];
@@ -121,7 +137,7 @@ type DashboardData = {
   subjects: Array<{ id: string; name: string }>;
   profiles: Array<{ id: string; full_name: string | null; school_id: string | null }>;
   activity: Array<{ action: string; user_name: string | null; created_at: string }>;
-  classes: Array<{ id: string; name: string; class_teacher_id: string | null }>;
+  classes: DashboardClassRow[];
   streams: Array<{ id: string; name: string; class_id: string | null; stream_teacher_id: string | null }>;
   terms: Array<{ id: string; name: string; is_current: boolean; start_date?: string | null }>;
   teacherAllocations: Array<{ subject_id: string; class_id: string | null; stream_id: string | null }>;
@@ -197,7 +213,7 @@ function useDashboardData(
               .limit(3000),
           ),
           supabase.from("subjects").select("id, name"),
-          schoolQuery(supabase.from("classes").select("id, name, class_teacher_id").limit(500)),
+          schoolQuery(supabase.from("classes").select("id, name, class_teacher_id, education_level").limit(500)),
           schoolQuery(supabase.from("streams").select("id, name, class_id, stream_teacher_id").limit(500)),
           schoolQuery(
             supabase
@@ -375,6 +391,16 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   const classById = new Map<string, string>(
     (data.classes ?? []).map((item: any): [string, string] => [item.id, item.name]),
   );
+  const classLevelById = new Map<string, string | null>(
+    (data.classes ?? []).map((item: any): [string, string | null] => [item.id, item.education_level]),
+  );
+  const studentById = new Map<string, any>(
+    (data.students ?? []).map((item: any): [string, any] => [item.id, item]),
+  );
+  const assessmentTotal = (assessment: any) => assessmentTotalForLevel(
+    assessment,
+    classLevelById.get(studentById.get(assessment.student_id)?.class_id ?? ""),
+  );
   const streamById = new Map<string, { name: string; class_id: string | null }>(
     (data.streams ?? []).map((item: any): [string, { name: string; class_id: string | null }] => [
       item.id,
@@ -469,9 +495,7 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   });
   const visibleLearners = scopeStudents.slice(0, 10);
 
-  const totals = scopeAssessments.map(
-    (assessment: any) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
-  );
+  const totals = scopeAssessments.map(assessmentTotal);
   const average = totals.length
     ? totals.reduce((sum: number, value: number) => sum + value, 0) / totals.length
     : 0;
@@ -489,7 +513,7 @@ function TeacherDashboard({ data, me }: { data: any; me: any }) {
   const teacherSubjectPerformance = scopeSubjects.map((subject: any) => {
     const subjectScores = scopeAssessments
       .filter((assessment: any) => assessment.subject_id === subject.id)
-      .map((assessment: any) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+      .map(assessmentTotal);
     return { name: subject.name, average: subjectScores.length ? subjectScores.reduce((sum: number, score: number) => sum + score, 0) / subjectScores.length : 0 };
   }).filter((item: any) => item.average > 0);
   const teacherGenderCounts = new Map<string, number>();
@@ -938,6 +962,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const classById = new Map<string, string>(
     (data?.classes ?? []).map((item) => [item.id, item.name]),
   );
+  const classLevelById = new Map<string, string | null>(
+    (data?.classes ?? []).map((item) => [item.id, item.education_level]),
+  );
   const streamById = new Map<string, { name: string; class_id: string | null }>(
     (data?.streams ?? []).map((item) => [
       item.id,
@@ -950,6 +977,11 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   const studentById = new Map<string, DashboardStudentRow>(
     (data?.students ?? []).map((item) => [item.id, item]),
   );
+  const assessmentTotal = (assessment: DashboardData["assessments"][number]) =>
+    assessmentTotalForLevel(
+      assessment,
+      classLevelById.get(studentById.get(assessment.student_id)?.class_id ?? ""),
+    );
   const subjectById = new Map<string, { id: string; name: string }>(
     (data?.subjects ?? []).map((item) => [item.id, item]),
   );
@@ -1081,7 +1113,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
   let submitted = 0;
   let draft = 0;
   for (const assessment of data.assessments) {
-    const total = Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
+    const total = assessmentTotal(assessment);
     totals.push(total);
     const current = subjectStats.get(assessment.subject_id) ?? { total: 0, count: 0 };
     current.total += total;
@@ -1134,7 +1166,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     subjectName: subjectById.get(assessment.subject_id)?.name ?? "Unknown",
     termName: termById.get(assessment.term_id)?.name ?? "Unknown",
     gradeDescriptor: assessment.grade_descriptor ?? "Unknown",
-    total: Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0),
+    total: assessmentTotal(assessment),
   }));
   const reviewClassOptions = data.classes ?? [];
   const reviewStreamOptions = (data.streams ?? []).filter(
@@ -1156,7 +1188,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     .map((term) => {
       const termScores = data.assessments
         .filter((assessment) => assessment.term_id === term.id)
-        .map((assessment) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+        .map(assessmentTotal);
       return {
         term: term.name,
         average: termScores.length
@@ -1201,7 +1233,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
             assessment.term_id === term.id &&
             schoolClass.studentIds.has(assessment.student_id),
         )
-        .map((assessment) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+        .map(assessmentTotal);
       point[schoolClass.key] = scores.length
         ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
         : null;
@@ -1212,7 +1244,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     const classStudentIds = new Set(data.students.filter((student) => student.class_id === item.id).map((student) => student.id));
     const classScores = data.assessments
       .filter((assessment) => classStudentIds.has(assessment.student_id))
-      .map((assessment) => Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0));
+      .map(assessmentTotal);
     return {
       name: item.name,
       average: classScores.length ? Math.round((classScores.reduce((sum, score) => sum + score, 0) / classScores.length) * 10) / 10 : 0,

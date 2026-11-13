@@ -5,6 +5,7 @@ import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Btn, PageHeader, Panel, Pill, inputClass } from "@/components/ui-kit";
+import { ResponsiveCardTable } from "@/components/ui/responsive-card-table";
 import { useCurrentUser, hasAny } from "@/hooks/useCurrentUser";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { fetchDosApprovalRows, type ApprovalRow } from "@/lib/dos-approvals";
@@ -248,11 +249,11 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                     <th className="px-3 py-3">Paper</th>
                     <th className="px-3 py-3">Stream</th>
                     <th className="px-3 py-3">Term</th>
-                    <th className="px-3 py-3 text-right">Formative</th>
+                    <th className="px-3 py-3 text-right">O-Level Formative / 20</th>
                     <th className="px-3 py-3 text-right">BOT</th>
                     <th className="px-3 py-3 text-right">MOT</th>
                     <th className="px-3 py-3 text-right">EOT</th>
-                    <th className="px-3 py-3 text-right">Total</th>
+                    <th className="px-3 py-3 text-right">O-Level Total / A-Level Average</th>
                     <th className="px-3 py-3">Status</th>
                     <th className="px-3 py-3 text-right">Action</th>
                   </tr>
@@ -260,6 +261,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                 <tbody>
                   {visibleData.map((group) => {
                     const row = group.first;
+                    const isALevel = row.education_level === "advanced";
                     const formative = group.rows.find((item) => item.record_type === "formative");
                     const periodRow = (examType: string) =>
                       group.rows.find(
@@ -288,10 +290,13 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                       ? summativeValues.reduce((sum, value) => sum + Number(value), 0) /
                         summativeValues.length
                       : 0;
-                    const hasNumericMarks =
-                      formative?.formative != null || summativeValues.length > 0;
+                    const hasNumericMarks = isALevel
+                      ? summativeValues.length > 0
+                      : formative?.formative != null || summativeValues.length > 0;
                     const total = hasNumericMarks
-                      ? Number(formative?.formative ?? 0) + averageSummative
+                      ? isALevel
+                        ? averageSummative
+                        : Number(formative?.formative ?? 0) + averageSummative
                       : null;
                     const statuses = Array.from(new Set(group.pendingRows.map((item) => item.status)));
                     const statusLabel = statuses.length === 1 ? statuses[0] : "Mixed";
@@ -303,12 +308,14 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                         <td className="whitespace-nowrap px-3 py-3">{row.paper_name || "—"}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.stream_name}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.term_name}</td>
-                        <td className="px-3 py-3 text-right">{formativeValue}</td>
+                        <td className="px-3 py-3 text-right">{isALevel ? "—" : formativeValue}</td>
                         <td className="px-3 py-3 text-right">{botValue}</td>
                         <td className="px-3 py-3 text-right">{motValue}</td>
                         <td className="px-3 py-3 text-right">{eotValue}</td>
                         <td className="px-3 py-3 text-right font-medium">
-                          {group.rows.some((item) => item.is_missing)
+                          {group.rows.some((item) =>
+                            item.is_missing && (!isALevel || item.record_type !== "formative"),
+                          )
                             ? "MISSING MARK"
                             : total ?? "—"}
                         </td>
@@ -401,11 +408,11 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                   <th className="pb-2">Paper</th>
                   <th className="pb-2">Stream</th>
                   <th className="pb-2">Term</th>
-                  <th className="pb-2">Formative</th>
+                  <th className="pb-2">O-Level Formative / 20</th>
                   <th className="pb-2">BOT</th>
                   <th className="pb-2">MOT</th>
                   <th className="pb-2">EOT</th>
-                  <th className="pb-2">Total</th>
+                  <th className="pb-2">O-Level Total / A-Level Average</th>
                   <th className="pb-2">Status</th>
                   <th className="pb-2">Action</th>
                 </tr>
@@ -414,6 +421,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                 {approvedGroups.map((group) => {
                       const rows = group.rows;
                       const row = rows[0];
+                      const isALevel = row.education_level === "advanced";
                       const formative = rows.find((item) => item.record_type === "formative");
                       const periodConfigurationExists = rows.some((item) => item.assessment_periods_configured);
                       const configuredActiveTypes = rows.find((item) => item.assessment_periods_configured)
@@ -427,14 +435,20 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                         rows.find((item) => item.exam_type === type && item.record_type === "summative"),
                       );
                       const hasMissingPeriod = activeRows.some((item) => !item || item.summative == null);
-                      const isMissing = rows.some((item) => item.is_missing) || !formative || hasMissingPeriod;
+                      const isMissing = rows.some((item) =>
+                        item.is_missing && (!isALevel || item.record_type !== "formative"),
+                      ) ||
+                        (!isALevel && !formative) ||
+                        hasMissingPeriod;
                       const approvedSummatives = activeRows
                         .map((item) => item?.summative)
                         .filter((value): value is number => value != null);
                       const averageSummative = approvedSummatives.length
                         ? approvedSummatives.reduce((sum, value) => sum + Number(value), 0) / approvedSummatives.length
                         : null;
-                      const total = Number(formative?.formative ?? 0) + Number(averageSummative ?? 0);
+                      const total = isALevel
+                        ? averageSummative
+                        : Number(formative?.formative ?? 0) + Number(averageSummative ?? 0);
                       const periodValue = (examType: string) => {
                         if (!activeTypes.includes(examType)) return "—";
                         const assessment = rows.find(
@@ -455,7 +469,11 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                           <td className="py-3 pr-4">{row.stream_name}</td>
                           <td className="py-3 pr-4">{row.term_name}</td>
                           <td className="py-3 pr-4">
-                            {!formative || formative.is_missing ? "MISSING MARK" : formative.formative ?? "—"}
+                            {isALevel
+                              ? "—"
+                              : !formative || formative.is_missing
+                                ? "MISSING MARK"
+                                : formative.formative ?? "—"}
                           </td>
                           <td className="py-3 pr-4">{periodValue("beginning_of_term")}</td>
                           <td className="py-3 pr-4">{periodValue("mid_term")}</td>

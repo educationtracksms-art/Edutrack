@@ -11,6 +11,7 @@ export type ClassRow = {
   id: string;
   name: string;
   class_teacher_id: string | null;
+  education_level: string | null;
 };
 
 export type StreamRow = {
@@ -33,7 +34,7 @@ async function fetchClassesAndStreams(): Promise<ClassesAndStreams> {
   const [classesResult, streamsResult] = await Promise.all([
     supabase
       .from("classes")
-      .select("id, name, class_teacher_id")
+      .select("id, name, class_teacher_id, education_level")
       .order("name"),
     supabase
       .from("streams")

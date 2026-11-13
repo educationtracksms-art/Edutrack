@@ -657,7 +657,9 @@ export function AssessmentsPage() {
           (item: ClassRow) => item.id === student?.class_id,
         );
         const studentLevel = studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
-        const total = Number(assessment.formative || 0) + Number(assessment.summative || 0);
+        const total = studentLevel === "advanced"
+          ? Number(assessment.summative || 0)
+          : Number(assessment.formative || 0) + Number(assessment.summative || 0);
         const hit = tableData.gradingScales.find(
           (scale) =>
             (scale.education_level ?? "ordinary") === studentLevel &&
@@ -766,19 +768,22 @@ export function AssessmentsPage() {
         .filter((row) => !row.locked)
         .map((row) => row.id);
       if (!assessmentIds.length) throw new Error("No editable summative drafts are available");
-      if (!group.formativeMark) {
+      const student = data?.students.find((item) => item.id === group.row.student_id);
+      const studentClass = data?.classes.find((item) => item.id === student?.class_id);
+      const isALevel = studentClass?.education_level === "advanced";
+      if (!isALevel && !group.formativeMark) {
         throw new Error("Save the learner's formative mark before submitting this record");
       }
       await submitEntries({
         data: {
           assessmentIds,
-          formativeMarkId: group.formativeMark.id,
+          ...(isALevel ? {} : { formativeMarkId: group.formativeMark!.id }),
           teacherInitials: data?.teacherInitials ?? null,
         },
       });
     },
     onSuccess: () => {
-      toast.success("Formative and summative marks submitted for approval");
+      toast.success("Assessment marks submitted for approval");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
     },
     onError: (error: Error) => toast.error(friendlyAdminError(error)),
@@ -789,12 +794,16 @@ export function AssessmentsPage() {
       const edit = edits[id] ?? {};
       const existing = assessmentLookup.get(id);
       if (!existing) throw new Error("The selected assessment could not be found");
+      const student = tableData?.students.find((item) => item.id === existing.student_id);
+      const studentClass = tableData?.classes.find((item) => item.id === student?.class_id);
+      const isALevel = studentClass?.education_level === "advanced";
+      const summativeMaximum = isALevel ? 100 : 80;
       const effectiveFormative =
         edit.formative !== undefined ? edit.formative : (existing?.formative?.toString() ?? "");
       const effectiveSummative =
         edit.summative !== undefined ? edit.summative : (existing?.summative?.toString() ?? "");
-      const formative = readAssessmentMark(effectiveFormative, "formative", 20);
-      const summative = readAssessmentMark(effectiveSummative, "summative", 80);
+      const formative = isALevel ? null : readAssessmentMark(effectiveFormative, "formative", 20);
+      const summative = readAssessmentMark(effectiveSummative, "summative", summativeMaximum);
       const teacherInitials = data?.teacherInitials.trim() || existing.teacher_initials?.trim() || "";
       if (!teacherInitials) throw new Error("Add teacher initials before submitting the assessment");
       if (["draft", "rejected"].includes(existing?.status ?? "") && !existing?.locked) {
@@ -871,11 +880,11 @@ export function AssessmentsPage() {
           throw new Error("Select the paper assigned to you for this A-Level subject");
         }
       }
-      // Formative is saved independently in formative_marks; legacy assessment
-      // rows keep zero only to satisfy the existing database constraint.
-      const formative = entryForm.formative
-        ? readAssessmentMark(entryForm.formative, "formative", 20)
-        : 0;
+      const formative = isALevelSubject
+        ? null
+        : entryForm.formative
+          ? readAssessmentMark(entryForm.formative, "formative", 20)
+          : 0;
       const teacherInitials = entryForm.teacherInitials.trim();
       if (!teacherInitials) throw new Error("Add teacher initials before saving the assessment");
       const summativeEntries = [
@@ -897,7 +906,7 @@ export function AssessmentsPage() {
             assessmentId: editingAssessmentId,
             examType: entryForm.examType,
             formative,
-            summative: readAssessmentMark(currentValue, "summative", 80),
+            summative: readAssessmentMark(currentValue, "summative", isALevelSubject ? 100 : 80),
             teacherInitials,
           },
         });
@@ -905,7 +914,11 @@ export function AssessmentsPage() {
       }
 
       for (const [examType, value] of summativeEntries) {
-        const summative = readAssessmentMark(value, `${examType.replaceAll("_", " ")} summative`, 80);
+        const summative = readAssessmentMark(
+          value,
+          `${examType.replaceAll("_", " ")} summative`,
+          isALevelSubject ? 100 : 80,
+        );
         const existing = tableData?.assessments.find(
           (assessment) =>
             assessment.student_id === entryForm.studentId &&
@@ -1028,7 +1041,7 @@ export function AssessmentsPage() {
           throw new Error("Select the paper assigned to you for this A-Level subject");
         }
       }
-      const formative = entryForm.isMissing
+      const formative = entryForm.isMissing || isALevelSubject
         ? 0
         : readAssessmentMark(entryForm.formative, "formative", 20);
       // Formative is persisted once in formative_marks. Assessment rows hold
@@ -1072,7 +1085,11 @@ export function AssessmentsPage() {
       for (const [examType, value] of summativeEntries) {
         const summative = entryForm.isMissing
           ? 0
-          : readAssessmentMark(value, `${examType.replaceAll("_", " ")} summative`, 80);
+          : readAssessmentMark(
+              value,
+              `${examType.replaceAll("_", " ")} summative`,
+              isALevelSubject ? 100 : 80,
+            );
         const existing = tableData?.assessments.find(
           (assessment) =>
             assessment.student_id === entryForm.studentId &&
@@ -1135,7 +1152,7 @@ export function AssessmentsPage() {
       if (formativeError) throw new Error(formativeError.message);
     },
     onSuccess: () => {
-      toast.success("Formative and summative drafts saved");
+      toast.success(isALevelSubject ? "A-Level period drafts saved" : "Formative and summative drafts saved");
       queryClient.invalidateQueries({ queryKey: ["assessments"] });
       setEditingAssessmentId("");
       setEntryForm((current) => ({
@@ -1198,7 +1215,9 @@ export function AssessmentsPage() {
         const student = tableData.students.find((item) => item.id === assessment.student_id);
         const studentClass = tableData.classes.find((item) => item.id === student?.class_id);
         const studentLevel = studentClass?.education_level === "advanced" ? "advanced" : "ordinary";
-        const total = Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
+        const total = studentLevel === "advanced"
+          ? Number(assessment.summative ?? 0)
+          : Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
         const scale = tableData.gradingScales.find(
           (item) =>
             (item.education_level ?? "ordinary") === studentLevel &&
@@ -1291,7 +1310,10 @@ export function AssessmentsPage() {
       if (!teacherBulkSubmitGroups.length) {
         throw new Error("No editable assessments are in an open period for this allocation");
       }
-      const missingFormative = teacherBulkSubmitGroups.filter((group) => !group.formativeMark);
+      const isALevel = selectedSubject?.education_level === "advanced";
+      const missingFormative = isALevel
+        ? []
+        : teacherBulkSubmitGroups.filter((group) => !group.formativeMark);
       if (missingFormative.length) {
         throw new Error(
           `Save a formative mark for every learner before submitting: ${missingFormative.map((group) => group.studentName).join(", ")}`,
@@ -1299,10 +1321,14 @@ export function AssessmentsPage() {
       }
       await submitEntries({
         data: {
-          groups: teacherBulkSubmitGroups.map((group) => ({
-            assessmentIds: group.assessmentIds,
-            formativeMarkId: group.formativeMark!.id,
-          })),
+          ...(isALevel
+            ? { assessmentIds: teacherBulkSubmitGroups.flatMap((group) => group.assessmentIds) }
+            : {
+                groups: teacherBulkSubmitGroups.map((group) => ({
+                  assessmentIds: group.assessmentIds,
+                  formativeMarkId: group.formativeMark!.id,
+                })),
+              }),
           teacherInitials: data?.teacherInitials ?? null,
         },
       });
@@ -1318,7 +1344,9 @@ export function AssessmentsPage() {
     <div>
       <PageHeader
         title="Assessments"
-        description="Formative counts 20%, summative 80%. Approved scores lock automatically."
+        description={isALevelSubject
+          ? "Enter each active A-Level period mark out of 100. Approved scores lock automatically."
+          : "Formative counts 20%, summative 80%. Approved scores lock automatically."}
       />
 
       {isAssessmentsLoading && (
@@ -1664,7 +1692,7 @@ export function AssessmentsPage() {
                 counts this subject as zero rather than omitting it.
               </p>
             </div>
-            <fieldset className="md:col-span-1 xl:col-span-2 rounded-xl border-2 border-blue-200 bg-blue-50/40 p-4 shadow-sm dark:border-blue-900 dark:bg-blue-950/20">
+            {!isALevelSubject && <fieldset className="md:col-span-1 xl:col-span-2 rounded-xl border-2 border-blue-200 bg-blue-50/40 p-4 shadow-sm dark:border-blue-900 dark:bg-blue-950/20">
               <legend className="rounded-md border border-blue-200 bg-blue-100 px-2 py-1 text-sm font-semibold text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100">
                 Formative form — {selectedSubjectRequiresPaper ? "selected paper" : "whole term"}
               </legend>
@@ -1701,22 +1729,22 @@ export function AssessmentsPage() {
               <p className="mt-2 text-xs font-medium text-blue-800 dark:text-blue-200">
                 This formative mark will be saved as a draft together with the summative marks below.
               </p>
-            </fieldset>
+            </fieldset>}
             <fieldset className="md:col-span-1 xl:col-span-2 rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4 shadow-sm dark:border-emerald-900 dark:bg-emerald-950/20">
               <legend className="rounded-md border border-emerald-200 bg-emerald-100 px-2 py-1 text-sm font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
-                Summative form — BOT / MOT / EOT
+                {isALevelSubject ? "A-Level paper score — BOT / MOT / EOT" : "O-Level summative — BOT / MOT / EOT"}
               </legend>
               <p className="mb-3 text-xs text-muted-foreground">
                 {entryForm.isMissing
                   ? "Every open period will be saved as a missing mark."
                   : "Enter any active periods available for this term. Empty periods are skipped."}
               </p>
-              <Field label="BOT summative / 80">
+              <Field label={`BOT ${isALevelSubject ? "mark / 100" : "summative / 80"}`}>
                 <input
                   type="number"
                   step="0.1"
                   min={0}
-                  max={80}
+                  max={isALevelSubject ? 100 : 80}
                   disabled={entryForm.isMissing || !data?.openAssessmentPeriods.includes("beginning_of_term")}
                   className={inputClass}
                   value={entryForm.summativeBot}
@@ -1725,12 +1753,12 @@ export function AssessmentsPage() {
                   }
                 />
               </Field>
-              <Field label="MOT summative / 80">
+              <Field label={`MOT ${isALevelSubject ? "mark / 100" : "summative / 80"}`}>
                 <input
                   type="number"
                   step="0.1"
                   min={0}
-                  max={80}
+                  max={isALevelSubject ? 100 : 80}
                   disabled={entryForm.isMissing || !data?.openAssessmentPeriods.includes("mid_term")}
                   className={inputClass}
                   value={entryForm.summativeMot}
@@ -1739,12 +1767,12 @@ export function AssessmentsPage() {
                   }
                 />
               </Field>
-              <Field label="EOT summative / 80">
+              <Field label={`EOT ${isALevelSubject ? "mark / 100" : "summative / 80"}`}>
                 <input
                   type="number"
                   step="0.1"
                   min={0}
-                  max={80}
+                  max={isALevelSubject ? 100 : 80}
                   disabled={entryForm.isMissing || !data?.openAssessmentPeriods.includes("end_of_term")}
                   className={inputClass}
                   value={entryForm.summativeEot}
@@ -1756,14 +1784,18 @@ export function AssessmentsPage() {
               <p className="mt-1 text-xs text-muted-foreground">
                 {entryForm.isMissing
                   ? "Missing marks are shown as MISSING MARK on the report and count as zero."
-                  : "Approved active-period marks are averaged on the report."}
+                  : isALevelSubject
+                    ? "Approved active-period marks out of 100 are averaged on the report."
+                    : "Approved active-period marks are averaged on the report."}
               </p>
               <Btn type="submit" variant="accent" disabled={submitMutation.isPending || (isTeacher && !selectedAllocation) || !entryForm.studentId}>
                 {submitMutation.isPending
                   ? "Saving draft..."
                   : entryForm.isMissing
                     ? "Save missing-mark draft"
-                    : "Save Draft formative + summative."}
+                    : isALevelSubject
+                      ? "Save A-Level paper draft"
+                      : "Save O-Level formative + summative draft"}
               </Btn>
               {submitMutation.isError && (
                 <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -1785,15 +1817,18 @@ export function AssessmentsPage() {
             </fieldset>
             <Field label="Marks status">
               <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
-                {entryForm.isMissing
+                {isALevelSubject
+                  ? "Each A-Level period is graded independently out of 100; no formative mark is used."
+                  : entryForm.isMissing
                   ? "This draft records a missing mark for the selected subject or paper."
                   : "Formative and summative marks are saved together as drafts. Enter at least one active BOT, MOT, or EOT mark."}
               </p>
             </Field>
             <Field label="Grade descriptor">
               <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                Generated on the report after the approved formative mark and active period
-                summative marks are available.
+                {isALevelSubject
+                  ? "Generated from the A-Level paper score range."
+                  : "Generated from the O-Level formative and active-period summative total."}
               </p>
             </Field>
           </form>
@@ -1872,11 +1907,11 @@ export function AssessmentsPage() {
                 <th className="pb-2">Paper</th>
                 <th className="pb-2">Stream</th>
                 <th className="pb-2">Term</th>
-                <th className="pb-2">Formative</th>
+                <th className="pb-2">O-Level Formative / 20</th>
                 <th className="pb-2">BOT</th>
                 <th className="pb-2">MOT</th>
                 <th className="pb-2">EOT</th>
-                <th className="pb-2">Total</th>
+                <th className="pb-2">Total / A-Level Average</th>
                 <th className="pb-2">Status</th>
                 <th className="pb-2" />
               </tr>
@@ -1899,9 +1934,12 @@ export function AssessmentsPage() {
                     (!group.formativeMark ||
                       (!group.formativeMark.locked &&
                         ["draft", "rejected"].includes(group.formativeMark.status)));
-                  const total = formative == null || group.average == null
+                  const isALevel = studentClass?.education_level === "advanced";
+                  const total = group.average == null || (!isALevel && formative == null)
                     ? null
-                    : Number(formative) + group.average;
+                    : isALevel
+                      ? group.average
+                      : Number(formative) + group.average;
                   return (
                     <tr key={`${row.student_id}-${row.subject_id}-${row.paper_id ?? "subject"}-${row.term_id}`} className="border-t border-border">
                       <td className="py-2 font-medium">{row.studentName}</td>
@@ -1910,7 +1948,7 @@ export function AssessmentsPage() {
                       <td>{row.paperName || "—"}</td>
                       <td>{stream?.name ?? "—"}</td>
                       <td>{row.termName}</td>
-                      <td>{formative == null ? "—" : formative}</td>
+                      <td>{isALevel || formative == null ? "—" : formative}</td>
                       <td>{group.periods.beginning_of_term ?? "—"}</td>
                       <td>{group.periods.mid_term ?? "—"}</td>
                       <td>{group.periods.end_of_term ?? "—"}</td>

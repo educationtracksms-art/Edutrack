@@ -275,5 +275,77 @@
     min-width: 0;
     max-width: 52%;
   }
+
+  main[data-mobile-ux="enabled"] {
+    padding: 0.875rem;
+  }
+
+  main[data-mobile-ux="enabled"] h1 {
+    font-size: clamp(1.35rem, 6vw, 1.75rem);
+    line-height: 1.2;
+  }
+
+  main[data-mobile-ux="enabled"] :where(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea) {
+    min-height: 2.75rem;
+    font-size: 16px;
+  }
+
+  main[data-mobile-ux="enabled"] :where(.overflow-x-auto) {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  main[data-mobile-ux="enabled"] [role="tablist"] {
+    max-width: 100%;
+    scrollbar-width: none;
+  }
+
+  main[data-mobile-ux="enabled"] [role="tablist"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] tbody {
+    gap: 0.875rem;
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] tr {
+    border-color: color-mix(in oklab, var(--color-border) 75%, var(--color-primary) 25%);
+    border-radius: 1rem;
+    box-shadow: 0 4px 16px oklch(0.21 0.045 258 / 0.06);
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] td {
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    line-height: 1.35;
+    white-space: normal;
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] td::before {
+    max-width: 42%;
+    font-size: 0.66rem;
+    letter-spacing: 0.055em;
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] td > * {
+    max-width: 58%;
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] td[data-label="Action"] > *,
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] td[data-label="Actions"] > * {
+    max-width: 100%;
+  }
+
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] td[data-label="Action"] > div,
+  main[data-mobile-ux="enabled"] table[data-responsive-table="true"] td[data-label="Actions"] > div {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 

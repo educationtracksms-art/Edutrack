@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Btn, PageHeader, Panel, Stat } from "@/components/ui-kit";
+import { ResponsiveCardTable } from "@/components/ui/responsive-card-table";
 import { asNumber, downloadCsv, money, toCsv, useFinanceContext, useFinanceSettings } from "@/lib/bursar";
 
 import { requireFinanceAccess } from "@/lib/route-guards";
@@ -54,16 +55,37 @@ function ProcurementPage() {
       </div>
       <Panel title="Purchase requests">
         {isPending ? <p className="text-sm text-muted-foreground">Loading procurement…</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="py-2 pr-3">Request</th><th className="py-2 pr-3">Supplier</th><th className="py-2 pr-3">Item</th><th className="py-2 pr-3 text-right">Amount</th><th className="py-2 pr-3">Status</th></tr></thead>
-              <tbody>
-                {((data?.requests ?? []) as any[]).slice(0, 150).map((row: any) => (
-                  <tr key={row.id} className="border-t"><td className="py-2 pr-3 font-medium">{row.request_number}</td><td className="py-2 pr-3">{suppliersById.get(row.supplier_id) ?? "—"}</td><td className="py-2 pr-3">{row.item_description}</td><td className="py-2 pr-3 text-right">{money(row.requested_amount, settings)}</td><td className="py-2 pr-3 text-xs">{row.status}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveCardTable
+            desktop={
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="py-2 pr-3">Request</th><th className="py-2 pr-3">Supplier</th><th className="py-2 pr-3">Item</th><th className="py-2 pr-3 text-right">Amount</th><th className="py-2 pr-3">Status</th></tr></thead>
+                  <tbody>
+                    {((data?.requests ?? []) as any[]).slice(0, 150).map((row: any) => (
+                      <tr key={row.id} className="border-t"><td className="py-2 pr-3 font-medium">{row.request_number}</td><td className="py-2 pr-3">{suppliersById.get(row.supplier_id) ?? "—"}</td><td className="py-2 pr-3">{row.item_description}</td><td className="py-2 pr-3 text-right">{money(row.requested_amount, settings)}</td><td className="py-2 pr-3 text-xs">{row.status}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            }
+            mobile={
+              ((data?.requests ?? []) as any[]).slice(0, 150).map((row: any) => (
+                <div key={row.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{row.request_number}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{suppliersById.get(row.supplier_id) ?? "—"}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{row.item_description}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold">{money(row.requested_amount, settings)}</p>
+                      <p className="text-xs text-muted-foreground">{row.status}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            }
+          />
         )}
       </Panel>
       <Panel title="Purchase orders">

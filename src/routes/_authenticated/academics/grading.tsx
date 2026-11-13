@@ -94,6 +94,7 @@ function GradingPage() {
       if (!aLevelGradingForm.grade.trim()) throw new Error("Enter a grade label");
       if (Number.isNaN(minScore) || Number.isNaN(maxScore) || Number.isNaN(points))
         throw new Error("Enter valid score boundaries and points");
+      if (minScore < 0 || maxScore > 100) throw new Error("A-level score ranges must be between 0 and 100");
       if (points < 1 || points > 5) throw new Error("A-level points must be between 1 and 5");
       if (maxScore < minScore) throw new Error("Maximum score must be greater than minimum score");
       await saveGradingScaleFn({
@@ -227,10 +228,13 @@ function GradingPage() {
               placeholder="A"
             />
           </Field>
-          <Field label="Min score">
+          <Field label="Min score (0–100)">
             <input
               required
               type="number"
+              min={0}
+              max={100}
+              step="0.1"
               className={inputClass}
               value={oLevelGradingForm.min_score}
               onChange={(e) =>
@@ -314,24 +318,30 @@ function GradingPage() {
             <input
               required
               type="number"
+              min={0}
+              max={100}
+              step="0.1"
               className={inputClass}
               value={aLevelGradingForm.min_score}
               onChange={(e) =>
                 setALevelGradingForm({ ...aLevelGradingForm, min_score: e.target.value })
               }
-              placeholder="70"
+              placeholder="0"
             />
           </Field>
-          <Field label="Max score">
+          <Field label="Max score (0–100)">
             <input
               required
               type="number"
+              min={0}
+              max={100}
+              step="0.1"
               className={inputClass}
               value={aLevelGradingForm.max_score}
               onChange={(e) =>
                 setALevelGradingForm({ ...aLevelGradingForm, max_score: e.target.value })
               }
-              placeholder="79"
+              placeholder="100"
             />
           </Field>
           <Field label="Points">
