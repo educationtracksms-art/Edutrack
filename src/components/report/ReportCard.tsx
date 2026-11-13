@@ -254,7 +254,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
           <colgroup>
             <col className="results-subject-col" />
             {isAdvanced && <col className="results-paper-col" />}
-            <col className="results-formative-col" />
+            {!isAdvanced && <col className="results-formative-col" />}
             {activeSummativePeriods.map((period) => (
               <col className="results-summative-col" key={period} />
             ))}
@@ -265,33 +265,42 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
             <col className="results-teacher-col" />
           </colgroup>
           <thead>
-            <tr>
-              <th colSpan={isAdvanced ? 2 : 1}>SUBJECT</th>
-              {isAdvanced ? null : null}
-              <th>
-                Formative
-                <br />
-                (20%)
-              </th>
-              <th colSpan={activeSummativePeriods.length}>
-                Summative (80%)
-              </th>
-              <th>Total</th>
-              {isAdvanced && <th>TOTAL A/V</th>}
-              <th>Grade</th>
-              <th>{isAdvanced ? "Points" : "Grade Descriptor"}</th>
-              <th>Teacher</th>
-            </tr>
-            <tr>
-              <th />
-              {isAdvanced && <th />}
-              <th />
-              {activeSummativePeriods.map((period) => <th key={period}>{period}</th>)}
-              <th />
-              <th />
-              <th />
-              <th />
-            </tr>
+            {isAdvanced ? (
+              <tr>
+                <th colSpan={2}>SUBJECT</th>
+                {activeSummativePeriods.map((period) => <th key={period}>{period}</th>)}
+                <th>Total</th>
+                <th>TOTAL A/V</th>
+                <th>Grade</th>
+                <th>Points</th>
+                <th>Teacher</th>
+              </tr>
+            ) : (
+              <>
+                <tr>
+                  <th>SUBJECT</th>
+                  <th>
+                    Formative
+                    <br />
+                    (20%)
+                  </th>
+                  <th colSpan={activeSummativePeriods.length}>Summative (80%)</th>
+                  <th>Total</th>
+                  <th>Grade</th>
+                  <th>Grade Descriptor</th>
+                  <th>Teacher</th>
+                </tr>
+                <tr>
+                  <th />
+                  <th />
+                  {activeSummativePeriods.map((period) => <th key={period}>{period}</th>)}
+                  <th />
+                  <th />
+                  <th />
+                  <th />
+                </tr>
+              </>
+            )}
           </thead>
           <tbody>
             {isAdvanced
@@ -312,7 +321,6 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
                     <tr key={`${row.subject}-${row.paperId ?? index}`}>
                       {index === 0 && <td rowSpan={group.papers.length}>{row.subject}</td>}
                       <td>{row.paperName}</td>
-                      <td>{row.formative}</td>
                       {activeSummativePeriods.map((period) => (
                         <td key={period}>
                           {period === "BOT" ? row.bot : period === "MOT" ? row.mot : row.eot}

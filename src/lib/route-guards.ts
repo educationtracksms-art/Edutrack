@@ -67,6 +67,11 @@ export function requireSuperAdmin(context: GuardContext) {
   return requireRoles(context, ["super_admin"], "Only platform administrators can open this page.");
 }
 
+/** School-wide settings are restricted to school administrators. */
+export function requireSchoolAdminAccess(context: GuardContext) {
+  return requireRoles(context, ["school_admin"], "Only school administrators can open this page.");
+}
+
 /** Any authenticated school user — tenant RLS still applies at the data layer. */
 export function requireSchoolAccess(context: GuardContext) {
   return requireRoles(context, SCHOOL_SCOPED_ROLES);

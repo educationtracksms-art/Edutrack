@@ -444,7 +444,7 @@ const NAV: NavItem[] = [
     to: "/settings",
     label: "Settings",
     icon: SlidersHorizontal,
-    roles: SCHOOL_ROLES,
+    roles: ["school_admin"],
     section: "Administration",
   },
   {

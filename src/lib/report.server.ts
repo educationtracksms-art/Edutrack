@@ -320,6 +320,13 @@ export async function buildReportCards(
               mid_term: subjectMarks.find((m: any) => m.exam_type === "mid_term")?.summative,
               end_of_term: subjectMarks.find((m: any) => m.exam_type === "end_of_term")?.summative,
             };
+            const activePeriodScores = (
+              ["beginning_of_term", "mid_term", "end_of_term"] as const
+            )
+              .filter((period) => activeTypes.has(period))
+              .map((period) => summativeByPeriod[period])
+              .filter((value) => value != null && Number.isFinite(Number(value)))
+              .map(Number);
             const periodValue = (period: keyof typeof summativeByPeriod) => {
               if (!activeTypes.has(period)) return "";
               const assessment = subjectMarks.find((m: any) => m.exam_type === period);
@@ -383,7 +390,7 @@ export async function buildReportCards(
                   "",
               };
             }
-            if (!mark) {
+            if (!mark || (educationLevel === "advanced" && activePeriodScores.length === 0)) {
               return {
                 subject: subject.name,
                 paperName: paper?.name ?? "",
@@ -400,12 +407,19 @@ export async function buildReportCards(
                 gradeDetail: "",
                 subjectPoints: "",
                 teacher:
-                  formativeRecord?.teacher_initials ?? "",
+                  mark?.teacher_initials ?? formativeRecord?.teacher_initials ?? "",
               };
             }
             const formative = formativeMark ?? 0;
             const summative = averageSummative ?? 0;
-            const total = Math.round((formative + summative) * 10) / 10;
+            const total =
+              educationLevel === "advanced"
+                ? Math.round(
+                    (activePeriodScores.reduce((sum, score) => sum + score, 0) /
+                      activePeriodScores.length) *
+                      10,
+                  ) / 10
+                : Math.round((formative + summative) * 10) / 10;
             const g =
               educationLevel === "advanced"
                 ? papers.length > 1

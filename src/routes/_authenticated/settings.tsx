@@ -9,8 +9,10 @@ import { Btn, Field, PageHeader, Panel, inputClass } from "@/components/ui-kit";
 import { uploadImage } from "@/lib/storage";
 import { friendlyAdminError } from "@/lib/admin-errors";
 import { canManageSchoolModules } from "@/lib/modules";
+import { requireSchoolAdminAccess } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/_authenticated/settings")({
+  beforeLoad: ({ context }) => requireSchoolAdminAccess(context),
   head: () => ({
     meta: [
       { title: "School Settings · EduTrack" },
