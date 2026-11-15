@@ -159,6 +159,7 @@ export type Database = {
           requested_by: string | null;
           required_approvals: number;
           school_id: string;
+          score: number | null;
           status: string;
           summary: string;
         };
@@ -177,6 +178,7 @@ export type Database = {
           requested_by?: string | null;
           required_approvals?: number;
           school_id : string;
+          score?: number | null;
           status?: string;
           summary : string;
         };
@@ -195,6 +197,7 @@ export type Database = {
           requested_by?: string | null;
           required_approvals?: number;
           school_id?: string;
+          score?: number | null;
           status?: string;
           summary?: string;
         };
