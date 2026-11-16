@@ -109,7 +109,7 @@ function StudentStatisticsPage() {
         await Promise.all([
           supabase
             .from("assessments")
-            .select("id, subject_id, term_id, formative, summative, grade_descriptor, status, created_at, is_missing")
+            .select("id, subject_id, term_id, score, formative, summative, grade_descriptor, status, created_at, is_missing")
             .eq("school_id", schoolId!)
             .eq("student_id", studentId)
             .order("created_at", { ascending: false })
@@ -251,13 +251,13 @@ function StudentStatisticsPage() {
     const hasScore =
       !assessment.is_missing &&
       (studentEducationLevel === "advanced"
-        ? assessment.summative !== null
+        ? assessment.score !== null
         : assessment.formative !== null || assessment.summative !== null);
     return {
       ...assessment,
       total: hasScore
         ? studentEducationLevel === "advanced"
-          ? Number(assessment.summative ?? 0)
+          ? Number(assessment.score ?? 0)
           : Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0)
         : null,
       subjectName: subjectNameById.get(assessment.subject_id) ?? "Unknown subject",
@@ -535,8 +535,8 @@ function StudentStatisticsPage() {
                   <th className="pb-2">Date</th>
                   <th className="pb-2">Term</th>
                   <th className="pb-2">Subject</th>
-                  <th className="pb-2">Formative</th>
-                  <th className="pb-2">Summative</th>
+                  <th className="pb-2">{studentEducationLevel === "advanced" ? "A-Level score" : "Formative"}</th>
+                  {studentEducationLevel !== "advanced" && <th className="pb-2">Summative</th>}
                   <th className="pb-2">Total</th>
                   <th className="pb-2">Grade</th>
                   <th className="pb-2">Status</th>
@@ -548,8 +548,8 @@ function StudentStatisticsPage() {
                     <td className="py-2.5">{formatDate(assessment.created_at)}</td>
                     <td>{assessment.termName}</td>
                     <td>{assessment.subjectName}</td>
-                    <td>{assessment.formative ?? "—"}</td>
-                    <td>{assessment.summative ?? "—"}</td>
+                    <td>{studentEducationLevel === "advanced" ? assessment.score ?? "—" : assessment.formative ?? "—"}</td>
+                    {studentEducationLevel !== "advanced" && <td>{assessment.summative ?? "—"}</td>}
                     <td className="font-semibold">{assessment.total ?? "—"}</td>
                     <td>{assessment.grade_descriptor ?? "—"}</td>
                     <td>

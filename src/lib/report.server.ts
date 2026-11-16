@@ -143,7 +143,7 @@ export async function buildReportCards(
     supabase
       .from("assessments")
       .select(
-        "student_id, subject_id, paper_id, exam_type, formative, summative, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+        "student_id, subject_id, paper_id, exam_type, score, formative, summative, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
       )
       .in("student_id", reportStudentIds)
       .eq("term_id", termFilterId)
@@ -307,32 +307,35 @@ export async function buildReportCards(
                 m.subject_id === subject.id && (paper ? m.paper_id === paper.id : !m.paper_id),
             );
             const mark = subjectMarks[subjectMarks.length - 1];
-            const summativeMarks = subjectMarks
-              .filter((m: any) => m.summative != null)
-              .map((m: any) => Number(m.summative))
+            const periodScore = (assessment: any) =>
+              educationLevel === "advanced" ? assessment.score : assessment.summative;
+            const periodMarks = subjectMarks
+              .map(periodScore)
+              .filter((value: unknown) => value != null)
+              .map(Number)
               .filter((value: number) => Number.isFinite(value));
-            const averageSummative = summativeMarks.length
-              ? summativeMarks.reduce((sum: number, value: number) => sum + value, 0) /
-                summativeMarks.length
+            const averagePeriodScore = periodMarks.length
+              ? periodMarks.reduce((sum: number, value: number) => sum + value, 0) /
+                periodMarks.length
               : null;
-            const summativeByPeriod = {
-              beginning_of_term: subjectMarks.find((m: any) => m.exam_type === "beginning_of_term")?.summative,
-              mid_term: subjectMarks.find((m: any) => m.exam_type === "mid_term")?.summative,
-              end_of_term: subjectMarks.find((m: any) => m.exam_type === "end_of_term")?.summative,
+            const periodScoresByPeriod = {
+              beginning_of_term: periodScore(subjectMarks.find((m: any) => m.exam_type === "beginning_of_term") ?? {}),
+              mid_term: periodScore(subjectMarks.find((m: any) => m.exam_type === "mid_term") ?? {}),
+              end_of_term: periodScore(subjectMarks.find((m: any) => m.exam_type === "end_of_term") ?? {}),
             };
             const activePeriodScores = (
               ["beginning_of_term", "mid_term", "end_of_term"] as const
             )
               .filter((period) => activeTypes.has(period))
-              .map((period) => summativeByPeriod[period])
+              .map((period) => periodScoresByPeriod[period])
               .filter((value) => value != null && Number.isFinite(Number(value)))
               .map(Number);
-            const periodValue = (period: keyof typeof summativeByPeriod) => {
+            const periodValue = (period: keyof typeof periodScoresByPeriod) => {
               if (!activeTypes.has(period)) return "";
               const assessment = subjectMarks.find((m: any) => m.exam_type === period);
               if (assessment?.is_missing) return "MISSING MARK";
-              return summativeByPeriod[period] != null
-                ? fmt(Number(summativeByPeriod[period]))
+              return periodScoresByPeriod[period] != null
+                ? fmt(Number(periodScoresByPeriod[period]))
                 : "";
             };
             // Formative is one whole-term mark per paper. Legacy subject-level
@@ -378,7 +381,9 @@ export async function buildReportCards(
                       ? ""
                       : fmt(formativeMark),
                 summative:
-                  averageSummative == null ? "" : fmt(averageSummative),
+                  educationLevel === "advanced" || averagePeriodScore == null
+                    ? ""
+                    : fmt(averagePeriodScore),
                 bot: periodValue("beginning_of_term"),
                 mot: periodValue("mid_term"),
                 eot: periodValue("end_of_term"),
@@ -412,7 +417,7 @@ export async function buildReportCards(
               };
             }
             const formative = formativeMark ?? 0;
-            const summative = averageSummative ?? 0;
+            const summative = averagePeriodScore ?? 0;
             const total =
               educationLevel === "advanced"
                 ? Math.round(
@@ -442,8 +447,8 @@ export async function buildReportCards(
               subjectId: subject.id,
               paperId: paper?.id ?? null,
               isPaper: false,
-              formative: fmt(formative),
-              summative: fmt(summative),
+              formative: educationLevel === "advanced" ? "" : fmt(formative),
+              summative: educationLevel === "advanced" ? "" : fmt(summative),
               bot: periodValue("beginning_of_term"),
               mot: periodValue("mid_term"),
               eot: periodValue("end_of_term"),

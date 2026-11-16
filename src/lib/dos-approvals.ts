@@ -16,6 +16,7 @@ export type ApprovalRow = {
   formative: number | null;
   mark?: number | null;
   summative: number | null;
+  score?: number | null;
   is_missing?: boolean;
   status: "draft" | "submitted" | "approved" | "rejected";
   locked: boolean;
@@ -60,7 +61,7 @@ export async function fetchDosApprovalRows(schoolId: string) {
     supabase
       .from("assessments")
       .select(
-        "id, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, status, locked, rejection_reason, created_at, submitted_by",
+        "id, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, status, locked, rejection_reason, created_at, submitted_by",
       )
       .eq("school_id", schoolId)
       .order("created_at", { ascending: false }),

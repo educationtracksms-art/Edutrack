@@ -159,7 +159,6 @@ export type Database = {
           requested_by: string | null;
           required_approvals: number;
           school_id: string;
-          score: number | null;
           status: string;
           summary: string;
         };
@@ -178,7 +177,6 @@ export type Database = {
           requested_by?: string | null;
           required_approvals?: number;
           school_id : string;
-          score?: number | null;
           status?: string;
           summary : string;
         };
@@ -197,7 +195,6 @@ export type Database = {
           requested_by?: string | null;
           required_approvals?: number;
           school_id?: string;
-          score?: number | null;
           status?: string;
           summary?: string;
         };
@@ -473,6 +470,7 @@ export type Database = {
           paper_id: string | null;
           rejection_reason: string | null;
           school_id: string;
+          score: number | null;
           status: string;
           student_id: string;
           subject_id: string;
@@ -498,6 +496,7 @@ export type Database = {
           paper_id?: string | null;
           rejection_reason?: string | null;
           school_id : string;
+          score?: number | null;
           status?: string;
           student_id : string;
           subject_id : string;
@@ -523,6 +522,7 @@ export type Database = {
           paper_id?: string | null;
           rejection_reason?: string | null;
           school_id?: string;
+          score?: number | null;
           status?: string;
           student_id?: string;
           subject_id?: string;

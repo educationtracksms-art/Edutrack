@@ -271,20 +271,22 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                     const displayedValue = (item: ApprovalRow | undefined, value: number | null | undefined) =>
                       item?.is_missing ? "MISSING MARK" : value ?? "—";
                     const formativeValue = displayedValue(formative, formative?.formative);
+                    const periodMark = (item: ApprovalRow | undefined) =>
+                      isALevel ? item?.score : item?.summative;
                     const botValue = displayedValue(
                       periodRow("beginning_of_term"),
-                      periodRow("beginning_of_term")?.summative,
+                      periodMark(periodRow("beginning_of_term")),
                     );
                     const motValue = displayedValue(
                       periodRow("mid_term"),
-                      periodRow("mid_term")?.summative,
+                      periodMark(periodRow("mid_term")),
                     );
                     const eotValue = displayedValue(
                       periodRow("end_of_term"),
-                      periodRow("end_of_term")?.summative,
+                      periodMark(periodRow("end_of_term")),
                     );
                     const summativeValues = ["beginning_of_term", "mid_term", "end_of_term"]
-                      .map((examType) => periodRow(examType)?.summative)
+                      .map((examType) => periodMark(periodRow(examType)))
                       .filter((value): value is number => value != null);
                     const averageSummative = summativeValues.length
                       ? summativeValues.reduce((sum, value) => sum + Number(value), 0) /
@@ -434,14 +436,16 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                       const activeRows = activeTypes.map((type) =>
                         rows.find((item) => item.exam_type === type && item.record_type === "summative"),
                       );
-                      const hasMissingPeriod = activeRows.some((item) => !item || item.summative == null);
+                      const periodMark = (item: ApprovalRow | undefined) =>
+                        isALevel ? item?.score : item?.summative;
+                      const hasMissingPeriod = activeRows.some((item) => periodMark(item) == null);
                       const isMissing = rows.some((item) =>
                         item.is_missing && (!isALevel || item.record_type !== "formative"),
                       ) ||
                         (!isALevel && !formative) ||
                         hasMissingPeriod;
                       const approvedSummatives = activeRows
-                        .map((item) => item?.summative)
+                        .map(periodMark)
                         .filter((value): value is number => value != null);
                       const averageSummative = approvedSummatives.length
                         ? approvedSummatives.reduce((sum, value) => sum + Number(value), 0) / approvedSummatives.length
@@ -454,9 +458,10 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                         const assessment = rows.find(
                           (item) => item.record_type === "summative" && item.exam_type === examType,
                         );
-                        return !assessment || assessment.summative == null || assessment.is_missing
+                        const mark = isALevel ? assessment?.score : assessment?.summative;
+                        return !assessment || mark == null || assessment.is_missing
                           ? "MISSING MARK"
-                          : assessment.summative;
+                          : mark;
                       };
                       return (
                         <tr key={`${row.student_id}-${row.subject_id}-${row.paper_id ?? "subject"}-${row.term_id}`} className="border-t border-border">

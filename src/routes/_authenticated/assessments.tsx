@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/assessments")({
       { title: "Assessments - EduTrack" },
       {
         name: "description",
-        content: "Capture formative and summative scores, submit for approval and lock results.",
+        content: "Record O-Level formative and period marks or A-Level paper scores, then submit results for approval.",
       },
       { property: "og:title", content: "Assessments - EduTrack" },
       {

@@ -170,6 +170,7 @@ async function validateAssessmentRelationships(
     examType?: string | null;
     formative?: number | null;
     summative?: number | null;
+    score?: number | null;
     isMissing?: boolean;
     teacherInitials?: string | null;
   },
@@ -312,14 +313,21 @@ async function validateAssessmentRelationships(
   // A missing mark is deliberately stored as zero with its own flag so it is
   // never confused with a learner who genuinely scored zero.
   const isMissing = Boolean(options.isMissing);
+  const score = educationLevel === "advanced"
+    ? isMissing
+      ? 0
+      : requiredAssessmentScore(options.score, "A-Level", 100)
+    : null;
   const formative = educationLevel === "advanced"
     ? null
     : isMissing
       ? 0
       : requiredAssessmentScore(options.formative, "formative", 20);
-  const summative = isMissing
-    ? 0
-    : requiredAssessmentScore(options.summative, "summative", educationLevel === "advanced" ? 100 : 80);
+  const summative = educationLevel === "advanced"
+    ? null
+    : isMissing
+      ? 0
+      : requiredAssessmentScore(options.summative, "summative", 80);
 
   const { data: classStreams, error: streamError } = await supabase
     .from("streams")
@@ -379,6 +387,7 @@ async function validateAssessmentRelationships(
     educationLevel,
     formative,
     summative,
+    score,
     isMissing,
     teacherInitials,
     paperId,
@@ -428,10 +437,11 @@ function gradeForAssessment(
 function assessmentScoreForLevel(
   educationLevel: "ordinary" | "advanced",
   formative: number | null,
-  summative: number,
+  summative: number | null,
+  score: number | null,
 ) {
-  if (educationLevel === "advanced") return summative;
-  return (formative ?? 0) + summative;
+  if (educationLevel === "advanced") return score ?? 0;
+  return (formative ?? 0) + (summative ?? 0);
 }
 
 async function requireOpenAssessmentPeriod(
@@ -2241,6 +2251,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       gradeDescriptor?: string | null;
       formative?: number | null;
       summative?: number | null;
+      score?: number | null;
       isMissing?: boolean;
       teacherInitials?: string | null;
     }) => data,
@@ -2280,6 +2291,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       // per-period BOT/MOT/EOT assessment row.
       formative: 0,
       summative: data.summative,
+      score: data.score,
       isMissing: data.isMissing,
       teacherInitials: data.teacherInitials,
     });
@@ -2291,6 +2303,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       educationLevel,
       formative,
       summative,
+      score,
       isMissing,
       teacherInitials,
       paperId,
@@ -2301,7 +2314,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       .select("grade, min_score, max_score, grade_descriptor, education_level")
       .eq("school_id", schoolId);
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
-    const totalScore = assessmentScoreForLevel(educationLevel, formative, summative);
+    const totalScore = assessmentScoreForLevel(educationLevel, formative, summative, score);
     const gradeMatch = gradeForAssessment(
       gradingScales ?? [],
       totalScore,
@@ -2337,6 +2350,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       grade_descriptor: gradeMatch.descriptor,
       formative,
       summative,
+      score,
       is_missing: isMissing,
       teacher_initials: teacherInitials,
       status: "draft",
@@ -2374,6 +2388,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       gradeDescriptor?: string | null;
       formative?: number | null;
       summative?: number | null;
+      score?: number | null;
       isMissing?: boolean;
       teacherInitials?: string | null;
     }) => data,
@@ -2403,7 +2418,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials, submitted_by",
+        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials, submitted_by",
       )
       .eq("id", data.assessmentId)
       .maybeSingle();
@@ -2426,6 +2441,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       examType: data.examType ?? existingAssessment.exam_type,
       formative: 0,
       summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
+      score: data.score !== undefined ? data.score : existingAssessment.score,
       isMissing: data.isMissing ?? existingAssessment.is_missing ?? false,
       teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
     });
@@ -2444,6 +2460,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       validated.educationLevel,
       validated.formative,
       validated.summative,
+      validated.score,
     );
     const gradeMatch = gradeForAssessment(
       gradingScales ?? [],
@@ -2459,6 +2476,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
         grade_descriptor: gradeMatch.descriptor,
         formative: validated.formative,
         summative: validated.summative,
+        score: validated.score,
         is_missing: validated.isMissing,
         teacher_initials: validated.teacherInitials,
         rejection_reason: null,
@@ -2488,6 +2506,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       assessmentId: string;
       formative?: number | null;
       summative?: number | null;
+      score?: number | null;
       isMissing?: boolean;
       teacherInitials?: string | null;
     }) => data,
@@ -2517,7 +2536,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     const { data: existingAssessment, error: existingError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials, submitted_by",
+        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials, submitted_by",
       )
       .eq("id", data.assessmentId)
       .maybeSingle();
@@ -2542,6 +2561,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       examType: existingAssessment.exam_type,
       formative: 0,
       summative: data.summative !== undefined ? data.summative : existingAssessment.summative,
+      score: data.score !== undefined ? data.score : existingAssessment.score,
       isMissing: data.isMissing ?? existingAssessment.is_missing ?? false,
       teacherInitials: data.teacherInitials ?? existingAssessment.teacher_initials,
     });
@@ -2561,6 +2581,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       validated.educationLevel,
       validated.formative,
       validated.summative,
+      validated.score,
     );
     const gradeMatch = gradeForAssessment(
       gradingScales ?? [],
@@ -2574,6 +2595,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       .update({
         formative: validated.formative,
         summative: validated.summative,
+        score: validated.score,
         is_missing: validated.isMissing,
         teacher_initials: validated.teacherInitials,
         grade_descriptor: gradeMatch.descriptor,
@@ -2617,6 +2639,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
       examType?: string;
       formative?: number | null;
       summative?: number | null;
+      score?: number | null;
       isMissing?: boolean;
       teacherInitials?: string | null;
     }) => data,
@@ -2650,7 +2673,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
       ? await context.supabase
           .from("assessments")
           .select(
-            "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials, submitted_by",
+            "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials, submitted_by",
           )
           .eq("id", assessmentId)
           .maybeSingle()
@@ -2679,6 +2702,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
       examType: existingAssessment?.exam_type ?? data.examType,
       formative: 0,
       summative: data.summative ?? existingAssessment?.summative,
+      score: data.score ?? existingAssessment?.score,
       isMissing: data.isMissing ?? existingAssessment?.is_missing ?? false,
       teacherInitials: data.teacherInitials ?? existingAssessment?.teacher_initials,
     });
@@ -2702,6 +2726,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
         validated.educationLevel,
         validated.formative,
         validated.summative,
+        validated.score,
       ),
       validated.educationLevel,
       validated.isMissing,
@@ -2714,6 +2739,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
         .update({
           formative: validated.formative,
           summative: validated.summative,
+          score: validated.score,
           is_missing: validated.isMissing,
           teacher_initials: validated.teacherInitials,
           grade_descriptor: gradeMatch.descriptor,
@@ -2759,6 +2785,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
         grade_descriptor: gradeMatch.descriptor,
         formative: validated.formative,
         summative: validated.summative,
+        score: validated.score,
         is_missing: validated.isMissing,
         teacher_initials: validated.teacherInitials,
         status: "submitted",
@@ -2832,7 +2859,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     const { data: assessments, error: fetchError } = await context.supabase
       .from("assessments")
       .select(
-        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, is_missing, teacher_initials",
+        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials",
       )
       .in("id", assessmentIds);
     if (fetchError) throw new Error(fetchError.message);
@@ -2882,6 +2909,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
           examType: assessment.exam_type,
           formative: 0,
           summative: assessment.summative,
+          score: assessment.score,
           isMissing: assessment.is_missing ?? false,
           teacherInitials: data.teacherInitials ?? assessment.teacher_initials,
         }),
@@ -2893,6 +2921,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
         validated.educationLevel,
         validated.formative,
         validated.summative,
+        validated.score,
       );
       const gradeMatch = gradeForAssessment(
         gradingScales ?? [],
@@ -2905,6 +2934,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
         teacher_initials: validated.teacherInitials,
         formative: validated.formative,
         summative: validated.summative,
+        score: validated.score,
         is_missing: validated.isMissing,
         grade_descriptor: gradeMatch.descriptor,
       };

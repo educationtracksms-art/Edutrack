@@ -223,7 +223,7 @@ function MarksheetPage() {
       "Stream",
       "Subject",
       "Paper",
-      "Formative",
+      "O-Level Formative",
       ...activePeriods,
       "Total",
       "Average",
@@ -390,7 +390,7 @@ function MarksheetPage() {
                   <th className="px-3 py-3">Stream</th>
                   <th className="px-3 py-3">Subject</th>
                   <th className="px-3 py-3">Paper</th>
-                  <th className="px-3 py-3 text-right">Formative</th>
+                  <th className="px-3 py-3 text-right">O-Level Formative</th>
                   {activePeriods.map((period) => <th key={period} className="px-3 py-3 text-right">{period}</th>)}
                   <th className="px-3 py-3 text-right">Total</th>
                   <th className="px-3 py-3 text-right">Average</th>

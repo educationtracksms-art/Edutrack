@@ -112,11 +112,11 @@ type DashboardClassRow = {
 };
 
 function assessmentTotalForLevel(
-  assessment: { formative?: number | null; summative?: number | null },
+  assessment: { formative?: number | null; summative?: number | null; score?: number | null },
   educationLevel: string | null | undefined,
 ) {
   return educationLevel === "advanced"
-    ? Number(assessment.summative ?? 0)
+    ? Number(assessment.score ?? 0)
     : Number(assessment.formative ?? 0) + Number(assessment.summative ?? 0);
 }
 
@@ -128,6 +128,7 @@ type DashboardData = {
     student_id: string;
     subject_id: string;
     term_id: string;
+    score: number | null;
     formative: number | null;
     summative: number | null;
     grade_descriptor: string | null;
@@ -207,7 +208,7 @@ function useDashboardData(
             supabase
               .from("assessments")
               .select(
-                "id, student_id, subject_id, term_id, formative, summative, grade_descriptor, status, school_id",
+                "id, student_id, subject_id, term_id, score, formative, summative, grade_descriptor, status, school_id",
               )
               .order("created_at", { ascending: false })
               .limit(3000),
@@ -1649,8 +1650,9 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                         <th className="pb-2">Subject</th>
                         <th className="pb-2">Term</th>
                         <th className="pb-2">Grade descriptor</th>
-                        <th className="pb-2">Formative</th>
-                        <th className="pb-2">Summative</th>
+                        <th className="pb-2">Formative (O-Level)</th>
+                        <th className="pb-2">Summative (O-Level)</th>
+                        <th className="pb-2">A-Level score</th>
                         <th className="pb-2">Total</th>
                         <th className="pb-2">Status</th>
                         <th className="pb-2" />
@@ -1673,8 +1675,21 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
                           <td className="py-2 pr-4">{assessment.subjectName}</td>
                           <td className="py-2 pr-4">{assessment.termName}</td>
                           <td className="py-2 pr-4">{assessment.gradeDescriptor}</td>
-                          <td className="py-2 pr-4">{Number(assessment.formative ?? 0)}</td>
-                          <td className="py-2 pr-4">{Number(assessment.summative ?? 0)}</td>
+                          <td className="py-2 pr-4">
+                            {classLevelById.get(studentById.get(assessment.student_id)?.class_id ?? "") === "advanced"
+                              ? "—"
+                              : Number(assessment.formative ?? 0)}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {classLevelById.get(studentById.get(assessment.student_id)?.class_id ?? "") === "advanced"
+                              ? "—"
+                              : Number(assessment.summative ?? 0)}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {classLevelById.get(studentById.get(assessment.student_id)?.class_id ?? "") === "advanced"
+                              ? Number(assessment.score ?? 0)
+                              : "—"}
+                          </td>
                           <td className="py-2 pr-4 font-semibold">{assessment.total}</td>
                           <td className="py-2 pr-4">
                             <Pill tone="warning">{assessment.status}</Pill>
