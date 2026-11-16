@@ -100,6 +100,7 @@ function StudentStatisticsPage() {
     queryFn: async () => {
       const [
         assessments,
+        aLevelAssessments,
         attendanceRecords,
         attendanceSummaries,
         formativeMarks,
@@ -110,6 +111,13 @@ function StudentStatisticsPage() {
           supabase
             .from("assessments")
             .select("id, subject_id, term_id, score, formative, summative, grade_descriptor, status, created_at, is_missing")
+            .eq("school_id", schoolId!)
+            .eq("student_id", studentId)
+            .order("created_at", { ascending: false })
+            .limit(5000),
+          (supabase as any)
+            .from("a_level_assessments")
+            .select("id, subject_id, term_id, score, grade_descriptor, status, created_at, is_missing")
             .eq("school_id", schoolId!)
             .eq("student_id", studentId)
             .order("created_at", { ascending: false })
@@ -147,6 +155,7 @@ function StudentStatisticsPage() {
 
       const failedResult = [
         assessments,
+        aLevelAssessments,
         attendanceRecords,
         attendanceSummaries,
         formativeMarks,
@@ -156,7 +165,14 @@ function StudentStatisticsPage() {
       if (failedResult?.error) throw new Error(failedResult.error.message);
 
       return {
-        assessments: assessments.data ?? [],
+        assessments: [
+          ...(assessments.data ?? []),
+          ...((aLevelAssessments.data ?? []) as any[]).map((assessment) => ({
+            ...assessment,
+            formative: null,
+            summative: null,
+          })),
+        ],
         attendanceRecords: attendanceRecords.data ?? [],
         attendanceSummaries: attendanceSummaries.data ?? [],
         formativeMarks: formativeMarks.data ?? [],

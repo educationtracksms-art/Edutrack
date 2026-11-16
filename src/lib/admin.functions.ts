@@ -444,6 +444,66 @@ function assessmentScoreForLevel(
   return (formative ?? 0) + (summative ?? 0);
 }
 
+type AssessmentTableName = "assessments" | "a_level_assessments";
+
+async function findStoredAssessment(supabase: any, assessmentId: string) {
+  const [ordinaryResult, advancedResult] = await Promise.all([
+    supabase.from("assessments").select("*").eq("id", assessmentId).maybeSingle(),
+    supabase.from("a_level_assessments").select("*").eq("id", assessmentId).maybeSingle(),
+  ]);
+  if (ordinaryResult.error) throw new Error(ordinaryResult.error.message);
+  if (advancedResult.error) throw new Error(advancedResult.error.message);
+  if (ordinaryResult.data && advancedResult.data) {
+    throw new Error("Assessment records have conflicting identifiers");
+  }
+  if (advancedResult.data) {
+    return {
+      table: "a_level_assessments" as const,
+      assessment: {
+        ...advancedResult.data,
+        formative: null,
+        summative: null,
+        record_type: "a_level" as const,
+      },
+    };
+  }
+  if (ordinaryResult.data) {
+    return {
+      table: "assessments" as const,
+      assessment: { ...ordinaryResult.data, record_type: "o_level" as const },
+    };
+  }
+  return null;
+}
+
+async function findStoredAssessments(supabase: any, assessmentIds: string[]) {
+  const [ordinaryResult, advancedResult] = await Promise.all([
+    supabase.from("assessments").select("*").in("id", assessmentIds),
+    supabase.from("a_level_assessments").select("*").in("id", assessmentIds),
+  ]);
+  if (ordinaryResult.error) throw new Error(ordinaryResult.error.message);
+  if (advancedResult.error) throw new Error(advancedResult.error.message);
+  const records = [
+    ...(ordinaryResult.data ?? []).map((assessment: any) => ({
+      table: "assessments" as const,
+      assessment: { ...assessment, record_type: "o_level" as const },
+    })),
+    ...(advancedResult.data ?? []).map((assessment: any) => ({
+      table: "a_level_assessments" as const,
+      assessment: {
+        ...assessment,
+        formative: null,
+        summative: null,
+        record_type: "a_level" as const,
+      },
+    })),
+  ];
+  if (new Set(records.map((record) => record.assessment.id)).size !== records.length) {
+    throw new Error("Assessment records have conflicting identifiers");
+  }
+  return records;
+}
+
 async function requireOpenAssessmentPeriod(
   supabase: any,
   schoolId: string,
@@ -753,9 +813,14 @@ export const loadAssessmentRecords = createServerFn({ method: "GET" })
         "hod",
       ].includes(role),
     );
-    const [assessmentsResult, formativeMarksResult, scopeResults] = await Promise.all([
+    const [assessmentsResult, aLevelAssessmentsResult, formativeMarksResult, scopeResults] = await Promise.all([
       context.supabase
         .from("assessments")
+        .select("*")
+        .eq("school_id", profile.school_id)
+        .order("created_at"),
+      (context.supabase as any)
+        .from("a_level_assessments")
         .select("*")
         .eq("school_id", profile.school_id)
         .order("created_at"),
@@ -784,6 +849,7 @@ export const loadAssessmentRecords = createServerFn({ method: "GET" })
           ]),
     ]);
     if (assessmentsResult.error) throw new Error(assessmentsResult.error.message);
+    if (aLevelAssessmentsResult.error) throw new Error(aLevelAssessmentsResult.error.message);
 
     const formativeMarksError = formativeMarksResult.error;
     const missingFormativeMarksTable =
@@ -794,7 +860,18 @@ export const loadAssessmentRecords = createServerFn({ method: "GET" })
       throw new Error(formativeMarksError.message);
     }
 
-    let assessments = assessmentsResult.data ?? [];
+    let assessments = [
+      ...(assessmentsResult.data ?? []).map((assessment: any) => ({
+        ...assessment,
+        record_type: "o_level" as const,
+      })),
+      ...((aLevelAssessmentsResult.data ?? []) as any[]).map((assessment) => ({
+        ...assessment,
+        formative: null,
+        summative: null,
+        record_type: "a_level" as const,
+      })),
+    ];
     let formativeMarks = missingFormativeMarksTable ? [] : formativeMarksResult.data ?? [];
     if (!canViewAllAssessments) {
       if (!scopeResults) throw new Error("Unable to determine assessment access scope");
@@ -1130,16 +1207,13 @@ export const reviewAssessments = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    if (isClassTeacher && !canReviewAny) {
-      const { data: assessments } = await context.supabase
-        .from("assessments")
-        .select("id, student_id")
-        .in("id", data.ids)
-        .eq("school_id", schoolId);
-      if (!assessments || assessments.length !== data.ids.length) {
-        throw new Error("One or more assessments were not found in your school");
-      }
+    const assessmentRecords = await findStoredAssessments(context.supabase, data.ids);
+    const assessments = assessmentRecords.map((record) => record.assessment);
+    if (assessments.length !== data.ids.length || assessments.some((row) => row.school_id !== schoolId)) {
+      throw new Error("One or more assessments were not found in your school");
+    }
 
+    if (isClassTeacher && !canReviewAny) {
       const { data: students } = await context.supabase
         .from("students")
         .select("id, class_id")
@@ -1199,22 +1273,17 @@ export const reviewAssessments = createServerFn({ method: "POST" })
         }
       }
 
-      const { data: scopedAssessments } = await context.supabase
-        .from("assessments")
-        .select("id, student_id")
-        .eq("school_id", schoolId)
-        .in("id", data.ids);
       const { data: scopedStudents } = await context.supabase
         .from("students")
         .select("id, class_id, stream_id")
         .in(
           "id",
-          (scopedAssessments ?? []).map((assessment: any) => assessment.student_id),
+          assessments.map((assessment: any) => assessment.student_id),
         );
       const studentById = new Map(
         (scopedStudents ?? []).map((student: any) => [student.id, student]),
       );
-      const scopedMismatch = (scopedAssessments ?? []).some((assessment: any) => {
+      const scopedMismatch = assessments.some((assessment: any) => {
         const student = studentById.get(assessment.student_id);
         if (!student) return true;
         if (data.classId && student.class_id !== data.classId) return true;
@@ -1244,15 +1313,26 @@ export const reviewAssessments = createServerFn({ method: "POST" })
           };
 
     const reviewableStatuses = data.action === "reject" ? ["submitted", "approved"] : ["submitted"];
-    const { data: updatedRows, error } = await context.supabase
-      .from("assessments")
-      .update(patch as never)
-      .eq("school_id", schoolId)
-      .in("status", reviewableStatuses)
-      .in("id", data.ids)
-      .select("id, submitted_by");
-    if (error) throw new Error(error.message);
-    if ((updatedRows ?? []).length !== data.ids.length) {
+    const updates = await Promise.all(
+      (["assessments", "a_level_assessments"] as const).map(async (table) => {
+        const ids = assessmentRecords
+          .filter((record) => record.table === table)
+          .map((record) => record.assessment.id);
+        if (!ids.length) return { rows: [], error: null };
+        const result = await (context.supabase as any)
+          .from(table)
+          .update(patch)
+          .eq("school_id", schoolId)
+          .in("status", reviewableStatuses)
+          .in("id", ids)
+          .select("id, submitted_by");
+        return { rows: result.data ?? [], error: result.error };
+      }),
+    );
+    const updateError = updates.find((result) => result.error)?.error;
+    if (updateError) throw new Error(updateError.message);
+    const updatedRows = updates.flatMap((result) => result.rows);
+    if (updatedRows.length !== data.ids.length) {
       throw new Error(data.action === "reject" ? "Only submitted or approved assessments can be rejected" : "Only submitted assessments can be reviewed");
     }
 
@@ -1279,7 +1359,7 @@ export const reviewAssessments = createServerFn({ method: "POST" })
       context.userId,
       profile?.school_id ?? null,
       data.action === "approve" ? "ASSESSMENTS_APPROVED" : "ASSESSMENTS_REJECTED",
-      "assessments",
+      "assessment_records",
       { count: data.ids.length },
     );
     return { ok: true };
@@ -1303,13 +1383,9 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    const { data: existingAssessment, error: existingError } = await context.supabase
-      .from("assessments")
-      .select("id, school_id, status, submitted_by, locked, term_id, exam_type")
-      .eq("id", data.assessmentId)
-      .maybeSingle();
-    if (existingError) throw new Error(existingError.message);
-    if (!existingAssessment || existingAssessment.school_id !== schoolId) {
+    const storedRecord = await findStoredAssessment(context.supabase, data.assessmentId);
+    const existingAssessment = storedRecord?.assessment;
+    if (!storedRecord || !existingAssessment || existingAssessment.school_id !== schoolId) {
       throw new Error("Assessment not found in your school");
     }
 
@@ -1364,8 +1440,8 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       patch.submitted_at = new Date().toISOString();
     }
 
-    const { data: updatedRows, error } = await context.supabase
-      .from("assessments")
+    const { data: updatedRows, error } = await (context.supabase as any)
+      .from(storedRecord.table)
       .update(patch as never)
       .eq("id", data.assessmentId)
       .eq("school_id", schoolId)
@@ -1379,7 +1455,7 @@ export const updateAssessmentStatus = createServerFn({ method: "POST" })
       context.userId,
       schoolId,
       "ASSESSMENT_STATUS_CHANGED",
-      "assessments",
+      storedRecord.table,
       {
         assessment_id: data.assessmentId,
         status: data.status,
@@ -2321,8 +2397,9 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       educationLevel,
       isMissing,
     );
-    let existingAssessmentQuery = context.supabase
-      .from("assessments")
+    const table: AssessmentTableName = educationLevel === "advanced" ? "a_level_assessments" : "assessments";
+    let existingAssessmentQuery = (context.supabase as any)
+      .from(table)
       .select("id")
       .eq("school_id", schoolId)
       .eq("student_id", student.id)
@@ -2340,7 +2417,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       );
     }
 
-    const { error } = await context.supabase.from("assessments").insert({
+    const commonPayload = {
       school_id: schoolId,
       student_id: student.id,
       subject_id: subject.id,
@@ -2348,9 +2425,6 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       paper_id: paperId,
       exam_type: examType,
       grade_descriptor: gradeMatch.descriptor,
-      formative,
-      summative,
-      score,
       is_missing: isMissing,
       teacher_initials: teacherInitials,
       status: "draft",
@@ -2360,7 +2434,11 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       submitted_at: null,
       approved_by: null,
       approved_at: null,
-    });
+    };
+    const payload = educationLevel === "advanced"
+      ? { ...commonPayload, score }
+      : { ...commonPayload, formative, summative, score: null };
+    const { error } = await (context.supabase as any).from(table).insert(payload);
     if (error) throw new Error(error.message);
 
     await logAudit(
@@ -2368,7 +2446,7 @@ export const upsertAssessmentEntry = createServerFn({ method: "POST" })
       context.userId,
       schoolId,
       "ASSESSMENT_DRAFT_SAVED",
-      "assessments",
+      table,
       {
         student_id: student.id,
         subject_id: subject.id,
@@ -2415,15 +2493,9 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    const { data: existingAssessment, error: existingError } = await context.supabase
-      .from("assessments")
-      .select(
-        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials, submitted_by",
-      )
-      .eq("id", data.assessmentId)
-      .maybeSingle();
-    if (existingError) throw new Error(existingError.message);
-    if (!existingAssessment || existingAssessment.school_id !== schoolId) {
+    const storedRecord = await findStoredAssessment(context.supabase, data.assessmentId);
+    const existingAssessment = storedRecord?.assessment;
+    if (!storedRecord || !existingAssessment || existingAssessment.school_id !== schoolId) {
       throw new Error("Assessment not found in your school");
     }
     if (!["draft", "rejected"].includes(existingAssessment.status) || existingAssessment.locked) {
@@ -2469,19 +2541,21 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       validated.isMissing,
     );
 
-    const { error } = await context.supabase
-      .from("assessments")
-      .update({
-        exam_type: validated.examType,
-        grade_descriptor: gradeMatch.descriptor,
-        formative: validated.formative,
-        summative: validated.summative,
-        score: validated.score,
-        is_missing: validated.isMissing,
-        teacher_initials: validated.teacherInitials,
-        rejection_reason: null,
-        submitted_by: existingAssessment.submitted_by ?? context.userId,
-      })
+    const patch = {
+      exam_type: validated.examType,
+      grade_descriptor: gradeMatch.descriptor,
+      score: validated.score,
+      is_missing: validated.isMissing,
+      teacher_initials: validated.teacherInitials,
+      rejection_reason: null,
+      submitted_by: existingAssessment.submitted_by ?? context.userId,
+      ...(storedRecord.table === "assessments"
+        ? { formative: validated.formative, summative: validated.summative }
+        : {}),
+    };
+    const { error } = await (context.supabase as any)
+      .from(storedRecord.table)
+      .update(patch)
       .eq("id", data.assessmentId);
     if (error) throw new Error(error.message);
 
@@ -2490,7 +2564,7 @@ export const updateAssessmentDraftEntry = createServerFn({ method: "POST" })
       context.userId,
       schoolId,
       "ASSESSMENT_DRAFT_UPDATED",
-      "assessments",
+      storedRecord.table,
       {
         assessment_id: data.assessmentId,
       },
@@ -2533,15 +2607,9 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    const { data: existingAssessment, error: existingError } = await context.supabase
-      .from("assessments")
-      .select(
-        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials, submitted_by",
-      )
-      .eq("id", data.assessmentId)
-      .maybeSingle();
-    if (existingError) throw new Error(existingError.message);
-    if (!existingAssessment || existingAssessment.school_id !== schoolId) {
+    const storedRecord = await findStoredAssessment(context.supabase, data.assessmentId);
+    const existingAssessment = storedRecord?.assessment;
+    if (!storedRecord || !existingAssessment || existingAssessment.school_id !== schoolId) {
       throw new Error("Assessment not found in your school");
     }
     if (existingAssessment.locked) {
@@ -2590,21 +2658,23 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
       validated.isMissing,
     );
 
-    const { data: updatedRows, error } = await context.supabase
-      .from("assessments")
-      .update({
-        formative: validated.formative,
-        summative: validated.summative,
-        score: validated.score,
-        is_missing: validated.isMissing,
-        teacher_initials: validated.teacherInitials,
-        grade_descriptor: gradeMatch.descriptor,
-        status: "submitted",
-        locked: false,
-        rejection_reason: null,
-        submitted_by: existingAssessment.submitted_by ?? context.userId,
-        submitted_at: new Date().toISOString(),
-      })
+    const submitPatch = {
+      score: validated.score,
+      is_missing: validated.isMissing,
+      teacher_initials: validated.teacherInitials,
+      grade_descriptor: gradeMatch.descriptor,
+      status: "submitted",
+      locked: false,
+      rejection_reason: null,
+      submitted_by: existingAssessment.submitted_by ?? context.userId,
+      submitted_at: new Date().toISOString(),
+      ...(storedRecord.table === "assessments"
+        ? { formative: validated.formative, summative: validated.summative }
+        : {}),
+    };
+    const { data: updatedRows, error } = await (context.supabase as any)
+      .from(storedRecord.table)
+      .update(submitPatch)
       .eq("id", data.assessmentId)
       .eq("school_id", schoolId)
       .eq("status", existingAssessment.status)
@@ -2613,7 +2683,7 @@ export const submitAssessmentEntry = createServerFn({ method: "POST" })
     if (!updatedRows?.length) throw new Error("The assessment changed before it was updated");
 
     await Promise.all([
-      logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
+      logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", storedRecord.table, {
         assessment_id: data.assessmentId,
       }),
       notifyAcademicLeadersOfSubmission(context.supabase, schoolId, 1, context.userId),
@@ -2669,18 +2739,10 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
     const assessmentId = data.assessmentId?.trim() || null;
-    const existingResult = assessmentId
-      ? await context.supabase
-          .from("assessments")
-          .select(
-            "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials, submitted_by",
-          )
-          .eq("id", assessmentId)
-          .maybeSingle()
-      : { data: null, error: null };
-    if (existingResult.error) throw new Error(existingResult.error.message);
-
-    const existingAssessment = existingResult.data;
+    const existingRecord = assessmentId
+      ? await findStoredAssessment(context.supabase, assessmentId)
+      : null;
+    const existingAssessment = existingRecord?.assessment ?? null;
     if (assessmentId && (!existingAssessment || existingAssessment.school_id !== schoolId)) {
       throw new Error("Assessment not found in your school");
     }
@@ -2734,21 +2796,23 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
     const submittedAt = new Date().toISOString();
 
     if (existingAssessment) {
-      const { data: updatedRows, error } = await context.supabase
-        .from("assessments")
-        .update({
-          formative: validated.formative,
-          summative: validated.summative,
-          score: validated.score,
-          is_missing: validated.isMissing,
-          teacher_initials: validated.teacherInitials,
-          grade_descriptor: gradeMatch.descriptor,
-          status: "submitted",
-          locked: false,
-          rejection_reason: null,
-          submitted_by: existingAssessment.submitted_by ?? context.userId,
-          submitted_at: submittedAt,
-        })
+      const patch = {
+        score: validated.score,
+        is_missing: validated.isMissing,
+        teacher_initials: validated.teacherInitials,
+        grade_descriptor: gradeMatch.descriptor,
+        status: "submitted",
+        locked: false,
+        rejection_reason: null,
+        submitted_by: existingAssessment.submitted_by ?? context.userId,
+        submitted_at: submittedAt,
+        ...(existingRecord?.table === "assessments"
+          ? { formative: validated.formative, summative: validated.summative }
+          : {}),
+      };
+      const { data: updatedRows, error } = await (context.supabase as any)
+        .from(existingRecord!.table)
+        .update(patch)
         .eq("id", existingAssessment.id)
         .eq("school_id", schoolId)
         .eq("status", existingAssessment.status)
@@ -2756,8 +2820,11 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       if (!updatedRows?.length) throw new Error("The assessment changed before it was submitted");
     } else {
-      let duplicateQuery = context.supabase
-        .from("assessments")
+      const targetTable: AssessmentTableName = validated.educationLevel === "advanced"
+        ? "a_level_assessments"
+        : "assessments";
+      let duplicateQuery = (context.supabase as any)
+        .from(targetTable)
         .select("id")
         .eq("school_id", schoolId)
         .eq("student_id", validated.student.id)
@@ -2775,7 +2842,7 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
         );
       }
 
-      const { error } = await context.supabase.from("assessments").insert({
+      const commonPayload = {
         school_id: schoolId,
         student_id: validated.student.id,
         subject_id: validated.subject.id,
@@ -2783,9 +2850,6 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
         paper_id: validated.paperId,
         exam_type: validated.examType,
         grade_descriptor: gradeMatch.descriptor,
-        formative: validated.formative,
-        summative: validated.summative,
-        score: validated.score,
         is_missing: validated.isMissing,
         teacher_initials: validated.teacherInitials,
         status: "submitted",
@@ -2795,12 +2859,21 @@ export const saveAndSubmitAssessmentEntry = createServerFn({ method: "POST" })
         submitted_at: submittedAt,
         approved_by: null,
         approved_at: null,
-      });
+      };
+      const payload = validated.educationLevel === "advanced"
+        ? { ...commonPayload, score: validated.score }
+        : {
+            ...commonPayload,
+            formative: validated.formative,
+            summative: validated.summative,
+            score: null,
+          };
+      const { error } = await (context.supabase as any).from(targetTable).insert(payload);
       if (error) throw new Error(error.message);
     }
 
     await Promise.all([
-      logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", "assessments", {
+      logAudit(context.supabase, context.userId, schoolId, "ASSESSMENT_SUBMITTED", existingRecord?.table ?? (validated.educationLevel === "advanced" ? "a_level_assessments" : "assessments"), {
         assessment_id: existingAssessment?.id ?? null,
         student_id: validated.student.id,
         subject_id: validated.subject.id,
@@ -2816,7 +2889,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: {
     assessmentIds?: string[];
-    groups?: Array<{ assessmentIds: string[]; formativeMarkId: string }>;
+    groups?: Array<{ assessmentIds: string[]; formativeMarkId?: string }>;
     formativeMarkId?: string;
     teacherInitials?: string | null;
   }) => data)
@@ -2842,8 +2915,8 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     if (data.groups && data.assessmentIds?.length) {
       throw new Error("Choose either individual assessments or grouped assessments to submit");
     }
-    if (data.groups?.some((group) => !group.formativeMarkId || !group.assessmentIds.length)) {
-      throw new Error("Every assessment group must include a formative mark and summative marks");
+    if (data.groups?.some((group) => !group.assessmentIds.length)) {
+      throw new Error("Every assessment group must include at least one assessment");
     }
     const assessmentIds = data.groups?.flatMap((group) => group.assessmentIds) ?? data.assessmentIds ?? [];
     if (!assessmentIds.length) {
@@ -2856,16 +2929,12 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    const { data: assessments, error: fetchError } = await context.supabase
-      .from("assessments")
-      .select(
-        "id, school_id, status, locked, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, teacher_initials",
-      )
-      .in("id", assessmentIds);
-    if (fetchError) throw new Error(fetchError.message);
-    if (!assessments || assessments.length !== assessmentIds.length) {
+    const storedRecords = await findStoredAssessments(context.supabase, assessmentIds);
+    if (storedRecords.length !== assessmentIds.length) {
       throw new Error("One or more assessments were not found in your school");
     }
+    const recordById = new Map(storedRecords.map((record) => [record.assessment.id, record]));
+    const assessments = storedRecords.map((record) => record.assessment);
     if (assessments.some((item) => item.school_id !== schoolId)) {
       throw new Error("One or more assessments were not found in your school");
     }
@@ -2876,6 +2945,18 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     ) {
       throw new Error("Only unlocked draft or rejected assessments can be submitted");
     }
+
+    const ordinaryGroups = data.groups?.filter((group) => {
+      const groupRecords = group.assessmentIds.map((id) => recordById.get(id));
+      const tables = new Set(groupRecords.map((record) => record?.table));
+      if (tables.size > 1) {
+        throw new Error("Keep A-Level and O-Level records in separate submission groups");
+      }
+      if (tables.has("assessments") && !group.formativeMarkId) {
+        throw new Error("Every O-Level group must include a formative mark and summative assessments");
+      }
+      return tables.has("assessments");
+    }) ?? [];
 
     // Every assessment period involved must be open for entry.
     const periodKeys = new Set<string>();
@@ -2896,8 +2977,9 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
     if (gradingScaleError) throw new Error(`Unable to load grading scales: ${gradingScaleError.message}`);
 
     const validatedAssessments = await Promise.all(
-      assessments.map(async (assessment) => ({
+      storedRecords.map(async ({ assessment, table }) => ({
         assessment,
+        table,
         validated: await validateAssessmentRelationships(context.supabase, {
           schoolId,
           userId: context.userId,
@@ -2940,24 +3022,60 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
       };
     });
     const entriesById = new Map(entries.map((entry) => [entry.assessment_id, entry]));
-    const rpcName = data.groups
-      ? "submit_assessment_groups"
-      : data.formativeMarkId
-        ? "submit_assessment_group"
-        : "submit_assessment_batch";
-    const rpcArgs = data.groups
-      ? {
-          p_groups: data.groups.map((group) => ({
-            formative_mark_id: group.formativeMarkId,
-            entries: group.assessmentIds.map((id) => entriesById.get(id)),
-          })),
-        }
-      : data.formativeMarkId
-        ? { p_entries: entries, p_formative_mark_id: data.formativeMarkId }
-        : { p_entries: entries };
-    const { data: submittedCount, error: batchError } = await (context.supabase as any).rpc(rpcName, rpcArgs);
-    if (batchError) throw new Error(batchError.message);
-    if (Number(submittedCount) !== entries.length) {
+    const ordinaryEntries = entries.filter((entry) => recordById.get(entry.assessment_id)?.table === "assessments");
+    const advancedEntries = entries
+      .filter((entry) => recordById.get(entry.assessment_id)?.table === "a_level_assessments")
+      .map(({ assessment_id, score, is_missing, teacher_initials, grade_descriptor }) => ({
+        assessment_id,
+        score,
+        is_missing,
+        teacher_initials,
+        grade_descriptor,
+      }));
+    const ordinaryGroupsForRpc = ordinaryGroups.map((group) => ({
+      formative_mark_id: group.formativeMarkId,
+      entries: group.assessmentIds.map((id) => entriesById.get(id)),
+    }));
+    if (data.groups) {
+      const groupedOrdinaryIds = new Set(ordinaryGroups.flatMap((group) => group.assessmentIds));
+      const selectedOrdinaryIds = new Set(ordinaryEntries.map((entry) => entry.assessment_id));
+      if (
+        groupedOrdinaryIds.size !== selectedOrdinaryIds.size ||
+        [...selectedOrdinaryIds].some((id) => !groupedOrdinaryIds.has(id))
+      ) {
+        throw new Error("The O-Level submission groups do not match the selected assessments");
+      }
+    }
+    let submittedCount = 0;
+
+    if (ordinaryEntries.length) {
+      const useGroups = ordinaryGroupsForRpc.length > 0;
+      const formativeMarkId = data.formativeMarkId;
+      const rpcName = useGroups
+        ? "submit_assessment_groups"
+        : formativeMarkId
+          ? "submit_assessment_group"
+          : "submit_assessment_batch";
+      const rpcArgs = useGroups
+        ? { p_groups: ordinaryGroupsForRpc }
+        : formativeMarkId
+          ? { p_entries: ordinaryEntries, p_formative_mark_id: formativeMarkId }
+          : { p_entries: ordinaryEntries };
+      const { data: count, error: batchError } = await (context.supabase as any).rpc(rpcName, rpcArgs);
+      if (batchError) throw new Error(batchError.message);
+      submittedCount += Number(count);
+    }
+
+    if (advancedEntries.length) {
+      const { data: count, error: batchError } = await (context.supabase as any).rpc(
+        "submit_a_level_assessment_batch",
+        { p_entries: advancedEntries },
+      );
+      if (batchError) throw new Error(batchError.message);
+      submittedCount += Number(count);
+    }
+
+    if (submittedCount !== entries.length) {
       throw new Error("The selected assessments could not be submitted");
     }
 
@@ -2967,7 +3085,7 @@ export const submitAssessmentEntries = createServerFn({ method: "POST" })
         context.userId,
         schoolId,
         "ASSESSMENTS_SUBMITTED",
-        "assessments",
+        "assessment_records",
         { assessment_ids: assessmentIds },
       ),
       notifyAcademicLeadersOfSubmission(context.supabase, schoolId, entries.length, context.userId),
@@ -3000,19 +3118,16 @@ export const deleteAssessmentEntry = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    const { data: existing } = await context.supabase
-      .from("assessments")
-      .select("id, school_id, student_id, subject_id, term_id, status, locked, submitted_by")
-      .eq("id", data.assessmentId)
-      .maybeSingle();
-    if (!existing || existing.school_id !== schoolId)
+    const storedRecord = await findStoredAssessment(context.supabase, data.assessmentId);
+    const existing = storedRecord?.assessment;
+    if (!storedRecord || !existing || existing.school_id !== schoolId)
       throw new Error("Assessment not found in your school");
     if (!['draft', 'rejected'].includes(existing.status) || existing.locked) {
       throw new Error("Only unlocked draft or rejected assessments can be deleted");
     }
 
-    const { data: deletedAssessments, error } = await context.supabase
-      .from("assessments")
+    const { data: deletedAssessments, error } = await (context.supabase as any)
+      .from(storedRecord.table)
       .delete()
       .eq("id", data.assessmentId)
       .eq("school_id", schoolId)
@@ -3027,7 +3142,7 @@ export const deleteAssessmentEntry = createServerFn({ method: "POST" })
       context.userId,
       schoolId,
       "ASSESSMENT_DELETED",
-      "assessments",
+      storedRecord.table,
       {
         assessment_id: data.assessmentId,
         student_id: existing.student_id,
@@ -3071,18 +3186,54 @@ export const deleteAssessmentGroup = createServerFn({ method: "POST" })
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
 
-    const { data: deletedAssessmentCount, error } = await (context.supabase as any).rpc(
-      "delete_assessment_group",
-      {
-        p_school_id: schoolId,
-        p_student_id: data.studentId,
-        p_subject_id: data.subjectId,
-        p_paper_id: data.paperId ?? null,
-        p_term_id: data.termId,
-      },
-    );
-    if (error) throw new Error(error.message);
-    if (!Number(deletedAssessmentCount)) {
+    const { data: student, error: studentError } = await context.supabase
+      .from("students")
+      .select("class_id")
+      .eq("id", data.studentId)
+      .eq("school_id", schoolId)
+      .maybeSingle();
+    if (studentError) throw new Error(studentError.message);
+    if (!student?.class_id) throw new Error("The learner is not assigned to a class");
+    const { data: studentClass, error: classError } = await context.supabase
+      .from("classes")
+      .select("education_level")
+      .eq("id", student.class_id)
+      .eq("school_id", schoolId)
+      .maybeSingle();
+    if (classError) throw new Error(classError.message);
+
+    let deletedCount: number;
+    if (studentClass?.education_level === "advanced") {
+      let deleteQuery = (context.supabase as any)
+        .from("a_level_assessments")
+        .delete()
+        .eq("school_id", schoolId)
+        .eq("student_id", data.studentId)
+        .eq("subject_id", data.subjectId)
+        .eq("term_id", data.termId)
+        .in("status", ["draft", "rejected"])
+        .eq("locked", false);
+      deleteQuery = data.paperId
+        ? deleteQuery.eq("paper_id", data.paperId)
+        : deleteQuery.is("paper_id", null);
+      const { data: deletedRows, error } = await deleteQuery.select("id");
+      if (error) throw new Error(error.message);
+      deletedCount = deletedRows?.length ?? 0;
+    } else {
+      const { data: deletedAssessmentCount, error } = await (context.supabase as any).rpc(
+        "delete_assessment_group",
+        {
+          p_school_id: schoolId,
+          p_student_id: data.studentId,
+          p_subject_id: data.subjectId,
+          p_paper_id: data.paperId ?? null,
+          p_term_id: data.termId,
+        },
+      );
+      if (error) throw new Error(error.message);
+      deletedCount = Number(deletedAssessmentCount);
+    }
+    if (!deletedCount) {
       throw new Error("No assessment records could be deleted");
     }
 
@@ -3091,17 +3242,17 @@ export const deleteAssessmentGroup = createServerFn({ method: "POST" })
       context.userId,
       schoolId,
       "ASSESSMENT_GROUP_DELETED",
-      "assessments",
+      studentClass?.education_level === "advanced" ? "a_level_assessments" : "assessments",
       {
         student_id: data.studentId,
         subject_id: data.subjectId,
         paper_id: data.paperId ?? null,
         term_id: data.termId,
-        deleted_assessment_count: Number(deletedAssessmentCount),
+        deleted_assessment_count: deletedCount,
       },
     );
 
-    return { ok: true, deletedAssessmentCount: Number(deletedAssessmentCount) };
+    return { ok: true, deletedAssessmentCount: deletedCount };
   });
 
 export const verifyStudent = createServerFn({ method: "POST" })

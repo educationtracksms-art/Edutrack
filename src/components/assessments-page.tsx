@@ -44,6 +44,7 @@ type AssessmentRow = {
   status: "draft" | "submitted" | "approved" | "rejected";
   locked: boolean;
   grade_descriptor: string | null;
+  record_type?: "o_level" | "a_level";
 };
 
 type FormativeMarkRow = {

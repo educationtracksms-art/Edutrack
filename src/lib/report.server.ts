@@ -148,6 +148,14 @@ export async function buildReportCards(
       .in("student_id", reportStudentIds)
       .eq("term_id", termFilterId)
       .eq("status", "approved"),
+    (supabase as any)
+      .from("a_level_assessments")
+      .select(
+        "student_id, subject_id, paper_id, exam_type, score, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+      )
+      .in("student_id", reportStudentIds)
+      .eq("term_id", termFilterId)
+      .eq("status", "approved"),
     supabase
       .from("attendance_summaries")
       .select("*")
@@ -175,12 +183,21 @@ export async function buildReportCards(
     throw new Error(`Unable to load report-card results: ${resultError.error.message}`);
   }
   const [
-    { data: assessments },
+    { data: ordinaryAssessments },
+    { data: aLevelAssessments },
     { data: attendance },
     { data: activities },
     { data: formativeMarks },
     { data: activePeriods },
   ] = resultResults;
+  const assessments = [
+    ...(ordinaryAssessments ?? []),
+    ...((aLevelAssessments ?? []) as any[]).map((assessment) => ({
+      ...assessment,
+      formative: null,
+      summative: null,
+    })),
+  ];
   const { data: commentRules, error: commentRulesError } = await supabase
     .from("report_comment_rules")
     .select("comment_role, points, descriptor, comment")

@@ -57,12 +57,17 @@ type LookupRow = {
 };
 
 export async function fetchDosApprovalRows(schoolId: string) {
-  const [assessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, profiles, allocations, periods] = await Promise.all([
+  const [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, profiles, allocations, periods] = await Promise.all([
     supabase
       .from("assessments")
       .select(
         "id, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, status, locked, rejection_reason, created_at, submitted_by",
       )
+      .eq("school_id", schoolId)
+      .order("created_at", { ascending: false }),
+    (supabase as any)
+      .from("a_level_assessments")
+      .select("id, student_id, subject_id, paper_id, term_id, exam_type, score, is_missing, status, locked, rejection_reason, created_at, submitted_by")
       .eq("school_id", schoolId)
       .order("created_at", { ascending: false }),
     (supabase as any)
@@ -87,7 +92,7 @@ export async function fetchDosApprovalRows(schoolId: string) {
       .eq("school_id", schoolId),
   ]);
 
-  const failedResult = [assessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, profiles, allocations, periods].find(
+  const failedResult = [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, profiles, allocations, periods].find(
     (result) => result.error,
   );
   if (failedResult?.error) {
@@ -130,7 +135,15 @@ export async function fetchDosApprovalRows(schoolId: string) {
   const termMap = new Map(termRows.map((row) => [row.id, row.name ?? "Unknown term"]));
   const profileMap = new Map(profileRows.map((row) => [row.id, row.full_name ?? "Unknown teacher"]));
 
-  const summativeRows = ((assessments.data ?? []) as unknown as ApprovalRow[]).map((row) => {
+  const assessmentRecords = [
+    ...((assessments.data ?? []) as unknown as ApprovalRow[]),
+    ...((aLevelAssessments.data ?? []) as unknown as ApprovalRow[]).map((row) => ({
+      ...row,
+      formative: null,
+      summative: null,
+    })),
+  ];
+  const summativeRows = assessmentRecords.map((row) => {
     const classId = studentClassMap.get(row.student_id) ?? null;
     const streamId = studentStreamMap.get(row.student_id) ?? null;
 
@@ -246,7 +259,8 @@ export async function fetchDosApprovalRows(schoolId: string) {
         let assessedCount = 0;
         let submittedCount = 0;
         let approvedCount = 0;
-        const expectedCount = assignedStudents.length * (activeTypes.length + 1);
+        const includesFormative = (subject?.education_level ?? "ordinary") !== "advanced";
+        const expectedCount = assignedStudents.length * (activeTypes.length + (includesFormative ? 1 : 0));
 
         for (const student of assignedStudents) {
           const formative = getRecord(
@@ -257,7 +271,7 @@ export async function fetchDosApprovalRows(schoolId: string) {
             termId,
             "formative",
           );
-          const expectedRecords: (ApprovalRow | undefined)[] = [formative];
+          const expectedRecords: (ApprovalRow | undefined)[] = includesFormative ? [formative] : [];
           for (const examType of activeTypes) {
             expectedRecords.push(
               getRecord(

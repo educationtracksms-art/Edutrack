@@ -195,7 +195,7 @@ function useDashboardData(
           ? (query: any) => query.eq("school_id", schoolId)
           : (query: any) => query;
 
-      const [students, assessments, subjects, classes, streams, terms, teacherAllocations, departmentsResult, schoolsResult, profilesResult, activityResult] =
+      const [students, assessments, aLevelAssessments, subjects, classes, streams, terms, teacherAllocations, departmentsResult, schoolsResult, profilesResult, activityResult] =
         await Promise.all([
           schoolQuery(
             supabase
@@ -210,6 +210,13 @@ function useDashboardData(
               .select(
                 "id, student_id, subject_id, term_id, score, formative, summative, grade_descriptor, status, school_id",
               )
+              .order("created_at", { ascending: false })
+              .limit(3000),
+          ),
+          schoolQuery(
+            (supabase as any)
+              .from("a_level_assessments")
+              .select("id, student_id, subject_id, term_id, score, grade_descriptor, status, school_id")
               .order("created_at", { ascending: false })
               .limit(3000),
           ),
@@ -255,7 +262,7 @@ function useDashboardData(
               ),
         ]);
 
-      const requiredResults = [students, assessments, subjects, classes, streams, terms];
+      const requiredResults = [students, assessments, aLevelAssessments, subjects, classes, streams, terms];
       const failedResult = requiredResults.find((result) => result.error);
       if (failedResult?.error) {
         throw new Error(`Unable to load school dashboard data: ${failedResult.error.message}`);
@@ -287,7 +294,14 @@ function useDashboardData(
       return {
         schools: schoolsResult.data ?? [],
         students: students.data ?? [],
-        assessments: assessments.data ?? [],
+        assessments: [
+          ...(assessments.data ?? []),
+          ...((aLevelAssessments.data ?? []) as any[]).map((assessment) => ({
+            ...assessment,
+            formative: null,
+            summative: null,
+          })),
+        ],
         subjects: subjects.data ?? [],
         profiles: profilesResult.data ?? [],
         activity: activityResult.data ?? [],

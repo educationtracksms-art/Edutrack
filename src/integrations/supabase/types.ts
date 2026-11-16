@@ -564,6 +564,125 @@ export type Database = {
           },
         ];
       };
+      a_level_assessments: {
+        Row: {
+          approved_at: string | null;
+          approved_by: string | null;
+          created_at: string;
+          exam_type: string;
+          grade_descriptor: string;
+          id: string;
+          is_missing: boolean;
+          locked: boolean;
+          paper_id: string | null;
+          rejection_reason: string | null;
+          school_id: string;
+          score: number;
+          status: string;
+          student_id: string;
+          subject_id: string;
+          submitted_at: string | null;
+          submitted_by: string | null;
+          teacher_initials: string | null;
+          term_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          exam_type?: string;
+          grade_descriptor?: string;
+          id?: string;
+          is_missing?: boolean;
+          locked?: boolean;
+          paper_id?: string | null;
+          rejection_reason?: string | null;
+          school_id: string;
+          score: number;
+          status?: string;
+          student_id: string;
+          subject_id: string;
+          submitted_at?: string | null;
+          submitted_by?: string | null;
+          teacher_initials?: string | null;
+          term_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          exam_type?: string;
+          grade_descriptor?: string;
+          id?: string;
+          is_missing?: boolean;
+          locked?: boolean;
+          paper_id?: string | null;
+          rejection_reason?: string | null;
+          school_id?: string;
+          score?: number;
+          status?: string;
+          student_id?: string;
+          subject_id?: string;
+          submitted_at?: string | null;
+          submitted_by?: string | null;
+          teacher_initials?: string | null;
+          term_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "a_level_assessments_school_id_fkey";
+            columns: ["school_id"];
+            isOneToOne: false;
+            referencedRelation: "schools";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "a_level_assessments_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "students";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "a_level_assessments_subject_id_fkey";
+            columns: ["subject_id"];
+            isOneToOne: false;
+            referencedRelation: "subjects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "a_level_assessments_paper_id_fkey";
+            columns: ["paper_id"];
+            isOneToOne: false;
+            referencedRelation: "subject_papers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "a_level_assessments_term_id_fkey";
+            columns: ["term_id"];
+            isOneToOne: false;
+            referencedRelation: "terms";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "a_level_assessments_submitted_by_fkey";
+            columns: ["submitted_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "a_level_assessments_approved_by_fkey";
+            columns: ["approved_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       attendance_absence_alerts: {
         Row: {
           consecutive_days: number;
