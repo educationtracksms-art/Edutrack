@@ -137,20 +137,22 @@ function SettingsPage() {
             Disabled modules are hidden from report output and staff navigation.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {(toggles ?? []).map((toggle: { id: string; module: string; enabled: boolean }) => (
-              <label
-                key={toggle.id}
-                className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
-              >
-                <span className="text-sm font-medium capitalize">{toggle.module.replace(/_/g, " ")}</span>
-                <input
-                  type="checkbox"
-                  checked={toggle.enabled}
-                  onChange={(e) => toggleMutation.mutate({ id: toggle.id, enabled: e.target.checked })}
-                  disabled={toggleMutation.isPending}
-                />
-              </label>
-            ))}
+            {(toggles ?? [])
+              .filter((toggle: { module: string }) => toggle.module !== "report_cards")
+              .map((toggle: { id: string; module: string; enabled: boolean }) => (
+                <label
+                  key={toggle.id}
+                  className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
+                >
+                  <span className="text-sm font-medium capitalize">{toggle.module.replace(/_/g, " ")}</span>
+                  <input
+                    type="checkbox"
+                    checked={toggle.enabled}
+                    onChange={(e) => toggleMutation.mutate({ id: toggle.id, enabled: e.target.checked })}
+                    disabled={toggleMutation.isPending}
+                  />
+                </label>
+              ))}
           </div>
         </Panel>
       )}

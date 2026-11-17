@@ -970,7 +970,6 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     me?.profile?.department_id,
     isChartsOnlyRole,
   );
-  const reportCardsEnabled = moduleMap?.get("report_cards") ?? true;
   const coCurricularEnabled = moduleMap?.get("co_curricular") ?? true;
   const timetableEnabled = moduleMap?.get("timetable") ?? true;
   const attendanceEnabled = moduleMap?.get("attendance") ?? true;
@@ -1359,7 +1358,6 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
     { key: "academics", label: "Academics" },
     { key: "attendance", label: "Attendance" },
     { key: "library", label: "Library" },
-    { key: "report_cards", label: "Report cards" },
     { key: "co_curricular", label: "Co-curricular" },
     { key: "students", label: "Students" },
     { key: "timetable", label: "Timetable" },
@@ -1813,7 +1811,7 @@ function SchoolDashboard({ me, isTeacher }: { me: any; isTeacher: boolean }) {
         </Panel>
       )}
 
-      {canEditHeadComments && reportCardsEnabled && (
+      {canEditHeadComments && (
         <CommentEditorPanel
           commentRole="head_teacher"
           schoolId={me?.profile?.school_id ?? null}

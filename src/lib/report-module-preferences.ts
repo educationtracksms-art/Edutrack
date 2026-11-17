@@ -1,5 +1,6 @@
 export type ReportModulePreferences = {
   grades: boolean;
+  assessmentMarks: boolean;
   comments: boolean;
   attendance: boolean;
   coCurricular: boolean;
@@ -10,6 +11,7 @@ export type ReportModulePreferences = {
 
 export const DEFAULT_REPORT_MODULE_PREFERENCES: ReportModulePreferences = {
   grades: true,
+  assessmentMarks: true,
   comments: true,
   attendance: true,
   coCurricular: true,
@@ -28,7 +30,7 @@ export function parseReportModulePreferences(value: unknown): ReportModulePrefer
   const saved = value as Record<string, unknown>;
   const booleanPreference = (key: keyof Pick<
     ReportModulePreferences,
-    "grades" | "comments" | "attendance" | "coCurricular" | "includeFeesBalance"
+    "grades" | "assessmentMarks" | "comments" | "attendance" | "coCurricular" | "includeFeesBalance"
   >) => {
     const preference = saved[key];
     if (preference === undefined) return DEFAULT_REPORT_MODULE_PREFERENCES[key];
@@ -52,6 +54,7 @@ export function parseReportModulePreferences(value: unknown): ReportModulePrefer
 
   return {
     grades: booleanPreference("grades"),
+    assessmentMarks: booleanPreference("assessmentMarks"),
     comments: booleanPreference("comments"),
     attendance: booleanPreference("attendance"),
     coCurricular: booleanPreference("coCurricular"),

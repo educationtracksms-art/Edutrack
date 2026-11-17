@@ -693,14 +693,13 @@ export const createSchoolWithAdmin = createServerFn({ method: "POST" })
       "sms",
       "parent_portal",
       "discipline",
-      "report_cards",
       "co_curricular",
     ];
     await context.supabase.from("feature_toggles").insert(
       modules.map((module) => ({
         school_id: school.id,
         module,
-        enabled: ["attendance", "report_cards", "fees", "co_curricular"].includes(module),
+        enabled: ["attendance", "fees", "co_curricular"].includes(module),
       })),
     );
     await context.supabase.from("notifications").insert({
@@ -2021,10 +2020,6 @@ export const upsertReportComment = createServerFn({ method: "POST" })
 
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
-    if (!(await isModuleEnabled(context.supabase, schoolId, "report_cards"))) {
-      throw new Error("Report comments module is disabled");
-    }
-
     const [{ data: student }, { data: term }, { data: existing }] = await Promise.all([
       context.supabase
         .from("students")
@@ -2221,10 +2216,6 @@ export const deleteReportComment = createServerFn({ method: "POST" })
 
     const schoolId = await schoolOf(context.supabase, context.userId);
     if (!schoolId) throw new Error("Your account is not linked to a school");
-    if (!(await isModuleEnabled(context.supabase, schoolId, "report_cards"))) {
-      throw new Error("Report comments module is disabled");
-    }
-
     const [{ data: student }, { data: term }, { data: existing }] = await Promise.all([
       context.supabase
         .from("students")

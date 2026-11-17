@@ -84,6 +84,7 @@ function ReportModulesPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {([
               ["grades", "Include grades"],
+              ["assessmentMarks", "Include approved assessment marks"],
               ["comments", "Include teacher comments"],
               ["attendance", "Include attendance"],
               ["coCurricular", "Include co-curricular activities"],
@@ -164,7 +165,8 @@ function ReportModulesPage() {
           </div>
         </form>
         <p className="mt-4 text-sm text-muted-foreground">
-          Saved preferences are applied the next time report cards are generated in this browser.
+          Assessment marks and grade details have separate settings. Saved preferences are applied
+          the next time report cards are generated in this browser.
         </p>
       </Panel>
     </div>

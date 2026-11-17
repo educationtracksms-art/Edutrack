@@ -30,6 +30,15 @@ export function ReportCard({
     activeSummativePeriods,
   } = data;
   const isAdvanced = gradingLevel === "advanced";
+  const includeGrades = modulePreferences.grades;
+  // Older saved previews may not carry this preference yet; keep marks enabled by default.
+  const includeAssessmentMarks = modulePreferences.assessmentMarks ?? true;
+  const showAssessmentResults = includeGrades || includeAssessmentMarks;
+  const resultColumnCount =
+    1 +
+    (isAdvanced ? 1 : 0) +
+    (includeAssessmentMarks ? (isAdvanced ? 0 : 1) + activeSummativePeriods.length + 1 : 0) +
+    (includeGrades ? (isAdvanced ? 4 : 3) : 0);
   const watermarkLabel = school.name || "School";
   const reportRef = useRef<HTMLDivElement | null>(null);
   const paymentLabel =
@@ -247,63 +256,85 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
           </tbody>
         </table>
 
-        {modulePreferences.grades && (
+        {showAssessmentResults && (
           <>
-        <h2 className="title">ASSESSMENT RESULTS SUMMARY</h2>
+        <h2 className="title">
+          {includeAssessmentMarks && !includeGrades
+            ? "APPROVED ASSESSMENT MARKS"
+            : "ASSESSMENT RESULTS SUMMARY"}
+        </h2>
         <table className="results">
           <colgroup>
             <col className="results-subject-col" />
             {isAdvanced && <col className="results-paper-col" />}
-            {!isAdvanced && <col className="results-formative-col" />}
-            {activeSummativePeriods.map((period) => (
+            {!isAdvanced && includeAssessmentMarks && <col className="results-formative-col" />}
+            {includeAssessmentMarks && activeSummativePeriods.map((period) => (
               <col className="results-summative-col" key={period} />
             ))}
-            <col className="results-total-col" />
-            {isAdvanced && <col className="results-average-col" />}
-            <col className="results-grade-col" />
-            <col className="results-descriptor-col" />
-            <col className="results-teacher-col" />
+            {includeGrades && <col className="results-total-col" />}
+            {includeGrades && isAdvanced && <col className="results-average-col" />}
+            {includeGrades && <col className="results-grade-col" />}
+            {includeGrades && <col className="results-descriptor-col" />}
+            {includeAssessmentMarks && <col className="results-teacher-col" />}
           </colgroup>
           <thead>
             {isAdvanced ? (
               <tr>
                 <th colSpan={2}>SUBJECT</th>
-                {activeSummativePeriods.map((period) => <th key={period}>{period} / 100</th>)}
-                <th>Total</th>
-                <th>TOTAL A/V</th>
-                <th>Grade</th>
-                <th>Points</th>
-                <th>Teacher</th>
+                {includeAssessmentMarks && activeSummativePeriods.map((period) => <th key={period}>{period} / 100</th>)}
+                {includeGrades && <>
+                  <th>Total</th>
+                  <th>TOTAL A/V</th>
+                  <th>Grade</th>
+                  <th>Points</th>
+                </>}
+                {includeAssessmentMarks && <th>Teacher</th>}
               </tr>
             ) : (
               <>
                 <tr>
                   <th>SUBJECT</th>
-                  <th>
-                    Formative
-                    <br />
-                    (20%)
-                  </th>
-                  <th colSpan={activeSummativePeriods.length}>Summative (80%)</th>
-                  <th>Total</th>
-                  <th>Grade</th>
-                  <th>Grade Descriptor</th>
-                  <th>Teacher</th>
+                  {includeAssessmentMarks && <>
+                    <th>
+                      Formative
+                      <br />
+                      (20%)
+                    </th>
+                    {activeSummativePeriods.length > 0 && (
+                      <th colSpan={activeSummativePeriods.length}>Summative (80%)</th>
+                    )}
+                  </>}
+                  {includeGrades && <>
+                    <th>Total</th>
+                    <th>Grade</th>
+                    <th>Grade Descriptor</th>
+                  </>}
+                  {includeAssessmentMarks && <th>Teacher</th>}
                 </tr>
                 <tr>
                   <th />
-                  <th />
-                  {activeSummativePeriods.map((period) => <th key={period}>{period}</th>)}
-                  <th />
-                  <th />
-                  <th />
-                  <th />
+                  {includeAssessmentMarks && <>
+                    <th />
+                    {activeSummativePeriods.map((period) => <th key={period}>{period}</th>)}
+                  </>}
+                  {includeGrades && <>
+                    <th />
+                    <th />
+                    <th />
+                  </>}
+                  {includeAssessmentMarks && <th />}
                 </tr>
               </>
             )}
           </thead>
           <tbody>
-            {isAdvanced
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={resultColumnCount} className="text-center">
+                  No assessment marks are available for this term.
+                </td>
+              </tr>
+            ) : isAdvanced
               ? Array.from(
                   rows.reduce((groups, row) => {
                     if (row.isSubjectSummary) return groups;
@@ -321,42 +352,44 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
                     <tr key={`${row.subject}-${row.paperId ?? index}`}>
                       {index === 0 && <td rowSpan={group.papers.length}>{row.subject}</td>}
                       <td>{row.paperName}</td>
-                      {activeSummativePeriods.map((period) => (
+                      {includeAssessmentMarks && activeSummativePeriods.map((period) => (
                         <td key={period}>
                           {period === "BOT" ? row.bot : period === "MOT" ? row.mot : row.eot}
                         </td>
                       ))}
-                      <td>{row.total}</td>
-                      {index === 0 && (
+                      {includeGrades && <td>{row.total}</td>}
+                      {includeGrades && index === 0 && (
                         <>
                           <td rowSpan={group.papers.length}>{summary?.totalAverage ?? ""}</td>
                           <td rowSpan={group.papers.length}>{summary?.grade ?? ""}</td>
                           <td rowSpan={group.papers.length}>{summary?.subjectPoints ?? ""}</td>
                         </>
                       )}
-                      <td>{row.teacher}</td>
+                      {includeAssessmentMarks && <td>{row.teacher}</td>}
                     </tr>
                   ));
                 })
               : rows.map((row) => (
                   <tr key={`${row.subject}-${row.paperId ?? "summary"}`}>
                     <td>{row.subject}</td>
-                    <td>{row.formative}</td>
-                    {activeSummativePeriods.map((period) => (
+                    {includeAssessmentMarks && <td>{row.formative}</td>}
+                    {includeAssessmentMarks && activeSummativePeriods.map((period) => (
                       <td key={period}>
                         {period === "BOT" ? row.bot : period === "MOT" ? row.mot : row.eot}
                       </td>
                     ))}
-                    <td>{row.total}</td>
-                    <td>{row.grade}</td>
-                    <td>{row.gradeDetail}</td>
-                    <td>{row.teacher}</td>
+                    {includeGrades && <>
+                      <td>{row.total}</td>
+                      <td>{row.grade}</td>
+                      <td>{row.gradeDetail}</td>
+                    </>}
+                    {includeAssessmentMarks && <td>{row.teacher}</td>}
                   </tr>
                 ))}
           </tbody>
         </table>
 
-        {!isAdvanced && (
+        {includeGrades && !isAdvanced && (
           <table className="overall-table">
             <tbody>
               <tr>
@@ -381,7 +414,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
           </table>
         )}
 
-        <section className="definitions">
+        {includeGrades && <section className="definitions">
           <div className="keywords">
             {isAdvanced && (
               <div className="overall-cell" style={{ marginBottom: "8px" }}>
@@ -431,7 +464,7 @@ function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
               </p>
             </div>
           )}
-        </section>
+        </section>}
           </>
         )}
 

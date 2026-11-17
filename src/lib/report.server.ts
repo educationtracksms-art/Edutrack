@@ -3,6 +3,21 @@ import type { ReportCardData, SubjectRow } from "./report-types";
 import { descriptorFromIdentifier } from "./descriptor";
 
 type AnyClient = SupabaseClient<any, any, any>;
+const REPORT_RESULT_PAGE_SIZE = 1000;
+
+async function fetchAllReportRows(
+  queryPage: (from: number, to: number) => PromiseLike<any>,
+) {
+  const rows: any[] = [];
+  for (let from = 0; ; from += REPORT_RESULT_PAGE_SIZE) {
+    const { data, error } = await queryPage(from, from + REPORT_RESULT_PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+
+    const page = (data ?? []) as any[];
+    rows.push(...page);
+    if (page.length < REPORT_RESULT_PAGE_SIZE) return { data: rows, error: null };
+  }
+}
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 // Score boundaries are configured values, not calculated marks. Keep their saved precision on reports.
@@ -140,22 +155,30 @@ export async function buildReportCards(
 
   const termFilterId = term?.id ?? "00000000-0000-0000-0000-000000000000";
   const resultResults = await Promise.all([
-    supabase
-      .from("assessments")
-      .select(
-        "student_id, subject_id, paper_id, exam_type, score, formative, summative, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
-      )
-      .in("student_id", reportStudentIds)
-      .eq("term_id", termFilterId)
-      .eq("status", "approved"),
-    (supabase as any)
-      .from("a_level_assessments")
-      .select(
-        "student_id, subject_id, paper_id, exam_type, score, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
-      )
-      .in("student_id", reportStudentIds)
-      .eq("term_id", termFilterId)
-      .eq("status", "approved"),
+    fetchAllReportRows((from, to) =>
+      supabase
+        .from("assessments")
+        .select(
+          "id, student_id, subject_id, paper_id, exam_type, score, formative, summative, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+        )
+        .in("student_id", reportStudentIds)
+        .eq("term_id", termFilterId)
+        .eq("status", "approved")
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllReportRows((from, to) =>
+      (supabase as any)
+        .from("a_level_assessments")
+        .select(
+          "id, student_id, subject_id, paper_id, exam_type, score, is_missing, teacher_initials, grade_descriptor, status, approved_by, approved_at",
+        )
+        .in("student_id", reportStudentIds)
+        .eq("term_id", termFilterId)
+        .eq("status", "approved")
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from("attendance_summaries")
       .select("*")
@@ -166,12 +189,16 @@ export async function buildReportCards(
       .select("*")
       .in("student_id", reportStudentIds)
       .eq("term_id", termFilterId),
-    (supabase as any)
-      .from("formative_marks")
-      .select("student_id, subject_id, paper_id, mark, is_missing, teacher_initials, status, approved_by, approved_at")
-      .in("student_id", reportStudentIds)
-      .eq("term_id", termFilterId)
-      .eq("status", "approved"),
+    fetchAllReportRows((from, to) =>
+      (supabase as any)
+        .from("formative_marks")
+        .select("id, student_id, subject_id, paper_id, mark, is_missing, teacher_initials, status, approved_by, approved_at")
+        .in("student_id", reportStudentIds)
+        .eq("term_id", termFilterId)
+        .eq("status", "approved")
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
     (supabase as any)
       .from("assessment_periods")
       .select("exam_type, is_active")
@@ -206,28 +233,20 @@ export async function buildReportCards(
     throw new Error(`Unable to load report comment rules: ${commentRulesError.message}`);
   }
 
-  // Only approved marks from periods activated for this term count towards a
-  // report. Inactive BOT/MOT/EOT periods must not appear or affect totals.
-  // A report must use the periods activated for the selected term. For older
-  // schools that have approved marks but no assessment_periods rows yet,
-  // retain those approved marks so report generation does not produce a blank
-  // card; once periods are configured, the activation rule is enforced.
-  const periodConfigurationExists = (activePeriods ?? []).length > 0;
-  const configuredActiveTypes = new Set<string>(
-    (activePeriods ?? []).filter((period: any) => period.is_active).map((period: any) => period.exam_type),
-  );
-  const activeTypes = periodConfigurationExists
-    ? configuredActiveTypes
-    : new Set<string>((assessments ?? []).map((assessment: any) => assessment.exam_type));
+  // Keep configured periods visible, and also show any period that already has
+  // an approved mark. This prevents a later period deactivation from hiding
+  // results that have already been approved for the selected term.
   const approvedAssessments = (assessments ?? []).filter(
-    (assessment: any) =>
-      assessment.status === "approved" && activeTypes.has(assessment.exam_type),
+    (assessment: any) => assessment.status === "approved",
   );
+  const activeTypes = new Set<string>([
+    ...(activePeriods ?? [])
+      .filter((period: any) => period.is_active)
+      .map((period: any) => period.exam_type),
+    ...approvedAssessments.map((assessment: any) => assessment.exam_type),
+  ]);
 
   const featureMap = new Map((toggles ?? []).map((toggle: any) => [toggle.module, !!toggle.enabled]));
-  const reportCardsEnabled = featureMap.get("report_cards") ?? true;
-  if (!reportCardsEnabled) return [];
-
   const feesEnabled = featureMap.get("fees") ?? true;
   const attendanceEnabled = featureMap.get("attendance") ?? true;
   const coCurricularEnabled = featureMap.get("co_curricular") ?? true;
@@ -411,6 +430,28 @@ export async function buildReportCards(
                 teacher: mark?.teacher_initials ??
                   formativeRecord?.teacher_initials ??
                   "",
+              };
+            }
+            if (!mark && educationLevel !== "advanced" && formativeRecord) {
+              // Formative marks are approved independently from summative
+              // periods. Keep an approved formative score visible even when
+              // the learner has no approved summative assessment yet.
+              return {
+                subject: subject.name,
+                paperName: paper?.name ?? "",
+                subjectId: subject.id,
+                paperId: paper?.id ?? null,
+                isPaper: false,
+                formative: formativeMark === undefined ? "" : fmt(formativeMark),
+                summative: "",
+                bot: periodValue("beginning_of_term"),
+                mot: periodValue("mid_term"),
+                eot: periodValue("end_of_term"),
+                total: "",
+                grade: "",
+                gradeDetail: "",
+                subjectPoints: "",
+                teacher: formativeRecord.teacher_initials ?? "",
               };
             }
             if (!mark || (educationLevel === "advanced" && activePeriodScores.length === 0)) {
