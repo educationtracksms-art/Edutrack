@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
+import { ReportCard } from "../../components/report/ReportCard";
+import { DEFAULT_REPORT_MODULE_PREFERENCES } from "../report-module-preferences";
 import { buildReportCards } from "../report.server";
 
 const schoolId = "school-1";
@@ -250,6 +254,26 @@ test("O-Level report shows an approved formative mark without an approved summat
   assert.ok(subjectRow, "expected the formative subject to appear on the report");
   assert.equal(subjectRow.formative, "12");
   assert.equal(subjectRow.total, "");
+});
+
+test("generated report card prints approved marks when grade details are disabled", async () => {
+  const [report] = await buildReportCards(
+    createReportClient("ordinary") as any,
+    [studentId],
+    termId,
+    "ordinary",
+  );
+  const html = renderToStaticMarkup(
+    createElement(ReportCard, {
+      data: report,
+      modulePreferences: { ...DEFAULT_REPORT_MODULE_PREFERENCES, grades: false },
+    }),
+  );
+
+  assert.match(html, /APPROVED ASSESSMENT MARKS/);
+  assert.match(html, /<td>15<\/td>/);
+  assert.match(html, /<td>65<\/td>/);
+  assert.doesNotMatch(html, /Grade Descriptor/);
 });
 
 test("report generation paginates approved marks for learners after the first 1000 results", async () => {

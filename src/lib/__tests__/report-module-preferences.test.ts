@@ -14,6 +14,7 @@ test("report module preferences preserve saved section and payment choices", () 
   assert.deepEqual(
     parseReportModulePreferences({
       grades: false,
+      assessmentMarks: false,
       comments: true,
       attendance: false,
       coCurricular: true,
@@ -23,6 +24,7 @@ test("report module preferences preserve saved section and payment choices", () 
     }),
     {
       grades: false,
+      assessmentMarks: false,
       comments: true,
       attendance: false,
       coCurricular: true,
