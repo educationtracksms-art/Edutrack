@@ -12,6 +12,8 @@ import { fetchDosApprovalRows, type ApprovalRow } from "@/lib/dos-approvals";
 import { updateAssessmentStatus, updateFormativeMarkStatus } from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
 
+const FORMATIVE_MARK_SPLIT_AT = Date.parse("2026-09-14T12:00:00.000Z");
+
 export const Route = createFileRoute("/_authenticated/approval")({
   beforeLoad: async () => {
     const { data: auth } = await supabase.auth.getUser();
@@ -266,7 +268,8 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                   {visibleData.map((group) => {
                     const row = group.first;
                     const isALevel = row.education_level === "advanced";
-                    const formative = group.rows.find((item) => item.record_type === "formative");
+                    const formative = formativeForGroup(group.rows, isALevel);
+                    const formativeScore = formativeScoreForRow(formative);
                     const periodRow = (examType: string) =>
                       group.rows.find(
                         (item) =>
@@ -274,7 +277,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                       );
                     const displayedValue = (item: ApprovalRow | undefined, value: number | null | undefined) =>
                       item?.is_missing ? "MISSING MARK" : value ?? "—";
-                    const formativeValue = displayedValue(formative, formative?.formative);
+                    const formativeDisplay = displayedValue(formative, formativeScore);
                     const periodMark = (item: ApprovalRow | undefined) =>
                       isALevel ? item?.score : item?.summative;
                     const botValue = displayedValue(
@@ -298,11 +301,11 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                       : 0;
                     const hasNumericMarks = isALevel
                       ? summativeValues.length > 0
-                      : formative?.formative != null || summativeValues.length > 0;
+                      : formativeScore != null || summativeValues.length > 0;
                     const total = hasNumericMarks
                       ? isALevel
                         ? averageSummative
-                        : Number(formative?.formative ?? 0) + averageSummative
+                        : Number(formativeScore ?? 0) + averageSummative
                       : null;
                     const statuses = Array.from(new Set(group.pendingRows.map((item) => item.status)));
                     const statusLabel = statuses.length === 1 ? statuses[0] : "Mixed";
@@ -314,7 +317,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                         <td className="whitespace-nowrap px-3 py-3">{row.paper_name || "—"}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.stream_name}</td>
                         <td className="whitespace-nowrap px-3 py-3">{row.term_name}</td>
-                        <td className="px-3 py-3 text-right">{isALevel ? "—" : formativeValue}</td>
+                        <td className="px-3 py-3 text-right">{isALevel ? "—" : formativeDisplay}</td>
                         <td className="px-3 py-3 text-right">{botValue}</td>
                         <td className="px-3 py-3 text-right">{motValue}</td>
                         <td className="px-3 py-3 text-right">{eotValue}</td>
@@ -432,7 +435,8 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                       const rows = group.rows;
                       const row = rows[0];
                       const isALevel = row.education_level === "advanced";
-                      const formative = rows.find((item) => item.record_type === "formative");
+                      const formative = formativeForGroup(rows, isALevel);
+                      const formativeScore = formativeScoreForRow(formative);
                       const periodConfigurationExists = rows.some((item) => item.assessment_periods_configured);
                       const configuredActiveTypes = rows.find((item) => item.assessment_periods_configured)
                         ?.active_exam_types ?? [];
@@ -450,7 +454,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                       const isMissing = rows.some((item) =>
                         item.is_missing && (!isALevel || item.record_type !== "formative"),
                       ) ||
-                        (!isALevel && !formative) ||
+                        (!isALevel && formativeScore == null) ||
                         hasMissingPeriod;
                       const approvedSummatives = activeRows
                         .map(periodMark)
@@ -460,7 +464,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                         : null;
                       const total = isALevel
                         ? averageSummative
-                        : Number(formative?.formative ?? 0) + Number(averageSummative ?? 0);
+                        : Number(formativeScore ?? 0) + Number(averageSummative ?? 0);
                       const periodValue = (examType: string) => {
                         if (!activeTypes.includes(examType)) return "—";
                         const assessment = rows.find(
@@ -486,7 +490,7 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
                               ? "—"
                               : !formative || formative.is_missing
                                 ? "MISSING MARK"
-                                : formative.formative ?? "—"}
+                                : formativeScore ?? "—"}
                           </td>
                           <td className="py-3 pr-4">{periodValue("beginning_of_term")}</td>
                           <td className="py-3 pr-4">{periodValue("mid_term")}</td>
@@ -515,4 +519,25 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
       )}
     </div>
   );
+}
+
+function formativeForGroup(rows: ApprovalRow[], isALevel: boolean) {
+  const savedFormative = rows.find((item) => item.record_type === "formative");
+  if (savedFormative || isALevel) return savedFormative;
+
+  // Older O-Level records kept the formative score on each assessment row.
+  // Use it only when the separate formative record is absent and the value
+  // looks like a real saved mark rather than the new workflow's zero placeholder.
+  return rows.find(
+    (item) =>
+      item.record_type === "summative" &&
+      item.legacy_formative != null &&
+      (Number(item.legacy_formative) > 0 ||
+        item.is_missing ||
+        Date.parse(item.created_at ?? "") < FORMATIVE_MARK_SPLIT_AT),
+  );
+}
+
+function formativeScoreForRow(item: ApprovalRow | undefined) {
+  return item?.formative ?? item?.legacy_formative;
 }

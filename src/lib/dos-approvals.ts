@@ -30,6 +30,7 @@ export type ApprovalRow = {
   stream_id?: string | null;
   education_level?: "ordinary" | "advanced" | string | null;
   formative: number | null;
+  legacy_formative?: number | null;
   mark?: number | null;
   summative: number | null;
   score?: number | null;
@@ -201,7 +202,8 @@ export async function fetchDosApprovalRows(schoolId: string) {
         .map((period) => period.exam_type),
       assessment_periods_configured: periodRows.some((period) => period.term_id === row.term_id),
       // Formative is represented by the separate formative_marks record.
-      // Do not display the legacy copy stored on a summative assessment row.
+      // Keep a legacy value as a fallback for records that were not backfilled.
+      legacy_formative: row.formative ?? null,
       formative: null,
       class_id: classId,
       stream_id: streamId,
