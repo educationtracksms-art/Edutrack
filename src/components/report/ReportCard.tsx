@@ -3,6 +3,7 @@ import {
   DEFAULT_REPORT_MODULE_PREFERENCES,
   type ReportModulePreferences,
 } from "@/lib/report-module-preferences";
+import { useEffect, useRef, type CSSProperties } from "react";
 
 export function ReportCard({
   data,
@@ -37,12 +38,13 @@ export function ReportCard({
     (includeAssessmentMarks ? (isAdvanced ? 0 : 1) + activeSummativePeriods.length + 1 : 0) +
     (includeGrades ? (isAdvanced ? 4 : 3) : 0);
   const watermarkLabel = school.name || "School";
+  const reportRef = useRef<HTMLDivElement | null>(null);
   const paymentLabel =
     modulePreferences.paymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
   const paymentValue =
     modulePreferences.paymentReferenceType === "account_number"
-      ? modulePreferences.accountNumber || school.reportAccountNumber || "_____________________"
-      : student.schpayCode || "_____________________";
+      ? modulePreferences.accountNumber || school.reportAccountNumber || ""
+      : student.schpayCode || "";
   const nextTermBeginsOn = (() => {
     const value = school.reportNextTermBeginsOn?.trim();
     if (!value) return "";
@@ -73,8 +75,48 @@ export function ReportCard({
     return `${day.padStart(2, "0")} ${monthNames[monthIndex]} ${year}`;
   })();
 
+  useEffect(() => {
+    const node = reportRef.current;
+    if (!node) return;
+
+    const onBeforePrint = () => {
+      const sheet = node.querySelector<HTMLElement>(".report-sheet");
+      if (!sheet) return;
+
+      const pixelsPerMillimeter = 96 / 25.4;
+      const printableWidth = 198 * pixelsPerMillimeter;
+      const printableHeight = 285 * pixelsPerMillimeter;
+      const contentWidth = Math.max(sheet.scrollWidth, sheet.getBoundingClientRect().width);
+      const contentHeight = Math.max(sheet.scrollHeight, sheet.getBoundingClientRect().height);
+      const scale = Math.min(
+        1,
+        printableWidth / Math.max(contentWidth, 1),
+        printableHeight / Math.max(contentHeight, 1),
+      );
+
+      sheet.style.setProperty("--print-scale", String(scale));
+    };
+
+    const onAfterPrint = () => {
+      const sheet = node.querySelector<HTMLElement>(".report-sheet");
+      sheet?.style.setProperty("--print-scale", "1");
+    };
+
+    window.addEventListener("beforeprint", onBeforePrint);
+    window.addEventListener("afterprint", onAfterPrint);
+
+    return () => {
+      window.removeEventListener("beforeprint", onBeforePrint);
+      window.removeEventListener("afterprint", onAfterPrint);
+    };
+  }, []);
+
   return (
-    <div className={`report-doc ${isAdvanced ? "advanced-report" : ""}`}>
+    <div
+      ref={reportRef}
+      className={`report-doc ${isAdvanced ? "advanced-report" : ""}`}
+      style={{ "--print-scale": 1 } as CSSProperties}
+    >
       <div className="report-sheet">
         <div className="report-watermark" aria-hidden="true">
           {school.logoUrl ? (
@@ -108,6 +150,14 @@ export function ReportCard({
         </header>
 
         <table className="student-info-table">
+          <colgroup>
+            <col className="student-info-lin-label-col" />
+            <col className="student-info-lin-value-col" />
+            <col className="student-info-field-label-col" />
+            <col className="student-info-field-value-col" />
+            <col className="student-info-attendance-col" />
+            <col className="student-info-photo-col" />
+          </colgroup>
           <tbody>
             <tr>
               <td className="label-lin">LIN:</td>
@@ -158,15 +208,12 @@ export function ReportCard({
                   <td className="value-small">{student.feesBalance}</td>
                 </>
               ) : (
-                <>
-                  <td className="label-small" />
-                  <td className="value-small" />
-                </>
+                <td className="empty-info-cell" colSpan={2} />
               )}
             </tr>
             <tr>
               <td className="label-small">House:</td>
-              <td className="value-small">{student.house || "_____________________"}</td>
+              <td className="value-small">{student.house}</td>
               <td className="label-small">Class / Stream:</td>
               <td className="value-small">{student.classStream}</td>
             </tr>
@@ -434,28 +481,16 @@ export function ReportCard({
           <div>
             <strong>Class Teacher</strong>
             {staff.classTeacher && (
-              <>
-                <br />
-                {staff.classTeacher}
-              </>
+              <span className="signature-name">{staff.classTeacher}</span>
             )}
-            <br />
-            <br />
-            <br />
-            _______________________
+            <hr className="signature-line" aria-hidden="true" />
           </div>
           <div>
             <strong>Head Teacher</strong>
             {staff.headTeacher && (
-              <>
-                <br />
-                {staff.headTeacher}
-              </>
+              <span className="signature-name">{staff.headTeacher}</span>
             )}
-            <br />
-            <br />
-            <br />
-            _______________________
+            <hr className="signature-line" aria-hidden="true" />
           </div>
         </section>
       </div>

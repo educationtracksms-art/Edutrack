@@ -114,7 +114,7 @@
 .report-doc .school-details h1 {
   margin: 0 0 1mm;
   color: #17263c;
-  font-size: 14pt;
+  font-size: 16pt;
   font-weight: 700;
   letter-spacing: 0.15px;
   text-transform: uppercase;
@@ -163,83 +163,127 @@
 }
 
 .report-doc .student-info-table {
-  margin-bottom: 2mm;
+  margin-bottom: 2.5mm;
   table-layout: fixed;
-  border: 0.25mm solid #8e9aab;
+  overflow: hidden;
+  border: 0.3mm solid #8e9aab;
+  background: #fff;
+}
+
+.report-doc .student-info-lin-label-col {
+  width: 9%;
+}
+
+.report-doc .student-info-lin-value-col {
+  width: 14%;
+}
+
+.report-doc .student-info-field-label-col {
+  width: 11%;
+}
+
+.report-doc .student-info-field-value-col {
+  width: 26%;
+}
+
+.report-doc .student-info-attendance-col {
+  width: 24%;
+}
+
+.report-doc .student-info-photo-col {
+  width: 16%;
 }
 
 .report-doc .student-info-table td {
-  height: 5mm;
-  padding: 0.7mm 1mm;
-  border: 0.2mm solid #aeb8c5;
+  height: 6mm;
+  padding: 1mm 1.2mm;
+  border: 0.2mm solid #c0cad7;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
   vertical-align: middle;
   font-size: 9pt;
 }
 
-.report-doc .student-info-table .label-lin {
-  width: 8%;
-  font-weight: 700;
+.report-doc .student-info-table .label-lin,
+.report-doc .student-info-table .label-name,
+.report-doc .student-info-table .label-small {
+  color: #33445c;
+  background: #edf3fa;
+  font-weight: 400;
 }
 
 .report-doc .student-info-table .value-lin {
-  width: 13%;
-}
-
-.report-doc .student-info-table .label-name {
-  width: 10%;
+  color: #173f6b;
+  font-size: 11pt;
   font-weight: 700;
+  line-height: 1.15;
 }
 
 .report-doc .student-info-table .value-name {
-  width: 31%;
-  font-weight: 600;
-}
-
-.report-doc .student-info-table .label-small {
-  width: 12%;
-  font-weight: 600;
+  color: #172b45;
+  font-size: 11pt;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 .report-doc .student-info-table .value-small {
-  width: 18%;
+  color: #172b45;
+  font-size: 11pt;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 .report-doc .student-info-table .attendance-cell {
-  width: 19%;
-  padding: 0.5mm;
+  padding: 1mm;
   text-align: center;
+  background: #f5f8fc;
 }
 
 .report-doc .attendance-cell table {
   height: 100%;
   font-size: 9pt;
+  border: 0.2mm solid #9eacbd;
 }
 
 .report-doc .attendance-cell th,
 .report-doc .attendance-cell td {
   height: auto;
-  padding: 0.5mm 0.8mm;
+  padding: 0.7mm 0.8mm;
   text-align: center;
   border: 0.2mm solid #64748b;
 }
 
 .report-doc .attendance-cell th {
-  color: white;
+  color: #fff;
   font-size: 9pt;
   font-weight: 700;
-  background: #26384d;
+  letter-spacing: 0.2px;
+  background: #214f87;
+}
+
+.report-doc .attendance-cell td:first-child {
+  text-align: left;
+}
+
+.report-doc .attendance-cell td:last-child {
+  color: #173f6b;
+  font-weight: 700;
+}
+
+.report-doc .student-info-table .empty-info-cell {
+  background: #fff;
 }
 
 .report-doc .student-info-table .passport-cell {
-  width: 15%;
-  padding: 1mm;
+  padding: 1.5mm;
   text-align: center;
+  background: #f5f8fc;
 }
 
 .report-doc .passport {
   display: flex;
-  width: 22mm;
-  height: 27mm;
+  width: 25mm;
+  height: 32mm;
   max-width: 100%;
   align-items: center;
   justify-content: center;
@@ -249,8 +293,8 @@
   font-size: 9pt;
   font-weight: 700;
   text-align: center;
-  border: 0.6mm solid #c62832;
-  border-radius: 2mm;
+  border: 0.5mm solid #8e9aab;
+  border-radius: 1.5mm;
   background: #fff;
   object-fit: cover;
 }
@@ -455,8 +499,27 @@
 
 .report-doc .signature-area > div {
   width: 42%;
-  min-height: 19mm;
+  min-height: 22mm;
   font-size: 9pt;
+}
+
+.report-doc .signature-name,
+.report-doc .signature-line {
+  display: block;
+}
+
+.report-doc .signature-name {
+  margin-top: 0.5mm;
+}
+
+.report-doc hr.signature-line {
+  width: 55mm;
+  max-width: 100%;
+  height: 0;
+  margin-top: 5mm;
+  border: 0;
+  border-top: 1.5px solid #172334;
+  opacity: 1;
 }
 
 .report-preview-hidden {
@@ -510,14 +573,17 @@
 
   .report-doc {
     width: 210mm !important;
+    height: 297mm !important;
     min-height: 297mm !important;
     margin: 0 !important;
     padding: 6mm !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     border: 0 !important;
     box-shadow: none !important;
     break-after: page;
     page-break-after: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .report-preview-list > .report-doc:last-child {
@@ -529,8 +595,10 @@
     display: flex !important;
     width: 100% !important;
     min-height: 285mm !important;
-    height: auto !important;
-    overflow: visible !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    transform: scale(var(--print-scale, 1));
+    transform-origin: top left;
   }
 }
 
