@@ -60,14 +60,12 @@ function PreviewPage() {
               <ALevelReportCard
                 key={card.studentId}
                 data={card}
-                shrinkToFit={preview.shrinkToFit}
                 modulePreferences={preview.modulePreferences ?? DEFAULT_REPORT_MODULE_PREFERENCES}
               />
             ) : (
               <OLevelReportCard
                 key={card.studentId}
                 data={card}
-                shrinkToFit={preview.shrinkToFit}
                 modulePreferences={preview.modulePreferences ?? DEFAULT_REPORT_MODULE_PREFERENCES}
               />
             ),

@@ -72,7 +72,6 @@ export type ReportCardData = {
 export type ReportPreviewState = {
   cards: ReportCardData[];
   reportLevel: ReportCardData["gradingLevel"];
-  shrinkToFit: boolean;
   modulePreferences?: ReportModulePreferences;
 };
 

@@ -3,15 +3,12 @@ import {
   DEFAULT_REPORT_MODULE_PREFERENCES,
   type ReportModulePreferences,
 } from "@/lib/report-module-preferences";
-import { useEffect, useRef, type CSSProperties } from "react";
 
 export function ReportCard({
   data,
-  shrinkToFit = true,
   modulePreferences = DEFAULT_REPORT_MODULE_PREFERENCES,
 }: {
   data: ReportCardData;
-  shrinkToFit?: boolean;
   modulePreferences?: ReportModulePreferences;
 }) {
   const {
@@ -40,7 +37,6 @@ export function ReportCard({
     (includeAssessmentMarks ? (isAdvanced ? 0 : 1) + activeSummativePeriods.length + 1 : 0) +
     (includeGrades ? (isAdvanced ? 4 : 3) : 0);
   const watermarkLabel = school.name || "School";
-  const reportRef = useRef<HTMLDivElement | null>(null);
   const paymentLabel =
     modulePreferences.paymentReferenceType === "account_number" ? "Account No." : "SchPay Code";
   const paymentValue =
@@ -77,87 +73,8 @@ export function ReportCard({
     return `${day.padStart(2, "0")} ${monthNames[monthIndex]} ${year}`;
   })();
 
-  useEffect(() => {
-    const node = reportRef.current;
-    if (!node) return;
-
-    // Initial scale computation on mount, after the first render
-    // Use a base scale that ensures the report is legible on A4 paper.
-    // We compute scale based on content width relative to A4 width (794px at 96dpi).
-    // If content is wider than A4, we shrink; if narrower, we keep full size but ensure minimum readability.
-    const computeInitialScale = () => {
-      const sheet = node.querySelector<HTMLElement>(".report-sheet");
-      if (!sheet) return;
-      const pixelsPerMillimeter = 96 / 25.4;
-      // A4 paper size in millimeters (210mm x 297mm) -> 210 * 96/25.4 ≈ 794px wide, 297 * 96/25.4 ≈ 1123px high
-      const a4WidthPx = 210 * pixelsPerMillimeter;
-      const a4HeightPx = 297 * pixelsPerMillimeter;
-      // Measure content width/height after the sheet has rendered its content
-      const contentWidth = Math.max(sheet.clientWidth, sheet.getBoundingClientRect().width);
-      const contentHeight = Math.max(sheet.clientHeight, sheet.getBoundingClientRect().height);
-      // Base scale: if content fits within A4, use 1 (full size); if wider, shrink to fit width only.
-      // We use a ratio that preserves legibility - don't shrink below 0.8 even if content is very wide.
-      let scale = 1;
-      if (contentWidth > a4WidthPx) {
-        scale = Math.max(0.8, a4WidthPx / contentWidth); // shrink but not below 80%
-      } else {
-        // Content narrower than A4 - we can scale up slightly for better readability, up to 1.1x
-        scale = Math.min(1.1, a4WidthPx / contentWidth);
-      }
-      // Also consider height - ensure nothing is cut off vertically
-      const heightRatio = a4HeightPx / Math.max(contentHeight, 1);
-      scale = Math.min(scale, heightRatio);
-      node.style.setProperty("--print-scale", String(scale));
-    };
-
-    // Run after the first paint to get accurate measurements
-    const initialTimer = setTimeout(computeInitialScale, 0);
-    // Also compute on beforeprint to adjust if needed
-    const onBeforePrint = () => {
-      const sheet = node.querySelector<HTMLElement>(".report-sheet");
-      if (!sheet) return;
-      // Force a reflow to get accurate dimensions
-      sheet.style.display = "inline-block";
-      computePrintScale(sheet, shrinkToFit);
-    };
-    const onAfterPrint = () => {
-      // Reset scale after printing for proper display on screen
-      node.style.setProperty("--print-scale", "1");
-    };
-
-    window.addEventListener("beforeprint", onBeforePrint);
-    window.addEventListener("afterprint", onAfterPrint);
-
-    return () => {
-      window.removeEventListener("beforeprint", onBeforePrint);
-      window.removeEventListener("afterprint", onAfterPrint);
-      clearTimeout(initialTimer);
-    };
-  }, [data, modulePreferences, shrinkToFit]);
-
-// Helper: compute and apply print scale to the sheet element
-function computePrintScale(sheet: HTMLElement, shrinkToFit: boolean) {
-  const pixelsPerMillimeter = 96 / 25.4;
-  const printableWidth = 206 * pixelsPerMillimeter;
-  const printableHeight = 293 * pixelsPerMillimeter;
-  const contentWidth = Math.max(sheet.scrollWidth, sheet.getBoundingClientRect().width);
-  const contentHeight = Math.max(sheet.scrollHeight, sheet.getBoundingClientRect().height);
-  const scale = shrinkToFit
-    ? Math.min(
-        1,
-        printableWidth / Math.max(contentWidth, 1),
-        printableHeight / Math.max(contentHeight, 1),
-      )
-    : 1;
-  sheet.style.setProperty("--print-scale", String(scale));
-}
-
   return (
-    <div
-      ref={reportRef}
-      className={`report-doc ${isAdvanced ? "advanced-report" : ""}`}
-      style={{ "--print-scale": 1 } as CSSProperties}
-    >
+    <div className={`report-doc ${isAdvanced ? "advanced-report" : ""}`}>
       <div className="report-sheet">
         <div className="report-watermark" aria-hidden="true">
           {school.logoUrl ? (

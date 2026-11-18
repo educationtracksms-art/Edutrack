@@ -98,7 +98,6 @@ function ReportsPage() {
   const [areModulePreferencesLoaded, setAreModulePreferencesLoaded] = useState(false);
 const [previewOpen, setPreviewOpen] = useState(true);
 
-  const [shrinkToFit, setShrinkToFit] = useState(true);
   const [reportTab, setReportTab] = useState<"academic" | "attendance">("academic");
   const [attendanceTermId, setAttendanceTermId] = useState("");
   const [attendanceClassId, setAttendanceClassId] = useState("");
@@ -437,7 +436,7 @@ const [previewOpen, setPreviewOpen] = useState(true);
                     navigate({
                       to: "/reports/preview",
                       state: {
-                        reportPreview: { cards, reportLevel, shrinkToFit, modulePreferences },
+                        reportPreview: { cards, reportLevel, modulePreferences },
                       },
                     })
                   }
@@ -445,16 +444,6 @@ const [previewOpen, setPreviewOpen] = useState(true);
                   View Reports
                 </Btn>
 
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    id="shrink-to-fit"
-                    name="shrink-to-fit"
-                    type="checkbox"
-                    checked={shrinkToFit}
-                    onChange={(event) => setShrinkToFit(event.target.checked)}
-                  />
-                  Shrink oversized reports to fit A4
-                </label>
                 <Btn onClick={print}>Print / Save PDF</Btn>
               </>
             )}
@@ -611,14 +600,12 @@ const [previewOpen, setPreviewOpen] = useState(true);
             <ALevelReportCard
               key={card.studentId}
               data={card}
-              shrinkToFit={shrinkToFit}
               modulePreferences={modulePreferences}
             />
           ) : (
             <OLevelReportCard
               key={card.studentId}
               data={card}
-              shrinkToFit={shrinkToFit}
               modulePreferences={modulePreferences}
             />
           ),

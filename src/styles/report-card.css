@@ -6,6 +6,7 @@
   box-sizing: border-box;
   color: #172334;
   font-family: Arial, Helvetica, sans-serif;
+  /* 9pt is 12px at the standard 96dpi CSS conversion. */
   font-size: 9pt;
   line-height: 1.25;
   background: #f7faff;
@@ -27,7 +28,7 @@
   flex-direction: column;
   width: 100%;
   min-height: 281mm;
-  overflow: hidden;
+  overflow: visible;
   background: linear-gradient(180deg, #f8fbff 0%, #fff 58%, #f7faff 100%);
 }
 
@@ -122,11 +123,11 @@
 .report-doc .school-details p {
   margin: 0.5mm 0;
   color: #38475b;
-  font-size: 7pt;
+  font-size: 9pt;
 }
 
 .report-doc .school-details p.motto {
-  font-size: 6.5pt;
+  font-size: 9pt;
   font-style: italic;
 }
 
@@ -172,7 +173,7 @@
   padding: 0.7mm 1mm;
   border: 0.2mm solid #aeb8c5;
   vertical-align: middle;
-  font-size: 7pt;
+  font-size: 9pt;
 }
 
 .report-doc .student-info-table .label-lin {
@@ -211,7 +212,7 @@
 
 .report-doc .attendance-cell table {
   height: 100%;
-  font-size: 6pt;
+  font-size: 9pt;
 }
 
 .report-doc .attendance-cell th,
@@ -224,7 +225,7 @@
 
 .report-doc .attendance-cell th {
   color: white;
-  font-size: 6pt;
+  font-size: 9pt;
   font-weight: 700;
   background: #26384d;
 }
@@ -245,7 +246,7 @@
   margin: 0 auto;
   padding: 1mm;
   color: #26384d;
-  font-size: 6.5pt;
+  font-size: 9pt;
   font-weight: 700;
   text-align: center;
   border: 0.6mm solid #c62832;
@@ -259,7 +260,7 @@
   margin: 1.5mm 0 1mm;
   padding-left: 1.5mm;
   color: #1c2b40;
-  font-size: 7.5pt;
+  font-size: 9pt;
   font-weight: 700;
   line-height: 1.3;
   border-left: 0.8mm solid #c62832;
@@ -269,7 +270,7 @@
 .report-doc .results {
   margin-bottom: 1.5mm;
   table-layout: fixed;
-  font-size: 6.5pt;
+  font-size: 9pt;
 }
 
 .report-doc .results-subject-col {
@@ -329,7 +330,7 @@
 
 .report-doc .results th {
   color: #18283d;
-  font-size: 6pt;
+  font-size: 9pt;
   font-weight: 700;
   background: #e7eef8;
 }
@@ -345,7 +346,7 @@
 
 .report-doc.advanced-report .results th,
 .report-doc.advanced-report .results td {
-  font-size: 5.7pt;
+  font-size: 9pt;
 }
 
 .report-doc .overall-table {
@@ -355,7 +356,7 @@
 
 .report-doc .overall-table td {
   padding: 1.2mm;
-  font-size: 6.5pt;
+  font-size: 9pt;
 }
 
 .report-doc .overall-cell {
@@ -387,7 +388,7 @@
 .report-doc .definitions h3 {
   margin: 0 0 1mm;
   color: #c62832;
-  font-size: 6.3pt;
+  font-size: 9pt;
   font-weight: 700;
   text-align: center;
   text-transform: uppercase;
@@ -396,7 +397,7 @@
 .report-doc .keywords table th,
 .report-doc .keywords table td {
   padding: 0.8mm;
-  font-size: 6pt;
+  font-size: 9pt;
   text-align: left;
   border: 0.2mm solid #a6b0bd;
 }
@@ -408,7 +409,7 @@
 
 .report-doc .meaning p {
   margin: 0 0 0.7mm;
-  font-size: 6pt;
+  font-size: 9pt;
   line-height: 1.25;
 }
 
@@ -422,7 +423,7 @@
 .report-doc .comments td {
   height: 5mm;
   padding: 0.8mm 1mm;
-  font-size: 6.5pt;
+  font-size: 9pt;
   border: 0.2mm solid #8e9aab;
 }
 
@@ -439,7 +440,7 @@
 .report-doc .approved-note {
   margin: 0 0 1mm;
   color: #214f87;
-  font-size: 6.5pt;
+  font-size: 9pt;
   font-weight: 600;
 }
 
@@ -447,7 +448,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12mm;
-  margin-top: auto;
+  margin-top: 1mm;
   padding: 2mm 0 0;
   border-top: 0.25mm solid #c5d2e3;
 }
@@ -455,7 +456,7 @@
 .report-doc .signature-area > div {
   width: 42%;
   min-height: 19mm;
-  font-size: 6.5pt;
+  font-size: 9pt;
 }
 
 .report-preview-hidden {
@@ -509,11 +510,10 @@
 
   .report-doc {
     width: 210mm !important;
-    height: 297mm !important;
     min-height: 297mm !important;
     margin: 0 !important;
     padding: 6mm !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     border: 0 !important;
     box-shadow: none !important;
     break-after: page;
@@ -529,14 +529,8 @@
     display: flex !important;
     width: 100% !important;
     min-height: 285mm !important;
-    height: 100% !important;
-    overflow: hidden !important;
-    transform: scale(var(--print-scale, 1));
-    transform-origin: top left;
-  }
-
-  .report-doc .signature-area {
-    margin-top: auto;
+    height: auto !important;
+    overflow: visible !important;
   }
 }
 
@@ -544,7 +538,7 @@
   .report-doc {
     min-height: 0;
     padding: 3mm;
-    font-size: 8pt;
+    font-size: 9pt;
   }
 
   .report-doc .report-sheet {

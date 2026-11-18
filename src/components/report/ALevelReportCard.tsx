@@ -4,12 +4,10 @@ import type { ReportModulePreferences } from "@/lib/report-module-preferences";
 
 export function ALevelReportCard({
   data,
-  shrinkToFit,
   modulePreferences,
 }: {
   data: ReportCardData;
-  shrinkToFit?: boolean;
   modulePreferences?: ReportModulePreferences;
 }) {
-  return <ReportCard data={data} shrinkToFit={shrinkToFit} modulePreferences={modulePreferences} />;
+  return <ReportCard data={data} modulePreferences={modulePreferences} />;
 }
