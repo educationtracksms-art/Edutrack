@@ -49,14 +49,14 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
   const updateStatus = useServerFn(updateAssessmentStatus);
   const updateFormativeStatus = useServerFn(updateFormativeMarkStatus);
 
-  const { data: approvalData, isLoading } = useQuery({
+  const { data: approvalData, isLoading, isError, error } = useQuery({
     queryKey: ["dos-assessment-rows", schoolId],
     enabled: !!schoolId && canManageApprovals,
     queryFn: async () => fetchDosApprovalRows(schoolId!),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
     gcTime: 1000 * 60 * 30,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
   });
   const allRows = approvalData?.rows;
   const pendingGroups = useMemo(() => {
@@ -232,7 +232,11 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
             </select>
           </div>
 
-          {isLoading ? (
+          {isError ? (
+            <p role="alert" className="text-sm text-red-700">
+              Could not load approval marks: {friendlyAdminError(error as Error)}
+            </p>
+          ) : isLoading ? (
             <p className="text-sm text-muted-foreground">Loading approvals…</p>
           ) : !pendingGroups.length ? (
             <p className="text-sm text-muted-foreground">
@@ -395,7 +399,11 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
           </select>
         </div>
 
-        {isApprovedLoading ? (
+        {isError ? (
+          <p role="alert" className="text-sm text-red-700">
+            Could not load approved marks: {friendlyAdminError(error as Error)}
+          </p>
+        ) : isApprovedLoading ? (
           <p className="text-sm text-muted-foreground">Loading approved assessments…</p>
         ) : !approvedRows?.length ? (
           <p className="text-sm text-muted-foreground">No approved assessments were found yet.</p>

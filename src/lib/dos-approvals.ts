@@ -1,5 +1,21 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const APPROVAL_RESULT_PAGE_SIZE = 1000;
+
+async function fetchAllApprovalRows(
+  queryPage: (from: number, to: number) => PromiseLike<any>,
+) {
+  const rows: any[] = [];
+  for (let from = 0; ; from += APPROVAL_RESULT_PAGE_SIZE) {
+    const { data, error } = await queryPage(from, from + APPROVAL_RESULT_PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+
+    const page = (data ?? []) as any[];
+    rows.push(...page);
+    if (page.length < APPROVAL_RESULT_PAGE_SIZE) return { data: rows, error: null };
+  }
+}
+
 export type ApprovalRow = {
   id: string;
   record_type?: "summative" | "formative";
@@ -58,37 +74,70 @@ type LookupRow = {
 
 export async function fetchDosApprovalRows(schoolId: string) {
   const [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, allocations, periods] = await Promise.all([
-    supabase
-      .from("assessments")
-      .select(
-        "id, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, status, locked, rejection_reason, created_at, submitted_by",
-      )
-      .eq("school_id", schoolId)
-      .order("created_at", { ascending: false }),
-    (supabase as any)
-      .from("a_level_assessments")
-      .select("id, student_id, subject_id, paper_id, term_id, exam_type, score, is_missing, status, locked, rejection_reason, created_at, submitted_by")
-      .eq("school_id", schoolId)
-      .order("created_at", { ascending: false }),
-    (supabase as any)
-      .from("formative_marks")
-      .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked, created_at, submitted_by")
-      .eq("school_id", schoolId)
-      .order("created_at", { ascending: false }),
-    supabase.from("students").select("id, full_name, class_id, stream_id, status").eq("school_id", schoolId),
-    supabase.from("classes").select("id, name, education_level").eq("school_id", schoolId),
-    supabase.from("streams").select("id, name").eq("school_id", schoolId),
-    supabase.from("subjects").select("id, name, education_level").eq("school_id", schoolId),
-    (supabase as any).from("subject_papers").select("id, subject_id, name").eq("school_id", schoolId),
-    supabase.from("terms").select("id, name").eq("school_id", schoolId),
-    (supabase as any)
-      .from("teacher_allocations")
-      .select("id, teacher_id, subject_id, paper_id, class_id, stream_id")
-      .eq("school_id", schoolId),
-    (supabase as any)
-      .from("assessment_periods")
-      .select("term_id, exam_type, is_active")
-      .eq("school_id", schoolId),
+    fetchAllApprovalRows((from, to) =>
+      supabase
+        .from("assessments")
+        .select(
+          "id, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, status, locked, rejection_reason, created_at, submitted_by",
+        )
+        .eq("school_id", schoolId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      (supabase as any)
+        .from("a_level_assessments")
+        .select("id, student_id, subject_id, paper_id, term_id, exam_type, score, is_missing, status, locked, rejection_reason, created_at, submitted_by")
+        .eq("school_id", schoolId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      (supabase as any)
+        .from("formative_marks")
+        .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked, created_at, submitted_by")
+        .eq("school_id", schoolId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      supabase.from("students").select("id, full_name, class_id, stream_id, status").eq("school_id", schoolId).order("id").range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      supabase.from("classes").select("id, name, education_level").eq("school_id", schoolId).order("id").range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      supabase.from("streams").select("id, name").eq("school_id", schoolId).order("id").range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      supabase.from("subjects").select("id, name, education_level").eq("school_id", schoolId).order("id").range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      (supabase as any).from("subject_papers").select("id, subject_id, name").eq("school_id", schoolId).order("id").range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      supabase.from("terms").select("id, name").eq("school_id", schoolId).order("id").range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      (supabase as any)
+        .from("teacher_allocations")
+        .select("id, teacher_id, subject_id, paper_id, class_id, stream_id")
+        .eq("school_id", schoolId)
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllApprovalRows((from, to) =>
+      (supabase as any)
+        .from("assessment_periods")
+        .select("term_id, exam_type, is_active")
+        .eq("school_id", schoolId)
+        .order("term_id")
+        .order("exam_type")
+        .range(from, to),
+    ),
   ]);
 
   const failedResult = [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, allocations, periods].find(
