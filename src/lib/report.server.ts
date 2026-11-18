@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReportCardData, SubjectRow } from "./report-types";
-import { descriptorFromIdentifier } from "./descriptor";
 
 type AnyClient = SupabaseClient<any, any, any>;
 const REPORT_RESULT_PAGE_SIZE = 1000;
@@ -647,7 +646,7 @@ export async function buildReportCards(
         : ((identifierScales ?? []).find(
             (scale: any) =>
               identifierAvg >= Number(scale.min_score) && identifierAvg <= Number(scale.max_score),
-          )?.descriptor ?? descriptorFromIdentifier(identifierAvg));
+          )?.descriptor ?? "");
     const totalPoints =
       educationLevel === "advanced"
         ? rows

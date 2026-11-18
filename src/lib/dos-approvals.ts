@@ -57,7 +57,7 @@ type LookupRow = {
 };
 
 export async function fetchDosApprovalRows(schoolId: string) {
-  const [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, profiles, allocations, periods] = await Promise.all([
+  const [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, allocations, periods] = await Promise.all([
     supabase
       .from("assessments")
       .select(
@@ -81,7 +81,6 @@ export async function fetchDosApprovalRows(schoolId: string) {
     supabase.from("subjects").select("id, name, education_level").eq("school_id", schoolId),
     (supabase as any).from("subject_papers").select("id, subject_id, name").eq("school_id", schoolId),
     supabase.from("terms").select("id, name").eq("school_id", schoolId),
-    supabase.from("profiles").select("id, full_name").eq("school_id", schoolId),
     (supabase as any)
       .from("teacher_allocations")
       .select("id, teacher_id, subject_id, paper_id, class_id, stream_id")
@@ -92,7 +91,7 @@ export async function fetchDosApprovalRows(schoolId: string) {
       .eq("school_id", schoolId),
   ]);
 
-  const failedResult = [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, profiles, allocations, periods].find(
+  const failedResult = [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, allocations, periods].find(
     (result) => result.error,
   );
   if (failedResult?.error) {
@@ -109,7 +108,6 @@ export async function fetchDosApprovalRows(schoolId: string) {
     subject_id: string;
   }>;
   const termRows = (terms.data ?? []) as LookupRow[];
-  const profileRows = (profiles.data ?? []) as LookupRow[];
   const allocationRows = (allocations.data ?? []) as Array<{
     id: string;
     teacher_id: string;
@@ -133,7 +131,6 @@ export async function fetchDosApprovalRows(schoolId: string) {
   const subjectMap = new Map(subjectRows.map((row) => [row.id, row.name ?? "Unknown subject"]));
   const paperMap = new Map(subjectPaperRows.map((row) => [row.id, row.name ?? "Unknown paper"]));
   const termMap = new Map(termRows.map((row) => [row.id, row.name ?? "Unknown term"]));
-  const profileMap = new Map(profileRows.map((row) => [row.id, row.full_name ?? "Unknown teacher"]));
 
   const assessmentRecords = [
     ...((assessments.data ?? []) as unknown as ApprovalRow[]),
@@ -166,9 +163,6 @@ export async function fetchDosApprovalRows(schoolId: string) {
       term_name: termMap.get(row.term_id) ?? "Unknown term",
       class_name: classMap.get(classId ?? "") ?? "Unknown class",
       stream_name: streamMap.get(streamId ?? "") ?? "Unknown stream",
-      submitted_by_name: row.submitted_by
-        ? (profileMap.get(row.submitted_by) ?? "Unknown teacher")
-        : "Not submitted",
     } satisfies ApprovalRow;
   });
   const formativeRows = ((formativeMarks.data ?? []) as ApprovalRow[]).map((row) => {
@@ -188,9 +182,6 @@ export async function fetchDosApprovalRows(schoolId: string) {
       term_name: termMap.get(row.term_id) ?? "Unknown term",
       class_name: classMap.get(classId ?? "") ?? "Unknown class",
       stream_name: streamMap.get(streamId ?? "") ?? "Unknown stream",
-      submitted_by_name: row.submitted_by
-        ? (profileMap.get(row.submitted_by) ?? "Unknown teacher")
-        : "Not submitted",
     } satisfies ApprovalRow;
   });
   const rows = [...summativeRows, ...formativeRows].sort(
@@ -226,101 +217,8 @@ export async function fetchDosApprovalRows(schoolId: string) {
     examType: string,
   ) => recordLookup.get([recordType, studentId, subjectId, paperId ?? "subject", termId, examType].join(":"));
 
-  const coverage: AssessmentCoverageRow[] = [];
-  for (const allocation of allocationRows) {
-    const subject = subjectRows.find((row) => row.id === allocation.subject_id);
-    const assignedStudents = studentRows.filter(
-      (student) =>
-        student.status === "active" &&
-        (classLevelMap.get(student.class_id ?? "") ?? "ordinary") ===
-          (subject?.education_level ?? "ordinary") &&
-        (!allocation.class_id || student.class_id === allocation.class_id) &&
-        (!allocation.stream_id || student.stream_id === allocation.stream_id),
-    );
-    const subjectPapersForAllocation = subjectPaperRows.filter(
-      (row) => row.subject_id === allocation.subject_id,
-    );
-    const coveragePapers = allocation.paper_id
-      ? [
-          subjectPapersForAllocation.find((row) => row.id === allocation.paper_id) ?? {
-            id: allocation.paper_id,
-            name: "Unknown paper",
-            subject_id: allocation.subject_id,
-          },
-        ]
-      : subjectPapersForAllocation.length
-        ? subjectPapersForAllocation
-        : [null];
-    const teacherName = profileMap.get(allocation.teacher_id) ?? "Unknown teacher";
-
-    for (const paper of coveragePapers) {
-      const paperId = paper?.id ?? null;
-      for (const [termId, activeTypes] of activePeriodsByTerm) {
-        let assessedCount = 0;
-        let submittedCount = 0;
-        let approvedCount = 0;
-        const includesFormative = (subject?.education_level ?? "ordinary") !== "advanced";
-        const expectedCount = assignedStudents.length * (activeTypes.length + (includesFormative ? 1 : 0));
-
-        for (const student of assignedStudents) {
-          const formative = getRecord(
-            "formative",
-            student.id,
-            allocation.subject_id,
-            paperId,
-            termId,
-            "formative",
-          );
-          const expectedRecords: (ApprovalRow | undefined)[] = includesFormative ? [formative] : [];
-          for (const examType of activeTypes) {
-            expectedRecords.push(
-              getRecord(
-                "summative",
-                student.id,
-                allocation.subject_id,
-                paperId,
-                termId,
-                examType,
-              ),
-            );
-          }
-          for (const record of expectedRecords) {
-            if (!record) continue;
-            assessedCount += 1;
-            if (record.status === "submitted" || record.status === "approved") submittedCount += 1;
-            if (record.status === "approved") approvedCount += 1;
-          }
-        }
-
-        const term = termRows.find((row) => row.id === termId);
-        const classId = allocation.class_id;
-        const streamId = allocation.stream_id;
-        coverage.push({
-          key: `${allocation.id}:${paperId ?? "subject"}:${termId}`,
-          teacher_name: teacherName,
-          subject_name: subjectMap.get(allocation.subject_id) ?? subject?.name ?? "Unknown subject",
-          paper_name: paper?.name ?? "",
-          class_name: classId ? classMap.get(classId) ?? "Unknown class" : "All classes",
-          stream_name: streamId ? streamMap.get(streamId) ?? "Unknown stream" : "All streams",
-          term_name: termMap.get(termId) ?? term?.name ?? "Unknown term",
-          assessed_count: assessedCount,
-          submitted_count: submittedCount,
-          approved_count: approvedCount,
-          expected_count: expectedCount,
-        });
-      }
-    }
-  }
-
   return {
     rows,
-    coverage: coverage.sort(
-      (a, b) =>
-        a.term_name.localeCompare(b.term_name) ||
-        a.class_name.localeCompare(b.class_name) ||
-        a.subject_name.localeCompare(b.subject_name) ||
-        a.teacher_name.localeCompare(b.teacher_name),
-    ),
   };
 }
 
