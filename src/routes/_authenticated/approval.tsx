@@ -52,9 +52,9 @@ export function ApprovalsPage({ view }: { view: "pending" | "approved" }) {
   const updateFormativeStatus = useServerFn(updateFormativeMarkStatus);
 
   const { data: approvalData, isLoading, isError, error } = useQuery({
-    queryKey: ["dos-assessment-rows", schoolId],
+    queryKey: ["dos-assessment-rows", schoolId, view],
     enabled: !!schoolId && canManageApprovals,
-    queryFn: async () => fetchDosApprovalRows(schoolId!),
+    queryFn: async () => fetchDosApprovalRows(schoolId!, view === "approved"),
     staleTime: 0,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: true,

@@ -16,6 +16,33 @@ async function fetchAllApprovalRows(
   }
 }
 
+type ApprovalPageCursor = { createdAt: string; id: string };
+
+async function fetchAllApprovalRowsByCreation(
+  queryPage: (cursor: ApprovalPageCursor | null, pageSize: number) => PromiseLike<any>,
+) {
+  const rows: any[] = [];
+  let cursor: ApprovalPageCursor | null = null;
+  for (;;) {
+    const { data, error } = await queryPage(cursor, APPROVAL_RESULT_PAGE_SIZE);
+    if (error) return { data: null, error };
+
+    const page = (data ?? []) as any[];
+    rows.push(...page);
+    if (page.length < APPROVAL_RESULT_PAGE_SIZE) return { data: rows, error: null };
+
+    const lastRow = page[page.length - 1];
+    cursor = { createdAt: lastRow.created_at, id: lastRow.id };
+  }
+}
+
+function afterApprovalCursor(query: any, cursor: ApprovalPageCursor | null) {
+  if (!cursor) return query;
+  return query.or(
+    `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.gt.${cursor.id})`,
+  );
+}
+
 export type ApprovalRow = {
   id: string;
   record_type?: "summative" | "formative";
@@ -73,37 +100,43 @@ type LookupRow = {
   education_level?: string | null;
 };
 
-export async function fetchDosApprovalRows(schoolId: string) {
+export async function fetchDosApprovalRows(schoolId: string, approvedOnly = false) {
   const [assessments, aLevelAssessments, formativeMarks, students, classes, streams, subjects, subjectPapers, terms, allocations, periods] = await Promise.all([
-    fetchAllApprovalRows((from, to) =>
-      supabase
+    fetchAllApprovalRowsByCreation((cursor, pageSize) => {
+      const query = supabase
         .from("assessments")
         .select(
           "id, student_id, subject_id, paper_id, term_id, exam_type, formative, summative, score, is_missing, status, locked, rejection_reason, created_at, submitted_by",
         )
-        .eq("school_id", schoolId)
+        .eq("school_id", schoolId);
+      if (approvedOnly) query.eq("status", "approved");
+      return afterApprovalCursor(query, cursor)
         .order("created_at", { ascending: false })
         .order("id", { ascending: true })
-        .range(from, to),
-    ),
-    fetchAllApprovalRows((from, to) =>
-      (supabase as any)
+        .limit(pageSize);
+    }),
+    fetchAllApprovalRowsByCreation((cursor, pageSize) => {
+      const query = (supabase as any)
         .from("a_level_assessments")
         .select("id, student_id, subject_id, paper_id, term_id, exam_type, score, is_missing, status, locked, rejection_reason, created_at, submitted_by")
-        .eq("school_id", schoolId)
+        .eq("school_id", schoolId);
+      if (approvedOnly) query.eq("status", "approved");
+      return afterApprovalCursor(query, cursor)
         .order("created_at", { ascending: false })
         .order("id", { ascending: true })
-        .range(from, to),
-    ),
-    fetchAllApprovalRows((from, to) =>
-      (supabase as any)
+        .limit(pageSize);
+    }),
+    fetchAllApprovalRowsByCreation((cursor, pageSize) => {
+      const query = (supabase as any)
         .from("formative_marks")
         .select("id, student_id, subject_id, paper_id, term_id, mark, is_missing, status, locked, created_at, submitted_by")
-        .eq("school_id", schoolId)
+        .eq("school_id", schoolId);
+      if (approvedOnly) query.eq("status", "approved");
+      return afterApprovalCursor(query, cursor)
         .order("created_at", { ascending: false })
         .order("id", { ascending: true })
-        .range(from, to),
-    ),
+        .limit(pageSize);
+    }),
     fetchAllApprovalRows((from, to) =>
       supabase.from("students").select("id, full_name, class_id, stream_id, status").eq("school_id", schoolId).order("id").range(from, to),
     ),
